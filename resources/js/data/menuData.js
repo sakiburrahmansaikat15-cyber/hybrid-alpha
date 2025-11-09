@@ -16,8 +16,8 @@ export const menuData = {
       submenu: [
         {
           id: 21,
-          title: "All Projects",
-          path: "/projects/all",
+          title: "Roles",
+          path: "/roles",
           description: "View all your projects",
           icon: "Folder"
         },
