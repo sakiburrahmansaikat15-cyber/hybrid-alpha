@@ -154,6 +154,35 @@ export const menuData = {
           icon: "Shield"
         }
       ]
+    },
+    {
+      id: 8,
+      title: "Test 002",
+      icon: "Settings2",
+      path: "/settings",
+      submenu: [
+        {
+          id: 81,
+          title: "Profile",
+          path: "/settings/profile",
+          description: "Personal settings",
+          icon: "User"
+        },
+        {
+          id: 82,
+          title: "Notifications",
+          path: "/settings/notifications",
+          description: "Configure alerts",
+          icon: "Bell"
+        },
+        {
+          id: 83,
+          title: "Security",
+          path: "/settings/security",
+          description: "Privacy & security",
+          icon: "Shield"
+        }
+      ]
     }
   ]
 };
