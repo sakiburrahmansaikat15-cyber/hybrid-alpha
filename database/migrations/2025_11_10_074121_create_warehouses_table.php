@@ -11,14 +11,12 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('payment_types', function (Blueprint $table) {
+Schema::create('warehouses', function (Blueprint $table) {
             $table->id();
             $table->string('name')->unique();
-            $table->string('type')->nullable();
-            $table->string('account_number')->nullable();
-            $table->text('notes')->nullable();
-            $table->json('images')->nullable();
-            $table->boolean('status')->default(true); // ONLY true (1) or false (0)
+            $table->text('address');
+            $table->text('note')->nullable();
+            $table->boolean('status')->default(true); // true = active, false = inactive
             $table->timestamps();
         });
     }
@@ -28,6 +26,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('payment_types');
+        Schema::dropIfExists('warehouses');
     }
 };

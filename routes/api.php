@@ -9,6 +9,14 @@ use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\ProductTypeController;
 use App\Http\Controllers\Api\BrandController;
 use App\Http\Controllers\Api\PaymentTypeController;
+use App\Http\Controllers\Api\WarehouseController;
+
+
+
+
+
+
+
 
 Route::prefix('roles')->group(function () {
     Route::get('/', [RoleController::class, 'index']);       // GET /api/roles
@@ -55,11 +63,19 @@ Route::prefix('brands')->group(function () {
     Route::delete('/{brand}', [BrandController::class, 'destroy']);
 });
 
+Route::prefix('payment-types')->name('payment-types.')->group(function () {
+    Route::get('/', [PaymentTypeController::class, 'index']);
+    Route::post('/', [PaymentTypeController::class, 'store']);
+    Route::get('{payment}', [PaymentTypeController::class, 'show']);
+    Route::put('{payment}', [PaymentTypeController::class, 'update']);
+    Route::delete('{payment}', [PaymentTypeController::class, 'destroy']);
+});
 
-Route::prefix('payment-types')->group(function () {
-    Route::get('/', [PaymentTypeController::class, 'index']);           // List all (with pagination/search)
-    Route::post('/', [PaymentTypeController::class, 'store']);          // Create new payment type
-    Route::get('/{id}', [PaymentTypeController::class, 'show']);        // Show single by ID
-    Route::put('/{id}', [PaymentTypeController::class, 'update']);      // Update payment type
-    Route::delete('/{id}', [PaymentTypeController::class, 'destroy']);  // Delete payment type
+
+Route::prefix('warehouses')->name('warehouses.')->group(function () {
+    Route::get('/', [WarehouseController::class, 'index'])->name('index');
+    Route::post('/', [WarehouseController::class, 'store'])->name('store');
+    Route::get('{id}', [WarehouseController::class, 'show'])->name('show');
+    Route::put('{id}', [WarehouseController::class, 'update'])->name('update');
+    Route::delete('{id}', [WarehouseController::class, 'destroy'])->name('destroy');
 });

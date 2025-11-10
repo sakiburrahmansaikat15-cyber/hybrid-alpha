@@ -5,221 +5,200 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\PaymentType;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 
 class PaymentTypeController extends Controller
 {
-    // Folder inside /public where images will be stored
-    protected $imageDir = 'payment-types';
+    protected const DISK = 'public';
+    protected const UPLOAD_DIR = 'payment-type';
 
-    /**
-     * List all payment types with pagination, search, and filters
-     */
-    public function index(Request $request)
+    /* =============================================================
+       LIST
+       ============================================================= */
+    public function index(Request $request): JsonResponse
     {
-        $perPage = (int) $request->get('per_page', 15);
-        $q = $request->get('q');
-        $type = $request->get('type');
-        $status = $request->get('status');
-        $sortBy = $request->get('sort_by', 'created_at');
-        $sortDir = strtolower($request->get('sort_dir', 'desc')) === 'asc' ? 'asc' : 'desc';
-
         $query = PaymentType::query();
 
-        // 🔍 Global search
-        if ($q) {
-            $query->where(function ($sub) use ($q) {
-                $sub->where('name', 'like', "%{$q}%")
-                    ->orWhere('type', 'like', "%{$q}%")
-                    ->orWhere('account_number', 'like', "%{$q}%")
-                    ->orWhere('notes', 'like', "%{$q}%");
-            });
+        // Search
+        if ($q = $request->get('q')) {
+            $query->search($q);
         }
 
-        // 🔍 Filters
-        if ($type) {
-            $query->where('type', $type);
+        // Status filter (strict true/false)
+        if ($request->filled('status')) {
+            $query->where('status', $request->boolean('status'));
         }
 
-        if (!is_null($status)) {
-            $query->where('status', (int)$status);
-        }
+        // Pagination + append image_urls
+        $data = $query->latest()->paginate($request->get('per_page', 15));
+        $data->getCollection()->transform(fn($item) => $item->append('image_urls'));
 
-        // 🧭 Sorting
-        $allowedSorts = ['id', 'name', 'type', 'created_at', 'updated_at'];
-        if (!in_array($sortBy, $allowedSorts)) {
-            $sortBy = 'created_at';
-        }
-
-        $paginator = $query->orderBy($sortBy, $sortDir)->paginate($perPage);
-
-        return response()->json($paginator, 200);
+        return response()->json([
+            'success' => true,
+            'data'    => $data,
+        ]);
     }
 
-    /**
-     * Store a new payment type and save uploaded images in /public/payment-types
-     */
-    public function store(Request $request)
+    /* =============================================================
+       STORE
+       ============================================================= */
+    public function store(Request $request): JsonResponse
     {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'type' => 'nullable|string|max:255',
+        $request->validate([
+            'name'           => 'required|string|max:255|unique:payment_types,name',
+            'type'           => 'nullable|string|max:255',
             'account_number' => 'nullable|string|max:255',
-            'notes' => 'nullable|string',
-            'status' => 'nullable|boolean',
-            'images.*' => 'nullable|image|max:2048'
+            'notes'          => 'nullable|string',
+            'status'         => 'required|in:1,0,true,false', // STRICT
+            'images'         => 'sometimes|array|max:5',
+            'images.*'       => 'image|mimes:jpeg,png,jpg,gif,webp|max:5120',
         ]);
 
-        DB::beginTransaction();
+        return $this->transaction(function () use ($request) {
+            $paths = $this->storeImages($request->file('images'));
 
-        try {
-            $images = $this->saveImagesToPublic($request->file('images', []));
-            $validated['images'] = $images;
+            $payment = PaymentType::create([
+                'name'           => $request->name,
+                'type'           => $request->type,
+                'account_number' => $request->account_number,
+                'notes'          => $request->notes,
+                'status'         => $request->boolean('status'),
+                'images'         => $paths,
+            ]);
 
-            $paymentType = PaymentType::create($validated);
+            Log::info('PaymentType created', ['id' => $payment->id]);
 
-            DB::commit();
-            return response()->json(['message' => 'Payment type created successfully', 'data' => $paymentType], 201);
-        } catch (\Throwable $e) {
-            DB::rollBack();
-            return response()->json(['message' => 'Error creating payment type', 'error' => $e->getMessage()], 500);
-        }
+            return response()->json([
+                'success' => true,
+                'message' => 'Payment type created',
+                'data'    => $payment->append('image_urls'),
+            ], 201);
+        });
     }
 
-    /**
-     * Show a specific payment type
-     */
-    public function show($id)
+    /* =============================================================
+       SHOW
+       ============================================================= */
+    public function show(PaymentType $payment): JsonResponse
     {
-        $paymentType = PaymentType::findOrFail($id);
-        return response()->json($paymentType, 200);
+        return response()->json([
+            'success' => true,
+            'data'    => $payment->append('image_urls'),
+        ]);
     }
 
-    /**
-     * Update an existing payment type and its images
-     */
-    public function update(Request $request, $id)
+    /* =============================================================
+       UPDATE
+       ============================================================= */
+    public function update(Request $request, PaymentType $payment): JsonResponse
     {
-        $paymentType = PaymentType::findOrFail($id);
-
-        $validated = $request->validate([
-            'name' => 'sometimes|required|string|max:255',
-            'type' => 'nullable|string|max:255',
+        $request->validate([
+            'name'           => ['sometimes', 'string', 'max:255', Rule::unique('payment_types')->ignore($payment->id)],
+            'type'           => 'nullable|string|max:255',
             'account_number' => 'nullable|string|max:255',
-            'notes' => 'nullable|string',
-            'status' => 'nullable|boolean',
-            'images.*' => 'nullable|image|max:2048',
-            'remove_images' => 'array'
+            'notes'          => 'nullable|string',
+            'status'         => 'sometimes|in:1,0,true,false', // STRICT
+            'images'         => 'sometimes|array|max:5',
+            'images.*'       => 'image|mimes:jpeg,png,jpg,gif,webp|max:5120',
         ]);
 
-        DB::beginTransaction();
+        return $this->transaction(function () use ($request, $payment) {
+            $data = $request->only(['name', 'type', 'account_number', 'notes']);
 
-        try {
-            // 🗑️ Remove selected images
-            if (!empty($validated['remove_images'])) {
-                $this->removeImagesFromModel($paymentType, $validated['remove_images']);
+            if ($request->has('status')) {
+                $data['status'] = $request->boolean('status');
             }
 
-            // 📸 Add new images
-            $newImages = $this->saveImagesToPublic($request->file('images', []));
-            $currentImages = $paymentType->images ?? [];
-            $mergedImages = array_values(array_filter(array_merge($currentImages, $newImages)));
+            if ($request->hasFile('images')) {
+                $this->deleteImages($payment->images);
+                $data['images'] = $this->storeImages($request->file('images'));
+            }
 
-            $validated['images'] = $mergedImages;
+            $payment->update($data);
 
-            $paymentType->update($validated);
+            Log::info('PaymentType updated', ['id' => $payment->id]);
 
-            DB::commit();
-            return response()->json(['message' => 'Payment type updated successfully', 'data' => $paymentType], 200);
-        } catch (\Throwable $e) {
-            DB::rollBack();
-            return response()->json(['message' => 'Error updating payment type', 'error' => $e->getMessage()], 500);
-        }
+            return response()->json([
+                'success' => true,
+                'message' => 'Payment type updated',
+                'data'    => $payment->append('image_urls'),
+            ]);
+        });
     }
 
-    /**
-     * Delete a payment type and all its images
-     */
-    public function destroy($id)
+    /* =============================================================
+       DESTROY
+       ============================================================= */
+    public function destroy(PaymentType $payment): JsonResponse
     {
-        $paymentType = PaymentType::findOrFail($id);
+        return $this->transaction(function () use ($payment) {
+            $this->deleteImages($payment->images);
+            $payment->delete();
 
-        DB::beginTransaction();
+            Log::info('PaymentType deleted', ['id' => $payment->id]);
 
+            return response()->json([
+                'success' => true,
+                'message' => 'Payment type deleted',
+            ]);
+        });
+    }
+
+    /* =============================================================
+       HELPERS
+       ============================================================= */
+
+    private function transaction(callable $callback): JsonResponse
+    {
         try {
-            $this->deleteAllImages($paymentType);
-            $paymentType->delete();
-
+            DB::beginTransaction();
+            $response = $callback();
             DB::commit();
-            return response()->json(['message' => 'Payment type deleted successfully'], 200);
+            return $response;
         } catch (\Throwable $e) {
             DB::rollBack();
-            return response()->json(['message' => 'Error deleting payment type', 'error' => $e->getMessage()], 500);
+            Log::error('PaymentType error: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'file'  => $e->getFile(),
+                'line'  => $e->getLine(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Operation failed',
+                'error'   => config('app.debug') ? $e->getMessage() : null,
+            ], 500);
         }
     }
 
-    /* =====================================================
-       🔧 Helper methods for saving/removing images in /public
-       ===================================================== */
-
-    /**
-     * Save uploaded images to /public/payment-types and return filenames
-     */
-    protected function saveImagesToPublic(array $files): array
+    private function storeImages(?array $files): array
     {
-        if (empty($files)) {
-            return [];
-        }
+        if (!$files) return [];
 
-        $saved = [];
-        $dir = public_path($this->imageDir);
-
-        if (!is_dir($dir)) {
-            mkdir($dir, 0755, true);
-        }
-
+        $paths = [];
         foreach ($files as $file) {
-            if (!$file || !$file->isValid()) continue;
-
-            $filename = Str::random(20) . '_' . time() . '.' . $file->getClientOriginalExtension();
-            $file->move($dir, $filename);
-
-            $saved[] = $filename;
-        }
-
-        return $saved;
-    }
-
-    /**
-     * Remove selected images from model and delete physical files
-     */
-    protected function removeImagesFromModel(PaymentType $model, array $removeList): void
-    {
-        $current = $model->images ?? [];
-        $remaining = array_values(array_diff($current, $removeList));
-
-        foreach ($removeList as $file) {
-            $path = public_path("{$this->imageDir}/{$file}");
-            if (is_file($path)) {
-                @unlink($path);
+            if ($file->isValid()) {
+                $name = time() . '_' . uniqid() . '.' . $file->guessExtension();
+                $path = $file->storeAs(self::UPLOAD_DIR, $name, self::DISK);
+                $paths[] = $path;
+                Log::info("Image uploaded: $path");
             }
         }
-
-        $model->images = $remaining;
-        $model->save();
+        return $paths;
     }
 
-    /**
-     * Delete all images for a given payment type
-     */
-    protected function deleteAllImages(PaymentType $model): void
+    private function deleteImages(?array $images): void
     {
-        $current = $model->images ?? [];
-        foreach ($current as $file) {
-            $path = public_path("{$this->imageDir}/{$file}");
-            if (is_file($path)) {
-                @unlink($path);
+        if (!$images) return;
+
+        foreach ($images as $path) {
+            if (Storage::disk(self::DISK)->exists($path)) {
+                Storage::disk(self::DISK)->delete($path);
+                Log::info("Image deleted: $path");
             }
         }
     }
