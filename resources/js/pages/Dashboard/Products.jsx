@@ -15,13 +15,13 @@ import {
   AlertCircle,
   Filter,
   Image as ImageIcon,
-  FileText,
   Tag,
   Layers,
   Building,
-  Cube,
   Ruler,
-  Type
+  Type,
+  Folder,
+  Box
 } from 'lucide-react';
 
 const Products = () => {
@@ -203,17 +203,13 @@ const Products = () => {
     }
   };
 
-  // Validate form
+  // Validate form - Only name is required
   const validateForm = () => {
     const newErrors = {};
 
-    if (!formData.name.trim()) newErrors.name = 'Product name is required';
-    if (!formData.category_id) newErrors.category_id = 'Category is required';
-    if (!formData.brand_id) newErrors.brand_id = 'Brand is required';
-    if (!formData.sub_category_id) newErrors.sub_category_id = 'Sub-category is required';
-    if (!formData.sub_item_id) newErrors.sub_item_id = 'Sub-item is required';
-    if (!formData.unit_id) newErrors.unit_id = 'Unit is required';
-    if (!formData.product_type_id) newErrors.product_type_id = 'Product type is required';
+    if (!formData.name.trim()) {
+      newErrors.name = 'Product name is required';
+    }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -232,11 +228,20 @@ const Products = () => {
       const submitData = new FormData();
       
       // Append all form data
-      Object.keys(formData).forEach(key => {
-        if (formData[key] !== null && formData[key] !== '') {
-          submitData.append(key, formData[key]);
-        }
-      });
+      submitData.append('name', formData.name);
+      submitData.append('status', formData.status);
+      
+      // Append optional fields only if they have values
+      if (formData.description) submitData.append('description', formData.description);
+      if (formData.specifications) submitData.append('specifications', formData.specifications);
+      
+      // Handle foreign keys - send empty string for null values
+      submitData.append('category_id', formData.category_id || '');
+      submitData.append('brand_id', formData.brand_id || '');
+      submitData.append('sub_category_id', formData.sub_category_id || '');
+      submitData.append('sub_item_id', formData.sub_item_id || '');
+      submitData.append('unit_id', formData.unit_id || '');
+      submitData.append('product_type_id', formData.product_type_id || '');
       
       if (formData.image) {
         submitData.append('image', formData.image);
@@ -326,12 +331,12 @@ const Products = () => {
       description: product.description || '',
       specifications: product.specifications || '',
       status: product.status,
-      category_id: product.category_id.toString(),
-      brand_id: product.brand_id.toString(),
-      sub_category_id: product.sub_category_id.toString(),
-      sub_item_id: product.sub_item_id.toString(),
-      unit_id: product.unit_id.toString(),
-      product_type_id: product.product_type_id.toString(),
+      category_id: product.category_id ? product.category_id.toString() : '',
+      brand_id: product.brand_id ? product.brand_id.toString() : '',
+      sub_category_id: product.sub_category_id ? product.sub_category_id.toString() : '',
+      sub_item_id: product.sub_item_id ? product.sub_item_id.toString() : '',
+      unit_id: product.unit_id ? product.unit_id.toString() : '',
+      product_type_id: product.product_type_id ? product.product_type_id.toString() : '',
       image: null
     });
     setImagePreview(product.image ? `/${product.image}` : null);
@@ -370,7 +375,7 @@ const Products = () => {
   // Filter products
   const filteredProducts = products.filter(product => {
     if (filterStatus !== 'all' && product.status !== (filterStatus === 'active' ? 1 : 0)) return false;
-    if (filterCategory !== 'all' && product.category_id.toString() !== filterCategory) return false;
+    if (filterCategory !== 'all' && product.category_id?.toString() !== filterCategory) return false;
     return true;
   });
 
@@ -399,7 +404,7 @@ const Products = () => {
   };
 
   const getRelationName = (product, relation) => {
-    return product[relation]?.name || 'N/A';
+    return product[relation]?.name || 'Not Set';
   };
 
   return (
@@ -408,9 +413,9 @@ const Products = () => {
       <div className="mb-6 sm:mb-8">
         <div className="flex items-center gap-3 mb-2">
           <Package className="w-8 h-8 text-blue-500" />
-          <h1 className="text-2xl sm:text-3xl font-bold text-white">Products</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-white">Products Management</h1>
         </div>
-        <p className="text-gray-400 text-sm sm:text-base">Manage your products and inventory</p>
+        <p className="text-gray-400 text-sm sm:text-base">Manage your products inventory and details</p>
       </div>
 
       {/* Error Alert */}
@@ -436,7 +441,7 @@ const Products = () => {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 sm:w-5 sm:h-5" />
             <input
               type="text"
-              placeholder="Search products..."
+              placeholder="Search products by name..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400 text-sm sm:text-base"
@@ -479,7 +484,7 @@ const Products = () => {
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors duration-200 w-full lg:w-auto justify-center"
         >
           <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
-          <span className="text-sm sm:text-base">Add Product</span>
+          <span className="text-sm sm:text-base">Add New Product</span>
         </button>
       </div>
 
@@ -506,7 +511,7 @@ const Products = () => {
           ))
         ) : (
           currentProducts.map((product) => (
-            <div key={product.id} className="bg-gray-800 rounded-lg p-4 border border-gray-700 hover:border-gray-600 transition-colors duration-200">
+            <div key={product.id} className="bg-gray-800 rounded-lg p-4 border border-gray-700 hover:border-blue-500 transition-all duration-200 hover:shadow-lg hover:shadow-blue-500/10">
               <div className="flex items-center gap-3 mb-3">
                 {product.image ? (
                   <img
@@ -564,7 +569,7 @@ const Products = () => {
                 <button
                   onClick={() => handleView(product)}
                   className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded text-xs transition-colors duration-200"
-                  title="View"
+                  title="View Details"
                 >
                   <Eye className="w-3 h-3" />
                   View
@@ -572,7 +577,7 @@ const Products = () => {
                 <button
                   onClick={() => handleEdit(product)}
                   className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs transition-colors duration-200"
-                  title="Edit"
+                  title="Edit Product"
                 >
                   <Edit className="w-3 h-3" />
                   Edit
@@ -583,7 +588,7 @@ const Products = () => {
                     setShowDeleteModal(true);
                   }}
                   className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-xs transition-colors duration-200"
-                  title="Delete"
+                  title="Delete Product"
                 >
                   <Trash2 className="w-3 h-3" />
                   Delete
@@ -611,7 +616,7 @@ const Products = () => {
               className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors duration-200"
             >
               <Plus className="w-4 h-4" />
-              Create Product
+              Create Your First Product
             </button>
           )}
         </div>
@@ -659,7 +664,7 @@ const Products = () => {
 
             <form onSubmit={handleSubmit} className="p-4 sm:p-6">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Left Column */}
+                {/* Left Column - Basic Info */}
                 <div className="space-y-4">
                   {/* Image Upload */}
                   <div>
@@ -759,137 +764,107 @@ const Products = () => {
                   </div>
                 </div>
 
-                {/* Right Column - Relationships */}
+                {/* Right Column - Optional Relationships */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-medium text-white flex items-center gap-2">
                     <Tag className="w-5 h-5" />
-                    Product Relationships
+                    Product Relationships (Optional)
                   </h3>
 
                   {/* Category */}
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
                       <Layers className="w-4 h-4" />
-                      Category *
+                      Category
                     </label>
                     <select
                       name="category_id"
                       value={formData.category_id}
                       onChange={handleInputChange}
-                      className={`w-full px-3 py-2 bg-gray-700 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white text-sm ${
-                        errors.category_id ? 'border-red-500' : 'border-gray-600'
-                      }`}
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white text-sm"
                     >
-                      {renderSelectOptions(categories, "Select Category")}
+                      {renderSelectOptions(categories, "Select Category (Optional)")}
                     </select>
-                    {errors.category_id && (
-                      <p className="mt-1 text-xs text-red-400">{errors.category_id}</p>
-                    )}
                   </div>
 
                   {/* Brand */}
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
                       <Building className="w-4 h-4" />
-                      Brand *
+                      Brand
                     </label>
                     <select
                       name="brand_id"
                       value={formData.brand_id}
                       onChange={handleInputChange}
-                      className={`w-full px-3 py-2 bg-gray-700 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white text-sm ${
-                        errors.brand_id ? 'border-red-500' : 'border-gray-600'
-                      }`}
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white text-sm"
                     >
-                      {renderSelectOptions(brands, "Select Brand")}
+                      {renderSelectOptions(brands, "Select Brand (Optional)")}
                     </select>
-                    {errors.brand_id && (
-                      <p className="mt-1 text-xs text-red-400">{errors.brand_id}</p>
-                    )}
                   </div>
 
                   {/* Sub-category */}
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
-                      <Cube className="w-4 h-4" />
-                      Sub-category *
+                      <Folder className="w-4 h-4" />
+                      Sub-category
                     </label>
                     <select
                       name="sub_category_id"
                       value={formData.sub_category_id}
                       onChange={handleInputChange}
-                      className={`w-full px-3 py-2 bg-gray-700 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white text-sm ${
-                        errors.sub_category_id ? 'border-red-500' : 'border-gray-600'
-                      }`}
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white text-sm"
                     >
-                      {renderSelectOptions(subCategories, "Select Sub-category")}
+                      {renderSelectOptions(subCategories, "Select Sub-category (Optional)")}
                     </select>
-                    {errors.sub_category_id && (
-                      <p className="mt-1 text-xs text-red-400">{errors.sub_category_id}</p>
-                    )}
                   </div>
 
                   {/* Sub-item */}
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
-                      <Cube className="w-4 h-4" />
-                      Sub-item *
+                      <Box className="w-4 h-4" />
+                      Sub-item
                     </label>
                     <select
                       name="sub_item_id"
                       value={formData.sub_item_id}
                       onChange={handleInputChange}
-                      className={`w-full px-3 py-2 bg-gray-700 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white text-sm ${
-                        errors.sub_item_id ? 'border-red-500' : 'border-gray-600'
-                      }`}
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white text-sm"
                     >
-                      {renderSelectOptions(subItems, "Select Sub-item")}
+                      {renderSelectOptions(subItems, "Select Sub-item (Optional)")}
                     </select>
-                    {errors.sub_item_id && (
-                      <p className="mt-1 text-xs text-red-400">{errors.sub_item_id}</p>
-                    )}
                   </div>
 
                   {/* Unit */}
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
                       <Ruler className="w-4 h-4" />
-                      Unit *
+                      Unit
                     </label>
                     <select
                       name="unit_id"
                       value={formData.unit_id}
                       onChange={handleInputChange}
-                      className={`w-full px-3 py-2 bg-gray-700 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white text-sm ${
-                        errors.unit_id ? 'border-red-500' : 'border-gray-600'
-                      }`}
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white text-sm"
                     >
-                      {renderSelectOptions(units, "Select Unit")}
+                      {renderSelectOptions(units, "Select Unit (Optional)")}
                     </select>
-                    {errors.unit_id && (
-                      <p className="mt-1 text-xs text-red-400">{errors.unit_id}</p>
-                    )}
                   </div>
 
                   {/* Product Type */}
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
                       <Type className="w-4 h-4" />
-                      Product Type *
+                      Product Type
                     </label>
                     <select
                       name="product_type_id"
                       value={formData.product_type_id}
                       onChange={handleInputChange}
-                      className={`w-full px-3 py-2 bg-gray-700 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white text-sm ${
-                        errors.product_type_id ? 'border-red-500' : 'border-gray-600'
-                      }`}
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white text-sm"
                     >
-                      {renderSelectOptions(productTypes, "Select Product Type")}
+                      {renderSelectOptions(productTypes, "Select Product Type (Optional)")}
                     </select>
-                    {errors.product_type_id && (
-                      <p className="mt-1 text-xs text-red-400">{errors.product_type_id}</p>
-                    )}
                   </div>
 
                   {/* Status */}
@@ -927,7 +902,7 @@ const Products = () => {
                   ) : (
                     <Save className="w-4 h-4" />
                   )}
-                  {selectedProduct ? 'Update' : 'Create'} Product
+                  {selectedProduct ? 'Update Product' : 'Create Product'}
                 </button>
               </div>
             </form>

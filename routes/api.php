@@ -15,8 +15,8 @@ use App\Http\Controllers\Api\SubItemController;
 use App\Http\Controllers\api\vendorController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\VariantController;
-
-
+use App\Http\Controllers\Api\StockController;
+use App\Http\Controllers\Api\SerialListController;
 
 
 Route::prefix('roles')->group(function () {
@@ -146,3 +146,29 @@ Route::prefix('variants')->group(function () {
     Route::put('/{id}', [VariantController::class, 'update']);          // PUT /api/variants/{id}
     Route::delete('/{id}', [VariantController::class, 'destroy']);      // DELETE /api/variants/{id}
 });
+
+
+
+
+Route::prefix('stocks')->group(function () {
+    Route::get('/', [StockController::class, 'index']);               // GET all
+    Route::post('/', [StockController::class, 'store']);              // CREATE
+    Route::get('/search', [StockController::class, 'search']);        // SEARCH
+    Route::get('/{id}', [StockController::class, 'show']);            // SHOW ONE
+    Route::put('/{id}', [StockController::class, 'update']);          // UPDATE
+    Route::delete('/{id}', [StockController::class, 'destroy']);      // DELETE
+});
+
+
+
+
+Route::prefix('serial-list')->group(function () {
+
+    Route::get('/', [SerialListController::class, 'index']);            // GET all
+    Route::post('/', [SerialListController::class, 'store']);           // CREATE
+    Route::get('/search', [SerialListController::class, 'search']);     // SEARCH
+    Route::get('/{id}', [SerialListController::class, 'show']);         // SHOW
+    Route::put('/{id}', [SerialListController::class, 'update']);       // UPDATE
+    Route::delete('/{id}', [SerialListController::class, 'destroy']);   // DELETE
+});
+

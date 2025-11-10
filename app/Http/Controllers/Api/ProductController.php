@@ -23,22 +23,31 @@ class ProductController extends Controller
             'name'             => 'required|string|max:255',
             'description'      => 'nullable|string',
             'status'           => 'required|boolean',
-            'category_id'      => 'required|exists:categories,id',
-            'brand_id'         => 'required|exists:brands,id',
-            'sub_category_id'  => 'required|exists:sub_categories,id',
-            'sub_item_id'      => 'required|exists:sub_items,id',
-            'unit_id'          => 'required|exists:units,id',
-            'product_type_id'  => 'required|exists:product_types,id',
+            'category_id'      => 'nullable|exists:categories,id',
+            'brand_id'         => 'nullable|exists:brands,id',
+            'sub_category_id'  => 'nullable|exists:sub_categories,id',
+            'sub_item_id'      => 'nullable|exists:sub_items,id',
+            'unit_id'          => 'nullable|exists:units,id',
+            'product_type_id'  => 'nullable|exists:product_types,id',
             'specifications'   => 'nullable|string',
             'image'            => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
         ]);
 
+        // Handle image upload
         if ($request->hasFile('image')) {
             $file = $request->image;
             $filename = time().'_'.$file->getClientOriginalName();
             $file->move(public_path('products'), $filename);
             $validated['image'] = 'products/'.$filename;
         }
+
+        // Convert empty strings to null for foreign keys
+        $validated['category_id'] = $validated['category_id'] ?: null;
+        $validated['brand_id'] = $validated['brand_id'] ?: null;
+        $validated['sub_category_id'] = $validated['sub_category_id'] ?: null;
+        $validated['sub_item_id'] = $validated['sub_item_id'] ?: null;
+        $validated['unit_id'] = $validated['unit_id'] ?: null;
+        $validated['product_type_id'] = $validated['product_type_id'] ?: null;
 
         $product = Product::create($validated);
 
@@ -61,18 +70,19 @@ class ProductController extends Controller
             'name'             => 'required|string|max:255',
             'description'      => 'nullable|string',
             'status'           => 'required|boolean',
-            'category_id'      => 'required|exists:categories,id',
-            'brand_id'         => 'required|exists:brands,id',
-            'sub_category_id'  => 'required|exists:sub_categories,id',
-            'sub_item_id'      => 'required|exists:sub_items,id',
-            'unit_id'          => 'required|exists:units,id',
-            'product_type_id'  => 'required|exists:product_types,id',
+            'category_id'      => 'nullable|exists:categories,id',
+            'brand_id'         => 'nullable|exists:brands,id',
+            'sub_category_id'  => 'nullable|exists:sub_categories,id',
+            'sub_item_id'      => 'nullable|exists:sub_items,id',
+            'unit_id'          => 'nullable|exists:units,id',
+            'product_type_id'  => 'nullable|exists:product_types,id',
             'specifications'   => 'nullable|string',
             'image'            => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
         ]);
 
+        // Handle image upload
         if ($request->hasFile('image')) {
-
+            // Delete old image
             if ($product->image && file_exists(public_path($product->image))) {
                 unlink(public_path($product->image));
             }
@@ -83,6 +93,14 @@ class ProductController extends Controller
 
             $validated['image'] = 'products/'.$filename;
         }
+
+        // Convert empty strings to null for foreign keys
+        $validated['category_id'] = $validated['category_id'] ?: null;
+        $validated['brand_id'] = $validated['brand_id'] ?: null;
+        $validated['sub_category_id'] = $validated['sub_category_id'] ?: null;
+        $validated['sub_item_id'] = $validated['sub_item_id'] ?: null;
+        $validated['unit_id'] = $validated['unit_id'] ?: null;
+        $validated['product_type_id'] = $validated['product_type_id'] ?: null;
 
         $product->update($validated);
 

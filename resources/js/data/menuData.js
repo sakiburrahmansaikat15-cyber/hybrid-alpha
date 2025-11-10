@@ -94,6 +94,20 @@ export const menuData = {
           description: "View all your projects",
           icon: "Folder"
         },
+    {
+          id: 34,
+          title: "Variants",
+          path: "/Variants",
+          description: "View all your projects",
+          icon: "Folder"
+        },
+    {
+          id: 35,
+          title: "Stocks",
+          path: "/Stocks",
+          description: "View all your projects",
+          icon: "Folder"
+        },
 
 
 
