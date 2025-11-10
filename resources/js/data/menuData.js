@@ -51,6 +51,7 @@ export const menuData = {
           icon: "Folder"
         },
 
+
     {
           id: 28,
           title: "PaymentTypes",
@@ -62,6 +63,27 @@ export const menuData = {
           id: 29,
           title: "Warehouses",
           path: "/Warehouses",
+          description: "View all your projects",
+          icon: "Folder"
+        },
+    {
+          id: 30,
+          title: "Vendor",
+          path: "/Vendor",
+          description: "View all your projects",
+          icon: "Folder"
+        },
+    {
+          id: 31,
+          title: "SubCategories",
+          path: "/SubCategories",
+          description: "View all your projects",
+          icon: "Folder"
+        },
+    {
+          id: 32,
+          title: "Subitems",
+          path: "/Subitems",
           description: "View all your projects",
           icon: "Folder"
         },

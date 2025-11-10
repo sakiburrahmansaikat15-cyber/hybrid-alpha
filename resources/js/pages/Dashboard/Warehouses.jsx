@@ -11,12 +11,14 @@ import {
   XCircle,
   Filter,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  AlertCircle
 } from 'lucide-react';
 
 const WarehouseManagement = () => {
   const [warehouses, setWarehouses] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editingWarehouse, setEditingWarehouse] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
@@ -33,37 +35,10 @@ const WarehouseManagement = () => {
     status: true
   });
   const [errors, setErrors] = useState({});
+  const [apiError, setApiError] = useState('');
 
-  // Mock data - replace with actual API calls
-  const mockWarehouses = [
-    {
-      id: 1,
-      name: 'Main Warehouse',
-      address: '123 Industrial Ave, Tech City, TC 12345',
-      note: 'Primary storage facility with climate control',
-      status: true,
-      created_at: '2024-01-15T10:30:00Z',
-      updated_at: '2024-01-15T10:30:00Z'
-    },
-    {
-      id: 2,
-      name: 'North Distribution Center',
-      address: '456 Commerce St, Business District, BD 67890',
-      note: 'Fast-moving goods only',
-      status: true,
-      created_at: '2024-01-10T14:20:00Z',
-      updated_at: '2024-01-12T09:15:00Z'
-    },
-    {
-      id: 3,
-      name: 'West Storage',
-      address: '789 Storage Rd, Logistics Park, LP 11223',
-      note: 'Under renovation until March',
-      status: false,
-      created_at: '2024-01-05T08:45:00Z',
-      updated_at: '2024-01-18T16:20:00Z'
-    }
-  ];
+  // API base URL - adjust according to your backend
+  const API_BASE = '/api/warehouses';
 
   useEffect(() => {
     fetchWarehouses();
@@ -71,58 +46,79 @@ const WarehouseManagement = () => {
 
   const fetchWarehouses = async () => {
     setLoading(true);
+    setApiError('');
     try {
-      // Simulate API call
-      setTimeout(() => {
-        setWarehouses(mockWarehouses);
-        setLoading(false);
-      }, 1000);
+      const response = await fetch(API_BASE);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch warehouses: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        setWarehouses(result.data.data || result.data);
+      } else {
+        throw new Error(result.message || 'Failed to fetch warehouses');
+      }
     } catch (error) {
       console.error('Error fetching warehouses:', error);
+      setApiError(error.message);
+    } finally {
       setLoading(false);
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const newErrors = {};
+    setSubmitting(true);
+    setApiError('');
 
+    const newErrors = {};
     if (!formData.name.trim()) newErrors.name = 'Name is required';
     if (!formData.address.trim()) newErrors.address = 'Address is required';
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
+      setSubmitting(false);
       return;
     }
 
-    setLoading(true);
     try {
-      // Simulate API call
-      setTimeout(() => {
-        if (editingWarehouse) {
-          // Update existing
-          setWarehouses(prev => prev.map(w => 
-            w.id === editingWarehouse.id 
-              ? { ...formData, id: editingWarehouse.id, updated_at: new Date().toISOString() }
-              : w
-          ));
-        } else {
-          // Create new
-          const newWarehouse = {
-            ...formData,
-            id: Math.max(...warehouses.map(w => w.id)) + 1,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          };
-          setWarehouses(prev => [...prev, newWarehouse]);
-        }
-        setLoading(false);
+      const url = editingWarehouse ? `${API_BASE}/${editingWarehouse.id}` : API_BASE;
+      const method = editingWarehouse ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method: method,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: JSON.stringify({
+          ...formData,
+          status: formData.status ? 1 : 0 // Convert to 1/0 for API
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Failed to ${editingWarehouse ? 'update' : 'create'} warehouse`);
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        await fetchWarehouses(); // Refresh the list
         setShowModal(false);
         resetForm();
-      }, 1000);
+      } else {
+        throw new Error(result.message || `Failed to ${editingWarehouse ? 'update' : 'create'} warehouse`);
+      }
     } catch (error) {
       console.error('Error saving warehouse:', error);
-      setLoading(false);
+      setApiError(error.message);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -135,20 +131,39 @@ const WarehouseManagement = () => {
       status: warehouse.status
     });
     setShowModal(true);
+    setApiError('');
   };
 
   const handleDelete = async (id) => {
-    setLoading(true);
+    setSubmitting(true);
+    setApiError('');
+    
     try {
-      // Simulate API call
-      setTimeout(() => {
-        setWarehouses(prev => prev.filter(w => w.id !== id));
-        setLoading(false);
+      const response = await fetch(`${API_BASE}/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to delete warehouse');
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        await fetchWarehouses(); // Refresh the list
         setDeleteConfirm(null);
-      }, 1000);
+      } else {
+        throw new Error(result.message || 'Failed to delete warehouse');
+      }
     } catch (error) {
       console.error('Error deleting warehouse:', error);
-      setLoading(false);
+      setApiError(error.message);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -161,6 +176,7 @@ const WarehouseManagement = () => {
     });
     setErrors({});
     setEditingWarehouse(null);
+    setApiError('');
   };
 
   const handleSort = (field) => {
@@ -236,6 +252,20 @@ const WarehouseManagement = () => {
           </button>
         </div>
       </div>
+
+      {/* API Error Alert */}
+      {apiError && (
+        <div className="mb-6 bg-red-900/50 border border-red-700 text-red-200 px-4 py-3 rounded-lg flex items-center space-x-2">
+          <AlertCircle className="w-5 h-5" />
+          <span>{apiError}</span>
+          <button
+            onClick={() => setApiError('')}
+            className="ml-auto text-red-300 hover:text-white"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       {/* Filters and Search */}
       <div className="bg-gray-800 rounded-lg p-4 mb-6">
@@ -317,18 +347,34 @@ const WarehouseManagement = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-700">
-              {loading && paginatedWarehouses.length === 0 ? (
+              {loading ? (
                 <tr>
                   <td colSpan="5" className="px-4 py-8 text-center text-gray-400">
                     <div className="flex justify-center">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                     </div>
+                    <p className="mt-2">Loading warehouses...</p>
                   </td>
                 </tr>
               ) : paginatedWarehouses.length === 0 ? (
                 <tr>
                   <td colSpan="5" className="px-4 py-8 text-center text-gray-400">
-                    No warehouses found
+                    <WarehouseIcon className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p className="text-lg mb-2">No warehouses found</p>
+                    <p className="text-sm text-gray-500">
+                      {warehouses.length === 0 
+                        ? "Get started by creating your first warehouse."
+                        : "Try adjusting your search or filter criteria."
+                      }
+                    </p>
+                    {warehouses.length === 0 && (
+                      <button
+                        onClick={() => setShowModal(true)}
+                        className="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors duration-200"
+                      >
+                        Create First Warehouse
+                      </button>
+                    )}
                   </td>
                 </tr>
               ) : (
@@ -494,10 +540,10 @@ const WarehouseManagement = () => {
                 <div className="flex space-x-3 pt-4">
                   <button
                     type="submit"
-                    disabled={loading}
+                    disabled={submitting}
                     className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50"
                   >
-                    {loading ? 'Saving...' : (editingWarehouse ? 'Update' : 'Create')}
+                    {submitting ? 'Saving...' : (editingWarehouse ? 'Update' : 'Create')}
                   </button>
                   <button
                     type="button"
@@ -527,10 +573,10 @@ const WarehouseManagement = () => {
             <div className="flex space-x-3">
               <button
                 onClick={() => handleDelete(deleteConfirm)}
-                disabled={loading}
+                disabled={submitting}
                 className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50"
               >
-                {loading ? 'Deleting...' : 'Delete'}
+                {submitting ? 'Deleting...' : 'Delete'}
               </button>
               <button
                 onClick={() => setDeleteConfirm(null)}

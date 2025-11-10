@@ -10,6 +10,9 @@ import ProductType from "./pages/Dashboard/ProductType";
 import Brands from "./pages/Dashboard/Brands";
 import PaymentTypes from "./pages/Dashboard/PaymentTypes";
 import Warehouses from "./pages/Dashboard/Warehouses";
+import Vendor from "./pages/Dashboard/Vendor";
+import SubCategories from "./pages/Dashboard/SubCategories";
+import Subitems from "./pages/Dashboard/SubItems";
 const AppRouter = () => {
     return (
         <div>
@@ -24,6 +27,10 @@ const AppRouter = () => {
                     <Route path="/Brands" element={<Brands />} />
                     <Route path="/PaymentTypes" element={<PaymentTypes />} />
                     <Route path="/Warehouses" element={<Warehouses />} />
+                    <Route path="/Vendor" element={<Vendor />} />
+                    <Route path="/SubCategories" element={<SubCategories />} />
+                    <Route path="/Subitems" element={<Subitems/>} />
+
                    
                 </Route>
             </Routes>

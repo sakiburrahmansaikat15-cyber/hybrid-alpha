@@ -10,9 +10,9 @@ use App\Http\Controllers\Api\ProductTypeController;
 use App\Http\Controllers\Api\BrandController;
 use App\Http\Controllers\Api\PaymentTypeController;
 use App\Http\Controllers\Api\WarehouseController;
-
-
-
+use App\Http\Controllers\Api\SubCategoryController;
+use App\Http\Controllers\Api\SubItemController;
+use App\Http\Controllers\api\vendorController;
 
 
 
@@ -24,6 +24,8 @@ Route::prefix('roles')->group(function () {
     Route::get('/{id}', [RoleController::class, 'show']);    // GET /api/roles/{id}
     Route::put('/{id}', [RoleController::class, 'update']);  // PUT /api/roles/{id}
     Route::delete('/{id}', [RoleController::class, 'destroy']); // DELETE /api/roles/{id}
+
+
 });
 
 
@@ -47,6 +49,35 @@ Route::prefix('categories')->group(function () {
     Route::patch('/{id}/status', [CategoryController::class, 'updateStatus']);
 });
 
+
+
+
+
+Route::prefix('payment-types')->group(function () {
+    Route::get('/', [PaymentTypeController::class, 'index']);           // List all (with pagination/search)
+    Route::post('/', [PaymentTypeController::class, 'store']);          // Create new payment type
+    Route::get('/{id}', [PaymentTypeController::class, 'show']);        // Show single by ID
+    Route::put('/{id}', [PaymentTypeController::class, 'update']);      // Update payment type
+    Route::delete('/{id}', [PaymentTypeController::class, 'destroy']);  // Delete payment type
+});
+
+
+Route::prefix('vendors')->group(function () {
+    Route::get('/', [vendorController::class, 'index']);
+    Route::post('/', [vendorController::class, 'store']);
+    Route::get('/search', [vendorController::class, 'search']);   // GET /api/vendors/search?search=
+    Route::get('/{id}', [vendorController::class, 'show']);
+    Route::put('/{id}', [vendorController::class, 'update']);
+    Route::delete('/{id}', [vendorController::class, 'destroy']); 
+});
+
+
+
+
+
+
+
+
 Route::prefix('product-types')->group(function () {
     Route::get('/', [ProductTypeController::class, 'index']);
     Route::post('/', [ProductTypeController::class, 'store']);
@@ -63,13 +94,6 @@ Route::prefix('brands')->group(function () {
     Route::delete('/{brand}', [BrandController::class, 'destroy']);
 });
 
-Route::prefix('payment-types')->name('payment-types.')->group(function () {
-    Route::get('/', [PaymentTypeController::class, 'index']);
-    Route::post('/', [PaymentTypeController::class, 'store']);
-    Route::get('{payment}', [PaymentTypeController::class, 'show']);
-    Route::put('{payment}', [PaymentTypeController::class, 'update']);
-    Route::delete('{payment}', [PaymentTypeController::class, 'destroy']);
-});
 
 
 Route::prefix('warehouses')->name('warehouses.')->group(function () {
@@ -78,4 +102,26 @@ Route::prefix('warehouses')->name('warehouses.')->group(function () {
     Route::get('{id}', [WarehouseController::class, 'show'])->name('show');
     Route::put('{id}', [WarehouseController::class, 'update'])->name('update');
     Route::delete('{id}', [WarehouseController::class, 'destroy'])->name('destroy');
+});
+
+
+
+Route::prefix('sub-categories')->group(function () {
+    Route::get('/', [SubCategoryController::class, 'index']);              // GET /api/sub-categories
+    Route::post('/', [SubCategoryController::class, 'store']);             // POST /api/sub-categories
+    Route::get('/search', [SubCategoryController::class, 'search']);       // GET /api/sub-categories/search?search=
+    Route::get('/{id}', [SubCategoryController::class, 'show']);           // GET /api/sub-categories/{id}
+    Route::put('/{id}', [SubCategoryController::class, 'update']);         // PUT /api/sub-categories/{id}
+    Route::delete('/{id}', [SubCategoryController::class, 'destroy']);     // DELETE /api/sub-categories/{id}
+});
+
+
+
+Route::prefix('sub-items')->group(function () {
+    Route::get('/', [SubItemController::class, 'index']);                // GET /api/sub-items
+    Route::post('/', [SubItemController::class, 'store']);               // POST /api/sub-items
+    Route::get('/search', [SubItemController::class, 'search']);         // GET /api/sub-items/search?search=
+    Route::get('/{id}', [SubItemController::class, 'show']);             // GET /api/sub-items/{id}
+    Route::put('/{id}', [SubItemController::class, 'update']);           // PUT /api/sub-items/{id}
+    Route::delete('/{id}', [SubItemController::class, 'destroy']);       // DELETE /api/sub-items/{id}
 });

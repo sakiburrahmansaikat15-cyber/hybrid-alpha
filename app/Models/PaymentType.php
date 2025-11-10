@@ -24,6 +24,10 @@ class PaymentType extends Model
     use HasFactory;
 
     /** Mass assignable */
+use Illuminate\Database\Eloquent\Model;
+
+class PaymentType extends Model
+{
     protected $fillable = [
         'name',
         'type',
