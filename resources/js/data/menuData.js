@@ -16,11 +16,50 @@ export const menuData = {
       submenu: [
         {
           id: 21,
-          title: "All Projects",
-          path: "/projects/all",
+          title: "Roles",
+          path: "/roles",
           description: "View all your projects",
           icon: "Folder"
         },
+
+        {
+          id: 24,
+          title: "units",
+          path: "/units",
+          description: "View all your projects",
+          icon: "Folder"
+        },
+    {
+          id: 25,
+          title: "categories",
+          path: "/categories",
+          description: "View all your projects",
+          icon: "Folder"
+        },
+    {
+          id: 26,
+          title: "ProductType",
+          path: "/ProductType",
+          description: "View all your projects",
+          icon: "Folder"
+        },
+    {
+          id: 27,
+          title: "Brands",
+          path: "/Brands",
+          description: "View all your projects",
+          icon: "Folder"
+        },
+
+
+
+
+
+
+
+
+
+
         {
           id: 22,
           title: "Create New",
