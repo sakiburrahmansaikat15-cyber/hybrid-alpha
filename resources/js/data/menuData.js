@@ -87,6 +87,13 @@ export const menuData = {
           description: "View all your projects",
           icon: "Folder"
         },
+    {
+          id: 33,
+          title: "Products",
+          path: "/Products",
+          description: "View all your projects",
+          icon: "Folder"
+        },
 
 
 

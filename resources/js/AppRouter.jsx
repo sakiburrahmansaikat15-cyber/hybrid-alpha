@@ -13,6 +13,7 @@ import Warehouses from "./pages/Dashboard/Warehouses";
 import Vendor from "./pages/Dashboard/Vendor";
 import SubCategories from "./pages/Dashboard/SubCategories";
 import Subitems from "./pages/Dashboard/SubItems";
+import Products from "./pages/Dashboard/Products";
 const AppRouter = () => {
     return (
         <div>
@@ -30,6 +31,7 @@ const AppRouter = () => {
                     <Route path="/Vendor" element={<Vendor />} />
                     <Route path="/SubCategories" element={<SubCategories />} />
                     <Route path="/Subitems" element={<Subitems/>} />
+                    <Route path="/Products" element={<Products/>} />
 
                    
                 </Route>

@@ -13,7 +13,8 @@ use App\Http\Controllers\Api\WarehouseController;
 use App\Http\Controllers\Api\SubCategoryController;
 use App\Http\Controllers\Api\SubItemController;
 use App\Http\Controllers\api\vendorController;
-
+use App\Http\Controllers\Api\ProductController;
+use App\Http\Controllers\Api\VariantController;
 
 
 
@@ -124,4 +125,24 @@ Route::prefix('sub-items')->group(function () {
     Route::get('/{id}', [SubItemController::class, 'show']);             // GET /api/sub-items/{id}
     Route::put('/{id}', [SubItemController::class, 'update']);           // PUT /api/sub-items/{id}
     Route::delete('/{id}', [SubItemController::class, 'destroy']);       // DELETE /api/sub-items/{id}
+});
+
+
+
+Route::prefix('products')->group(function () {
+    Route::get('/', [ProductController::class, 'index']);               // GET /api/products
+    Route::post('/', [ProductController::class, 'store']);              // POST /api/products
+    Route::get('/search', [ProductController::class, 'search']);        // GET /api/products/search?search=
+    Route::get('/{id}', [ProductController::class, 'show']);            // GET /api/products/{id}
+    Route::put('/{id}', [ProductController::class, 'update']);          // PUT /api/products/{id}
+    Route::delete('/{id}', [ProductController::class, 'destroy']);      // DELETE /api/products/{id}
+});
+
+Route::prefix('variants')->group(function () {
+    Route::get('/', [VariantController::class, 'index']);               // GET /api/variants
+    Route::post('/', [VariantController::class, 'store']);              // POST /api/variants
+    Route::get('/search', [VariantController::class, 'search']);        // GET /api/variants/search?search=
+    Route::get('/{id}', [VariantController::class, 'show']);            // GET /api/variants/{id}
+    Route::put('/{id}', [VariantController::class, 'update']);          // PUT /api/variants/{id}
+    Route::delete('/{id}', [VariantController::class, 'destroy']);      // DELETE /api/variants/{id}
 });
