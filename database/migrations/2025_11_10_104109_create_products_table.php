@@ -7,58 +7,58 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
-        Schema::table('products', function (Blueprint $table) {
-            // Drop existing foreign key constraints
-            $table->dropForeign(['category_id']);
-            $table->dropForeign(['brand_id']);
-            $table->dropForeign(['sub_category_id']);
-            $table->dropForeign(['sub_item_id']);
-            $table->dropForeign(['unit_id']);
-            $table->dropForeign(['product_type_id']);
+        Schema::create('products', function (Blueprint $table) {
+            $table->id();
 
-            // Make columns nullable
-            $table->unsignedBigInteger('category_id')->nullable()->change();
-            $table->unsignedBigInteger('brand_id')->nullable()->change();
-            $table->unsignedBigInteger('sub_category_id')->nullable()->change();
-            $table->unsignedBigInteger('sub_item_id')->nullable()->change();
-            $table->unsignedBigInteger('unit_id')->nullable()->change();
-            $table->unsignedBigInteger('product_type_id')->nullable()->change();
+            $table->string('name');
+            $table->string('slug')->unique();
+            $table->string('sku')->nullable();
+            $table->string('barcode')->nullable();
 
-            // Add foreign key constraints with nullOnDelete
-            $table->foreign('category_id')->references('id')->on('categories')->nullOnDelete();
-            $table->foreign('brand_id')->references('id')->on('brands')->nullOnDelete();
-            $table->foreign('sub_category_id')->references('id')->on('sub_categories')->nullOnDelete();
-            $table->foreign('sub_item_id')->references('id')->on('sub_items')->nullOnDelete();
-            $table->foreign('unit_id')->references('id')->on('units')->nullOnDelete();
-            $table->foreign('product_type_id')->references('id')->on('product_types')->nullOnDelete();
+            // Foreign keys (nullable, null on delete)
+            $table->foreignId('category_id')
+                ->nullable()
+                ->constrained('categories')
+                ->nullOnDelete();
+
+            $table->foreignId('brand_id')
+                ->nullable()
+                ->constrained('brands')
+                ->nullOnDelete();
+
+            $table->foreignId('sub_category_id')
+                ->nullable()
+                ->constrained('sub_categories')
+                ->nullOnDelete();
+
+            $table->foreignId('sub_item_id')
+                ->nullable()
+                ->constrained('sub_items')
+                ->nullOnDelete();
+
+            $table->foreignId('unit_id')
+                ->nullable()
+                ->constrained('units')
+                ->nullOnDelete();
+
+            $table->foreignId('product_type_id')
+                ->nullable()
+                ->constrained('product_types')
+                ->nullOnDelete();
+
+            // Product info
+            $table->text('description')->nullable();
+            $table->decimal('buying_price', 10, 2)->default(0);
+            $table->decimal('selling_price', 10, 2)->default(0);
+            $table->integer('stock_quantity')->default(0);
+            $table->boolean('status')->default(1); // 1 = active, 0 = inactive
+
+            $table->timestamps();
         });
     }
 
     public function down(): void
     {
-        Schema::table('products', function (Blueprint $table) {
-            // Reverse the changes if needed
-            $table->dropForeign(['category_id']);
-            $table->dropForeign(['brand_id']);
-            $table->dropForeign(['sub_category_id']);
-            $table->dropForeign(['sub_item_id']);
-            $table->dropForeign(['unit_id']);
-            $table->dropForeign(['product_type_id']);
-
-            $table->unsignedBigInteger('category_id')->nullable(false)->change();
-            $table->unsignedBigInteger('brand_id')->nullable(false)->change();
-            $table->unsignedBigInteger('sub_category_id')->nullable(false)->change();
-            $table->unsignedBigInteger('sub_item_id')->nullable(false)->change();
-            $table->unsignedBigInteger('unit_id')->nullable(false)->change();
-            $table->unsignedBigInteger('product_type_id')->nullable(false)->change();
-
-            // Re-add original foreign keys
-            $table->foreign('category_id')->references('id')->on('categories');
-            $table->foreign('brand_id')->references('id')->on('brands');
-            $table->foreign('sub_category_id')->references('id')->on('sub_categories');
-            $table->foreign('sub_item_id')->references('id')->on('sub_items');
-            $table->foreign('unit_id')->references('id')->on('units');
-            $table->foreign('product_type_id')->references('id')->on('product_types');
-        });
+        Schema::dropIfExists('products');
     }
 };
