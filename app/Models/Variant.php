@@ -14,11 +14,20 @@ class Variant extends Model
         'name',
         'value',
         'description',
+        'meta',
         'status',
     ];
 
+    protected $casts = [
+        'meta' => 'array',
+        'status' => 'boolean',
+    ];
+
+    // Relationship
     public function product()
     {
-        return $this->belongsTo(Product::class);
+        return $this->belongsTo(Product::class)->withDefault([
+            'name' => 'No Product',
+        ]);
     }
 }

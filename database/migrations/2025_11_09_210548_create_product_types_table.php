@@ -6,22 +6,22 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::create('product_types', function (Blueprint $table) {
-            $table->id(); // This creates auto-incrementing primary key 'id'
+            $table->id();
             $table->string('type');
-            $table->enum('status', ['active', 'inactive'])->default('active');
-            $table->timestamps(); // Creates created_at and updated_at columns
+
+            // Use boolean instead of enum for consistency
+            $table->boolean('status')->default(true);
+
+            // JSON meta (same style as payment type & role)
+            $table->json('meta')->nullable();
+
+            $table->timestamps();
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('product_types');

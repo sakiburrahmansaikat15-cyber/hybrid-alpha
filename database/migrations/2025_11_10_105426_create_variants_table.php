@@ -4,16 +4,27 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration {
+return new class extends Migration
+{
     public function up(): void
     {
         Schema::create('variants', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('product_id')->constrained()->cascadeOnDelete();
+
+            // Foreign key – nullable friendly format
+            $table->foreignId('product_id')
+                ->nullable()
+                ->constrained('products')
+                ->nullOnDelete();
+
             $table->string('name');
             $table->string('value');
             $table->text('description')->nullable();
-            $table->boolean('status')->default(1); // 1=active,0=inactive
+
+            // JSON meta like your roles table
+            $table->json('meta')->nullable();
+
+            $table->boolean('status')->default(true);
             $table->timestamps();
         });
     }

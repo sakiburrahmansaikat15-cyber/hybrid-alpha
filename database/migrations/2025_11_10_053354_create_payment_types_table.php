@@ -6,26 +6,19 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::create('payment_types', function (Blueprint $table) {
             $table->id();
-            $table->string('name')->unique();
-            $table->string('type')->nullable();
-            $table->string('account_number')->nullable();
+            $table->string('type');
+            $table->decimal('amount_number', 10, 2);
             $table->text('notes')->nullable();
-            $table->json('images')->nullable();
-            $table->boolean('status')->default(true); // ONLY true (1) or false (0)
+            $table->string('image')->nullable();
+            $table->boolean('status')->default(true);
             $table->timestamps();
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('payment_types');

@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { 
-  Plus, 
-  Search, 
-  Edit, 
-  Trash2, 
-  X, 
+import {
+  Plus,
+  Search,
+  Edit,
+  Trash2,
+  X,
   Check,
   AlertCircle,
   Package,
@@ -13,12 +13,9 @@ import {
   Warehouse,
   DollarSign,
   BarChart3,
-  Filter,
-  SortAsc,
-  SortDesc,
-  Calendar,
   Barcode,
-  Hash
+  Hash,
+  Calendar
 } from 'lucide-react';
 
 const StocksManager = () => {
@@ -51,6 +48,14 @@ const StocksManager = () => {
   });
   const [errors, setErrors] = useState({});
 
+  // Safe array access helper
+  const safeArray = (data) => {
+    if (!data) return [];
+    if (Array.isArray(data)) return data;
+    if (data.data && Array.isArray(data.data)) return data.data;
+    return [];
+  };
+
   // Fetch all data
   const fetchData = async () => {
     setLoading(true);
@@ -61,10 +66,11 @@ const StocksManager = () => {
         axios.get('/api/products'),
         axios.get('/api/warehouses')
       ]);
-      setStocks(stocksRes.data);
-      setVendors(vendorsRes.data);
-      setProducts(productsRes.data);
-      setWarehouses(warehousesRes.data);
+
+      setStocks(safeArray(stocksRes.data));
+      setVendors(safeArray(vendorsRes.data));
+      setProducts(safeArray(productsRes.data));
+      setWarehouses(safeArray(warehousesRes.data));
     } catch (error) {
       console.error('Error fetching data:', error);
       showNotification('Error fetching data', 'error');
@@ -77,7 +83,7 @@ const StocksManager = () => {
   useEffect(() => {
     const total = formData.quantity * formData.buying_price;
     const due = total - (formData.due_amount || 0);
-    
+
     setFormData(prev => ({
       ...prev,
       total_amount: parseFloat(total.toFixed(2)),
@@ -94,8 +100,8 @@ const StocksManager = () => {
 
     setLoading(true);
     try {
-      const response = await axios.get(`/api/stocks/search?search=${searchTerm}`);
-      setStocks(response.data);
+      const response = await axios.get(`/api/stocks/search?search=${encodeURIComponent(searchTerm)}`);
+      setStocks(safeArray(response.data));
     } catch (error) {
       console.error('Error searching stocks:', error);
       showNotification('Error searching stocks', 'error');
@@ -107,10 +113,10 @@ const StocksManager = () => {
   // Handle form input changes
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
-    
+
     setFormData(prev => ({
       ...prev,
-      [name]: type === 'checkbox' ? checked : 
+      [name]: type === 'checkbox' ? checked :
               type === 'number' ? parseFloat(value) || 0 : value
     }));
 
@@ -153,20 +159,20 @@ const StocksManager = () => {
   const handleEdit = (stock) => {
     setEditingStock(stock);
     setFormData({
-      name: stock.name,
-      vendor_id: stock.vendor_id,
-      product_id: stock.product_id,
-      warehouse_id: stock.warehouse_id,
-      quantity: stock.quantity,
-      buying_price: parseFloat(stock.buying_price),
-      selling_price: parseFloat(stock.selling_price),
-      total_amount: parseFloat(stock.total_amount),
-      due_amount: parseFloat(stock.due_amount),
-      stock_date: stock.stock_date,
+      name: stock.name || '',
+      vendor_id: stock.vendor_id || '',
+      product_id: stock.product_id || '',
+      warehouse_id: stock.warehouse_id || '',
+      quantity: stock.quantity || 1,
+      buying_price: parseFloat(stock.buying_price) || 0,
+      selling_price: parseFloat(stock.selling_price) || 0,
+      total_amount: parseFloat(stock.total_amount) || 0,
+      due_amount: parseFloat(stock.due_amount) || 0,
+      stock_date: stock.stock_date || new Date().toISOString().split('T')[0],
       commission: stock.commission || 0,
       sku: stock.sku || '',
       barcode: stock.barcode || '',
-      status: stock.status
+      status: stock.status !== undefined ? stock.status : true
     });
     setShowModal(true);
   };
@@ -210,7 +216,7 @@ const StocksManager = () => {
   const showNotification = (message, type = 'info') => {
     const notification = document.createElement('div');
     notification.className = `fixed top-4 right-4 p-4 rounded-lg z-50 ${
-      type === 'success' ? 'bg-green-600' : 
+      type === 'success' ? 'bg-green-600' :
       type === 'error' ? 'bg-red-600' : 'bg-blue-600'
     } text-white shadow-lg`;
     notification.textContent = message;
@@ -224,9 +230,9 @@ const StocksManager = () => {
   // Calculate statistics
   const stats = {
     totalStocks: stocks.length,
-    totalQuantity: stocks.reduce((sum, stock) => sum + stock.quantity, 0),
-    totalValue: stocks.reduce((sum, stock) => sum + (stock.quantity * stock.buying_price), 0),
-    totalDue: stocks.reduce((sum, stock) => sum + parseFloat(stock.due_amount), 0),
+    totalQuantity: stocks.reduce((sum, stock) => sum + (stock.quantity || 0), 0),
+    totalValue: stocks.reduce((sum, stock) => sum + ((stock.quantity || 0) * (stock.buying_price || 0)), 0),
+    totalDue: stocks.reduce((sum, stock) => sum + (parseFloat(stock.due_amount) || 0), 0),
     activeStocks: stocks.filter(stock => stock.status).length
   };
 
@@ -270,6 +276,11 @@ const StocksManager = () => {
     fetchData();
   }, []);
 
+  // Safe data access helpers
+  const getVendorName = (stock) => stock.vendor?.name || 'N/A';
+  const getProductName = (stock) => stock.product?.name || 'N/A';
+  const getWarehouseName = (stock) => stock.warehouse?.name || 'N/A';
+
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 p-4 md:p-6">
       {/* Header */}
@@ -279,7 +290,7 @@ const StocksManager = () => {
             <h1 className="text-2xl md:text-3xl font-bold text-white">Stock Management</h1>
             <p className="text-gray-400 mt-1">Manage inventory, vendors, and stock levels</p>
           </div>
-          
+
           <button
             onClick={() => setShowModal(true)}
             className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors duration-200 font-medium shadow-lg shadow-blue-600/25"
@@ -304,7 +315,7 @@ const StocksManager = () => {
             <div className="flex items-center gap-3">
               <Hash className="text-green-400" size={24} />
               <div>
-                <div className="text-2xl font-bold text-white">{stats.totalQuantity}</div>
+                <div className="text-2xl font-bold text-white">{stats.totalQuantity.toLocaleString()}</div>
                 <div className="text-gray-400 text-sm">Total Quantity</div>
               </div>
             </div>
@@ -382,9 +393,9 @@ const StocksManager = () => {
             {/* Sort Direction */}
             <button
               onClick={() => setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')}
-              className="p-2 bg-gray-700 hover:bg-gray-600 border border-gray-600 rounded-lg transition-colors duration-200"
+              className="p-2 bg-gray-700 hover:bg-gray-600 border border-gray-600 rounded-lg transition-colors duration-200 text-white"
             >
-              {sortDirection === 'asc' ? <SortAsc size={20} /> : <SortDesc size={20} />}
+              {sortDirection === 'asc' ? '↑' : '↓'}
             </button>
 
             {/* Action Buttons */}
@@ -419,7 +430,7 @@ const StocksManager = () => {
         )}
 
         {/* Stocks Table */}
-        {!loading && (
+        {!loading && sortedAndFilteredStocks.length > 0 && (
           <div className="bg-gray-800 rounded-lg overflow-hidden shadow-lg">
             <div className="overflow-x-auto">
               <table className="w-full">
@@ -450,7 +461,7 @@ const StocksManager = () => {
                 </thead>
                 <tbody className="divide-y divide-gray-700">
                   {sortedAndFilteredStocks.map((stock) => (
-                    <tr 
+                    <tr
                       key={stock.id}
                       className="hover:bg-gray-750 transition-colors duration-150"
                     >
@@ -468,7 +479,7 @@ const StocksManager = () => {
                           )}
                           <div className="text-xs text-gray-500 mt-1">
                             <Calendar size={12} className="inline mr-1" />
-                            {new Date(stock.stock_date).toLocaleDateString()}
+                            {stock.stock_date ? new Date(stock.stock_date).toLocaleDateString() : 'N/A'}
                           </div>
                         </div>
                       </td>
@@ -476,7 +487,7 @@ const StocksManager = () => {
                         <div className="flex items-center gap-2">
                           <Truck className="text-green-400" size={16} />
                           <span className="text-white">
-                            {stock.vendor?.name || 'N/A'}
+                            {getVendorName(stock)}
                           </span>
                         </div>
                       </td>
@@ -484,7 +495,7 @@ const StocksManager = () => {
                         <div className="flex items-center gap-2">
                           <Package className="text-blue-400" size={16} />
                           <span className="text-white">
-                            {stock.product?.name || 'N/A'}
+                            {getProductName(stock)}
                           </span>
                         </div>
                       </td>
@@ -492,20 +503,20 @@ const StocksManager = () => {
                         <div className="flex items-center gap-2">
                           <Warehouse className="text-purple-400" size={16} />
                           <span className="text-white">
-                            {stock.warehouse?.name || 'N/A'}
+                            {getWarehouseName(stock)}
                           </span>
                         </div>
                       </td>
                       <td className="px-4 py-4">
                         <div className="space-y-1">
                           <div className="text-sm">
-                            Buy: <span className="text-green-400">${parseFloat(stock.buying_price).toFixed(2)}</span>
+                            Buy: <span className="text-green-400">${parseFloat(stock.buying_price || 0).toFixed(2)}</span>
                           </div>
                           <div className="text-sm">
-                            Sell: <span className="text-yellow-400">${parseFloat(stock.selling_price).toFixed(2)}</span>
+                            Sell: <span className="text-yellow-400">${parseFloat(stock.selling_price || 0).toFixed(2)}</span>
                           </div>
                           <div className="text-sm">
-                            Due: <span className="text-red-400">${parseFloat(stock.due_amount).toFixed(2)}</span>
+                            Due: <span className="text-red-400">${parseFloat(stock.due_amount || 0).toFixed(2)}</span>
                           </div>
                         </div>
                       </td>
@@ -585,7 +596,7 @@ const StocksManager = () => {
                   setShowModal(false);
                   resetForm();
                 }}
-                className="p-2 hover:bg-gray-700 rounded-lg transition-colors duration-200"
+                className="p-2 hover:bg-gray-700 rounded-lg transition-colors duration-200 text-white"
               >
                 <X size={20} />
               </button>

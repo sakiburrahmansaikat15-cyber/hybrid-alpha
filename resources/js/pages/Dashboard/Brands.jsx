@@ -32,6 +32,7 @@ import {
     Settings
 } from "lucide-react";
 
+
 // Custom hook for debounce
 const useDebounce = (value, delay) => {
     const [debouncedValue, setDebouncedValue] = useState(value);
@@ -98,21 +99,21 @@ const ImagePreview = ({ images, onRemove, isEditing = false }) => {
 };
 
 // Brand Card Component
-const BrandCard = ({ 
-    brand, 
-    onEdit, 
-    onDelete, 
-    onToggleStatus, 
+const BrandCard = ({
+    brand,
+    onEdit,
+    onDelete,
+    onToggleStatus,
     onPreviewImage,
     isSelected,
     onSelect,
-    actionLoading 
+    actionLoading
 }) => {
     return (
         <div
             className={`bg-gray-750 rounded-xl overflow-hidden hover:shadow-2xl transition-all duration-300 border-2 ${
-                isSelected 
-                    ? "border-blue-500 ring-4 ring-blue-500/20" 
+                isSelected
+                    ? "border-blue-500 ring-4 ring-blue-500/20"
                     : "border-gray-700 hover:border-gray-600"
             }`}
         >
@@ -136,7 +137,7 @@ const BrandCard = ({
                             className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
                             loading="lazy"
                         />
-                        <div 
+                        <div
                             className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-30 transition-all duration-300 flex items-center justify-center cursor-pointer"
                             onClick={() => onPreviewImage(brand.image_urls[0])}
                         >
@@ -188,7 +189,7 @@ const BrandCard = ({
                     <Tag className="w-4 h-4 text-blue-400" />
                     {brand.name}
                 </h3>
-                
+
                 <div className="text-gray-400 text-sm mb-4 space-y-1">
                     <div className="flex items-center gap-2">
                         <Calendar className="w-3 h-3" />
@@ -259,17 +260,17 @@ const BrandCard = ({
 
 // Calendar Icon Component (since it's not in Lucide)
 const Calendar = ({ className = "w-4 h-4" }) => (
-    <svg 
-        className={className} 
-        fill="none" 
-        stroke="currentColor" 
+    <svg
+        className={className}
+        fill="none"
+        stroke="currentColor"
         viewBox="0 0 24 24"
     >
-        <path 
-            strokeLinecap="round" 
-            strokeLinejoin="round" 
-            strokeWidth={2} 
-            d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" 
+        <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
         />
     </svg>
 );
@@ -308,7 +309,7 @@ const Brands = () => {
         setErrorMessage("");
         try {
             const response = await axios.get(API_URL);
-            
+
             if (response.data.success) {
                 setBrands(response.data.data || []);
                 setSelectedBrands(new Set());
@@ -317,12 +318,12 @@ const Brands = () => {
             }
         } catch (error) {
             console.error("Error fetching brands:", error);
-            
+
             if (retryCount < 3) {
                 setTimeout(() => fetchBrands(retryCount + 1), 1000 * (retryCount + 1));
                 return;
             }
-            
+
             const errorMsg = error.response?.data?.message || error.message;
             setErrorMessage(`Unable to load brands: ${errorMsg}`);
         } finally {
@@ -338,8 +339,8 @@ const Brands = () => {
     const filteredAndSortedBrands = brands
         .filter((brand) => {
             const matchesSearch = brand.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase());
-            const matchesStatus = statusFilter === "all" || 
-                (statusFilter === "active" && brand.status) || 
+            const matchesStatus = statusFilter === "all" ||
+                (statusFilter === "active" && brand.status) ||
                 (statusFilter === "inactive" && !brand.status);
             return matchesSearch && matchesStatus;
         })
@@ -499,7 +500,7 @@ const Brands = () => {
             }
         } catch (error) {
             console.error("Submit error:", error);
-            
+
             if (error.response?.data?.errors) {
                 setErrors(error.response.data.errors);
                 showNotification("Please check the form for errors", "error");
@@ -521,9 +522,9 @@ const Brands = () => {
         });
         setPreviewImages(
             brand.image_urls
-                ? brand.image_urls.map((url) => ({ 
-                    preview: url, 
-                    name: "Existing image", 
+                ? brand.image_urls.map((url) => ({
+                    preview: url,
+                    name: "Existing image",
                     size: "Stored on server",
                     type: "EXISTING"
                 }))
@@ -592,7 +593,7 @@ const Brands = () => {
         setActionLoading(true);
         try {
             const brandIds = Array.from(selectedBrands);
-            
+
             if (bulkAction === "delete") {
                 if (!window.confirm(`Are you sure you want to delete ${brandIds.length} brand(s)? This cannot be undone.`)) {
                     return;
@@ -790,8 +791,8 @@ const Brands = () => {
                             <button
                                 onClick={() => setViewMode("grid")}
                                 className={`p-2 rounded-md transition-all ${
-                                    viewMode === "grid" 
-                                        ? "bg-blue-600 text-white shadow-lg" 
+                                    viewMode === "grid"
+                                        ? "bg-blue-600 text-white shadow-lg"
                                         : "text-gray-400 hover:text-white hover:bg-gray-600"
                                 }`}
                             >
@@ -800,8 +801,8 @@ const Brands = () => {
                             <button
                                 onClick={() => setViewMode("list")}
                                 className={`p-2 rounded-md transition-all ${
-                                    viewMode === "list" 
-                                        ? "bg-blue-600 text-white shadow-lg" 
+                                    viewMode === "list"
+                                        ? "bg-blue-600 text-white shadow-lg"
                                         : "text-gray-400 hover:text-white hover:bg-gray-600"
                                 }`}
                             >
@@ -880,12 +881,12 @@ const Brands = () => {
                             onClick={toggleSelectAll}
                             className="text-sm text-blue-400 hover:text-blue-300 transition-colors font-medium flex items-center gap-1"
                         >
-                            {selectedBrands.size === filteredAndSortedBrands.length 
+                            {selectedBrands.size === filteredAndSortedBrands.length
                                 ? <X className="w-3 h-3" />
                                 : <Check className="w-3 h-3" />
                             }
-                            {selectedBrands.size === filteredAndSortedBrands.length 
-                                ? "Deselect all" 
+                            {selectedBrands.size === filteredAndSortedBrands.length
+                                ? "Deselect all"
                                 : "Select all"
                             }
                         </button>
@@ -906,8 +907,8 @@ const Brands = () => {
                             {brands.length === 0 ? "No brands available" : "No matching brands found"}
                         </p>
                         <p className="text-sm mb-6 max-w-md mx-auto">
-                            {searchTerm || statusFilter !== "all" 
-                                ? "Try adjusting your search criteria or filters to find what you're looking for." 
+                            {searchTerm || statusFilter !== "all"
+                                ? "Try adjusting your search criteria or filters to find what you're looking for."
                                 : "Get started by creating your first brand to build your product catalog."
                             }
                         </p>
@@ -945,8 +946,8 @@ const Brands = () => {
                             <div
                                 key={brand.id}
                                 className={`bg-gray-750 rounded-xl p-4 hover:shadow-lg transition-all duration-300 border-2 ${
-                                    selectedBrands.has(brand.id) 
-                                        ? "border-blue-500 ring-4 ring-blue-500/20" 
+                                    selectedBrands.has(brand.id)
+                                        ? "border-blue-500 ring-4 ring-blue-500/20"
                                         : "border-gray-700 hover:border-gray-600"
                                 }`}
                             >
@@ -957,8 +958,8 @@ const Brands = () => {
                                         onChange={() => toggleBrandSelection(brand.id)}
                                         className="w-5 h-5 text-blue-600 bg-gray-800 border-gray-600 rounded focus:ring-2 focus:ring-blue-500"
                                     />
-                                    
-                                    <div 
+
+                                    <div
                                         className="w-16 h-16 bg-gray-800 rounded-lg overflow-hidden cursor-pointer flex-shrink-0"
                                         onClick={() => setImagePreview(brand.image_urls?.[0])}
                                     >
@@ -1150,8 +1151,8 @@ const Brands = () => {
                                 )}
 
                                 {/* Image Previews */}
-                                <ImagePreview 
-                                    images={previewImages} 
+                                <ImagePreview
+                                    images={previewImages}
                                     onRemove={removeImage}
                                     isEditing={!!editingBrand}
                                 />

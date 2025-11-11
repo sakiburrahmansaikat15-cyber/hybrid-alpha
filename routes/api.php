@@ -12,73 +12,66 @@ use App\Http\Controllers\Api\PaymentTypeController;
 use App\Http\Controllers\Api\WarehouseController;
 use App\Http\Controllers\Api\SubCategoryController;
 use App\Http\Controllers\Api\SubItemController;
-use App\Http\Controllers\api\vendorController;
+use App\Http\Controllers\Api\VendorController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\VariantController;
 use App\Http\Controllers\Api\StockController;
 use App\Http\Controllers\Api\SerialListController;
+use App\Http\Controllers\Api\TransactionController;
 
 
+/* ✅ ROLES */
 Route::prefix('roles')->group(function () {
-    Route::get('/', [RoleController::class, 'index']);       // GET /api/roles
-    Route::post('/', [RoleController::class, 'store']);      // POST /api/roles
-    Route::get('/{id}', [RoleController::class, 'show']);    // GET /api/roles/{id}
-    Route::put('/{id}', [RoleController::class, 'update']);  // PUT /api/roles/{id}
-    Route::delete('/{id}', [RoleController::class, 'destroy']); // DELETE /api/roles/{id}
-
-
+    Route::get('/', [RoleController::class, 'index']);
+    Route::post('/', [RoleController::class, 'store']);
+    Route::get('/{id}', [RoleController::class, 'show']);
+    Route::put('/{id}', [RoleController::class, 'update']);
+    Route::delete('/{id}', [RoleController::class, 'destroy']);
 });
 
 
-
-
-
+/* ✅ UNITS */
 Route::prefix('units')->group(function () {
-    Route::get('/', [UnitController::class, 'index']);       // GET /api/units
-    Route::post('/', [UnitController::class, 'store']);      // POST /api/units
-    Route::get('/{id}', [UnitController::class, 'show']);    // GET /api/units/{id}
-    Route::put('/{id}', [UnitController::class, 'update']);  // PUT /api/units/{id}
-    Route::delete('/{id}', [UnitController::class, 'destroy']); // DELETE /api/units/{id}
+    Route::get('/', [UnitController::class, 'index']);
+    Route::post('/', [UnitController::class, 'store']);
+    Route::get('/{id}', [UnitController::class, 'show']);
+    Route::put('/{id}', [UnitController::class, 'update']);
+    Route::delete('/{id}', [UnitController::class, 'destroy']);
 });
 
+
+/* ✅ CATEGORIES */
 Route::prefix('categories')->group(function () {
     Route::get('/', [CategoryController::class, 'index']);
     Route::post('/', [CategoryController::class, 'store']);
     Route::get('/{id}', [CategoryController::class, 'show']);
     Route::put('/{id}', [CategoryController::class, 'update']);
     Route::delete('/{id}', [CategoryController::class, 'destroy']);
-    Route::patch('/{id}/status', [CategoryController::class, 'updateStatus']);
 });
 
 
-
-
-
+/* ✅ PAYMENT TYPES */
 Route::prefix('payment-types')->group(function () {
-    Route::get('/', [PaymentTypeController::class, 'index']);           // List all (with pagination/search)
-    Route::post('/', [PaymentTypeController::class, 'store']);          // Create new payment type
-    Route::get('/{id}', [PaymentTypeController::class, 'show']);        // Show single by ID
-    Route::put('/{id}', [PaymentTypeController::class, 'update']);      // Update payment type
-    Route::delete('/{id}', [PaymentTypeController::class, 'destroy']);  // Delete payment type
+    Route::get('/', [PaymentTypeController::class, 'index']);
+    Route::post('/', [PaymentTypeController::class, 'store']);
+    Route::get('/{id}', [PaymentTypeController::class, 'show']);
+    Route::put('/{id}', [PaymentTypeController::class, 'update']);
+    Route::delete('/{id}', [PaymentTypeController::class, 'destroy']);
 });
 
 
+/* ✅ VENDORS */
 Route::prefix('vendors')->group(function () {
-    Route::get('/', [vendorController::class, 'index']);
-    Route::post('/', [vendorController::class, 'store']);
-    Route::get('/search', [vendorController::class, 'search']);   // GET /api/vendors/search?search=
-    Route::get('/{id}', [vendorController::class, 'show']);
-    Route::put('/{id}', [vendorController::class, 'update']);
-    Route::delete('/{id}', [vendorController::class, 'destroy']); 
+    Route::get('/', [VendorController::class, 'index']);
+    Route::post('/', [VendorController::class, 'store']);
+    Route::get('/search', [VendorController::class, 'search']);
+    Route::get('/{id}', [VendorController::class, 'show']);
+    Route::put('/{id}', [VendorController::class, 'update']);
+    Route::delete('/{id}', [VendorController::class, 'destroy']);
 });
 
 
-
-
-
-
-
-
+/* ✅ PRODUCT TYPES */
 Route::prefix('product-types')->group(function () {
     Route::get('/', [ProductTypeController::class, 'index']);
     Route::post('/', [ProductTypeController::class, 'store']);
@@ -87,88 +80,99 @@ Route::prefix('product-types')->group(function () {
     Route::delete('/{id}', [ProductTypeController::class, 'destroy']);
 });
 
+
+/* ✅ BRANDS */
 Route::prefix('brands')->group(function () {
     Route::get('/', [BrandController::class, 'index']);
     Route::post('/', [BrandController::class, 'store']);
-    Route::get('/{brand}', [BrandController::class, 'show']);
-    Route::put('/{brand}', [BrandController::class, 'update']); // Use PUT instead of POST
-    Route::delete('/{brand}', [BrandController::class, 'destroy']);
+    Route::get('/{id}', [BrandController::class, 'show']);
+    Route::put('/{id}', [BrandController::class, 'update']);
+    Route::delete('/{id}', [BrandController::class, 'destroy']);
 });
 
 
-
-Route::prefix('warehouses')->name('warehouses.')->group(function () {
-    Route::get('/', [WarehouseController::class, 'index'])->name('index');
-    Route::post('/', [WarehouseController::class, 'store'])->name('store');
-    Route::get('{id}', [WarehouseController::class, 'show'])->name('show');
-    Route::put('{id}', [WarehouseController::class, 'update'])->name('update');
-    Route::delete('{id}', [WarehouseController::class, 'destroy'])->name('destroy');
+/* ✅ WAREHOUSES */
+Route::prefix('warehouses')->group(function () {
+    Route::get('/', [WarehouseController::class, 'index']);
+    Route::post('/', [WarehouseController::class, 'store']);
+    Route::get('/{id}', [WarehouseController::class, 'show']);
+    Route::put('/{id}', [WarehouseController::class, 'update']);
+    Route::delete('/{id}', [WarehouseController::class, 'destroy']);
 });
 
 
-
+/* ✅ SUB-CATEGORIES */
 Route::prefix('sub-categories')->group(function () {
-    Route::get('/', [SubCategoryController::class, 'index']);              // GET /api/sub-categories
-    Route::post('/', [SubCategoryController::class, 'store']);             // POST /api/sub-categories
-    Route::get('/search', [SubCategoryController::class, 'search']);       // GET /api/sub-categories/search?search=
-    Route::get('/{id}', [SubCategoryController::class, 'show']);           // GET /api/sub-categories/{id}
-    Route::put('/{id}', [SubCategoryController::class, 'update']);         // PUT /api/sub-categories/{id}
-    Route::delete('/{id}', [SubCategoryController::class, 'destroy']);     // DELETE /api/sub-categories/{id}
+    Route::get('/', [SubCategoryController::class, 'index']);
+    Route::post('/', [SubCategoryController::class, 'store']);
+    Route::get('/search', [SubCategoryController::class, 'search']);
+    Route::get('/{id}', [SubCategoryController::class, 'show']);
+    Route::put('/{id}', [SubCategoryController::class, 'update']);
+    Route::delete('/{id}', [SubCategoryController::class, 'destroy']);
 });
 
 
-
+/* ✅ SUB-ITEMS */
 Route::prefix('sub-items')->group(function () {
-    Route::get('/', [SubItemController::class, 'index']);                // GET /api/sub-items
-    Route::post('/', [SubItemController::class, 'store']);               // POST /api/sub-items
-    Route::get('/search', [SubItemController::class, 'search']);         // GET /api/sub-items/search?search=
-    Route::get('/{id}', [SubItemController::class, 'show']);             // GET /api/sub-items/{id}
-    Route::put('/{id}', [SubItemController::class, 'update']);           // PUT /api/sub-items/{id}
-    Route::delete('/{id}', [SubItemController::class, 'destroy']);       // DELETE /api/sub-items/{id}
+    Route::get('/', [SubItemController::class, 'index']);
+    Route::post('/', [SubItemController::class, 'store']);
+    Route::get('/search', [SubItemController::class, 'search']);
+    Route::get('/{id}', [SubItemController::class, 'show']);
+    Route::put('/{id}', [SubItemController::class, 'update']);
+    Route::delete('/{id}', [SubItemController::class, 'destroy']);
 });
 
 
-
+/* ✅ PRODUCTS */
 Route::prefix('products')->group(function () {
-    Route::get('/', [ProductController::class, 'index']);               // GET /api/products
-    Route::post('/', [ProductController::class, 'store']);              // POST /api/products
-    Route::get('/search', [ProductController::class, 'search']);        // GET /api/products/search?search=
-    Route::get('/{id}', [ProductController::class, 'show']);            // GET /api/products/{id}
-    Route::put('/{id}', [ProductController::class, 'update']);          // PUT /api/products/{id}
-    Route::delete('/{id}', [ProductController::class, 'destroy']);      // DELETE /api/products/{id}
+    Route::get('/', [ProductController::class, 'index']);
+    Route::post('/', [ProductController::class, 'store']);
+    Route::get('/search', [ProductController::class, 'search']);
+    Route::get('/{id}', [ProductController::class, 'show']);
+    Route::put('/{id}', [ProductController::class, 'update']);
+    Route::delete('/{id}', [ProductController::class, 'destroy']);
 });
 
+
+/* ✅ VARIANTS */
 Route::prefix('variants')->group(function () {
-    Route::get('/', [VariantController::class, 'index']);               // GET /api/variants
-    Route::post('/', [VariantController::class, 'store']);              // POST /api/variants
-    Route::get('/search', [VariantController::class, 'search']);        // GET /api/variants/search?search=
-    Route::get('/{id}', [VariantController::class, 'show']);            // GET /api/variants/{id}
-    Route::put('/{id}', [VariantController::class, 'update']);          // PUT /api/variants/{id}
-    Route::delete('/{id}', [VariantController::class, 'destroy']);      // DELETE /api/variants/{id}
+    Route::get('/', [VariantController::class, 'index']);
+    Route::post('/', [VariantController::class, 'store']);
+    Route::get('/search', [VariantController::class, 'search']);
+    Route::get('/{id}', [VariantController::class, 'show']);
+    Route::put('/{id}', [VariantController::class, 'update']);
+    Route::delete('/{id}', [VariantController::class, 'destroy']);
 });
 
 
-
-
+/* ✅ STOCKS */
 Route::prefix('stocks')->group(function () {
-    Route::get('/', [StockController::class, 'index']);               // GET all
-    Route::post('/', [StockController::class, 'store']);              // CREATE
-    Route::get('/search', [StockController::class, 'search']);        // SEARCH
-    Route::get('/{id}', [StockController::class, 'show']);            // SHOW ONE
-    Route::put('/{id}', [StockController::class, 'update']);          // UPDATE
-    Route::delete('/{id}', [StockController::class, 'destroy']);      // DELETE
+    Route::get('/', [StockController::class, 'index']);
+    Route::post('/', [StockController::class, 'store']);
+    Route::get('/search', [StockController::class, 'search']);
+    Route::get('/{id}', [StockController::class, 'show']);
+    Route::put('/{id}', [StockController::class, 'update']);
+    Route::delete('/{id}', [StockController::class, 'destroy']);
 });
 
 
-
-
+/* ✅ SERIAL LIST */
 Route::prefix('serial-list')->group(function () {
+    Route::get('/', [SerialListController::class, 'index']);
+    Route::post('/', [SerialListController::class, 'store']);
+    Route::get('/search', [SerialListController::class, 'search']);
+    Route::get('/{id}', [SerialListController::class, 'show']);
+    Route::put('/{id}', [SerialListController::class, 'update']);
+    Route::delete('/{id}', [SerialListController::class, 'destroy']);
+});
 
-    Route::get('/', [SerialListController::class, 'index']);            // GET all
-    Route::post('/', [SerialListController::class, 'store']);           // CREATE
-    Route::get('/search', [SerialListController::class, 'search']);     // SEARCH
-    Route::get('/{id}', [SerialListController::class, 'show']);         // SHOW
-    Route::put('/{id}', [SerialListController::class, 'update']);       // UPDATE
-    Route::delete('/{id}', [SerialListController::class, 'destroy']);   // DELETE
+
+/* ✅ TRANSACTIONS */
+Route::prefix('transactions')->group(function () {
+    Route::get('/', [TransactionController::class, 'index']);
+    Route::post('/', [TransactionController::class, 'store']);
+    Route::get('/{id}', [TransactionController::class, 'show']);
+    Route::put('/{id}', [TransactionController::class, 'update']);
+    Route::delete('/{id}', [TransactionController::class, 'destroy']);
 });
 

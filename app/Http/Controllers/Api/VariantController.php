@@ -20,12 +20,16 @@ class VariantController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'product_id'   => 'required|exists:products,id',
-            'name'         => 'required|string|max:255',
-            'value'        => 'required|string|max:255',
-            'description'  => 'nullable|string',
-            'status'       => 'required|boolean',
+            'product_id'  => 'nullable|exists:products,id',
+            'name'        => 'required|string|max:255',
+            'value'       => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'meta'        => 'nullable|array',
+            'status'      => 'required|boolean',
         ]);
+
+        // Convert empty product to null
+        $validated['product_id'] = $validated['product_id'] ?: null;
 
         $variant = Variant::create($validated);
 
@@ -46,12 +50,15 @@ class VariantController extends Controller
         $variant = Variant::findOrFail($id);
 
         $validated = $request->validate([
-            'product_id'   => 'required|exists:products,id',
-            'name'         => 'required|string|max:255',
-            'value'        => 'required|string|max:255',
-            'description'  => 'nullable|string',
-            'status'       => 'required|boolean',
+            'product_id'  => 'nullable|exists:products,id',
+            'name'        => 'required|string|max:255',
+            'value'       => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'meta'        => 'nullable|array',
+            'status'      => 'required|boolean',
         ]);
+
+        $validated['product_id'] = $validated['product_id'] ?: null;
 
         $variant->update($validated);
 

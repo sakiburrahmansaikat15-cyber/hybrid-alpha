@@ -4,7 +4,8 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration {
+return new class extends Migration
+{
     public function up(): void
     {
         Schema::create('sub_items', function (Blueprint $table) {
@@ -12,7 +13,7 @@ return new class extends Migration {
             $table->foreignId('sub_category_id')->constrained()->cascadeOnDelete();
             $table->string('name');
             $table->string('image')->nullable();
-            $table->boolean('status')->default(1); // 1 = active
+            $table->boolean('status')->default(true);
             $table->timestamps();
         });
     }

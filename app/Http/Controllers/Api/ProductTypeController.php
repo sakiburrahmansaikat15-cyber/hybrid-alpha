@@ -9,48 +9,42 @@ use Illuminate\Http\JsonResponse;
 
 class ProductTypeController extends Controller
 {
-    /**
-     * GET /api/product-types
-     */
+    // LIST
     public function index(): JsonResponse
     {
-        $productTypes = ProductType::select('id', 'type', 'status', 'created_at')->get();
-        
+        $types = ProductType::select('id', 'type', 'status', 'meta', 'created_at')->get();
+
         return response()->json([
             'success' => true,
-            'data' => $productTypes,
-            'count' => $productTypes->count()
+            'count' => $types->count(),
+            'data' => $types
         ]);
     }
 
-    /**
-     * POST /api/product-types
-     */
+    // CREATE
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
             'type' => 'required|string|max:255|unique:product_types,type',
-            'status' => 'sometimes|in:active,inactive'
+            'status' => 'required|boolean',
+            'meta' => 'nullable|array',
         ]);
 
-        $productType = ProductType::create($validated);
+        $type = ProductType::create($validated);
 
         return response()->json([
             'success' => true,
             'message' => 'Product type created successfully',
-            'data' => $productType
+            'data' => $type
         ], 201);
     }
 
-    /**
-     * GET /api/product-types/{id}
-     */
+    // SHOW
     public function show($id): JsonResponse
     {
-        $productType = ProductType::select('id', 'type', 'status', 'created_at', 'updated_at')
-            ->find($id);
+        $type = ProductType::find($id);
 
-        if (!$productType) {
+        if (!$type) {
             return response()->json([
                 'success' => false,
                 'message' => 'Product type not found'
@@ -59,18 +53,16 @@ class ProductTypeController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $productType
+            'data' => $type
         ]);
     }
 
-    /**
-     * PUT /api/product-types/{id}
-     */
+    // UPDATE
     public function update(Request $request, $id): JsonResponse
     {
-        $productType = ProductType::find($id);
+        $type = ProductType::find($id);
 
-        if (!$productType) {
+        if (!$type) {
             return response()->json([
                 'success' => false,
                 'message' => 'Product type not found'
@@ -79,33 +71,32 @@ class ProductTypeController extends Controller
 
         $validated = $request->validate([
             'type' => 'sometimes|string|max:255|unique:product_types,type,' . $id,
-            'status' => 'sometimes|in:active,inactive'
+            'status' => 'sometimes|boolean',
+            'meta' => 'nullable|array',
         ]);
 
-        $productType->update($validated);
+        $type->update($validated);
 
         return response()->json([
             'success' => true,
             'message' => 'Product type updated successfully',
-            'data' => $productType
+            'data' => $type
         ]);
     }
 
-    /**
-     * DELETE /api/product-types/{id}
-     */
+    // DELETE
     public function destroy($id): JsonResponse
     {
-        $productType = ProductType::find($id);
+        $type = ProductType::find($id);
 
-        if (!$productType) {
+        if (!$type) {
             return response()->json([
                 'success' => false,
                 'message' => 'Product type not found'
             ], 404);
         }
 
-        $productType->delete();
+        $type->delete();
 
         return response()->json([
             'success' => true,

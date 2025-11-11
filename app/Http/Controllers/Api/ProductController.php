@@ -1,138 +1,101 @@
 <?php
 
-namespace App\Http\Controllers\Api;
+namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
 use App\Models\Product;
 use Illuminate\Http\Request;
 
 class ProductController extends Controller
 {
-    // LIST ALL
+    // get all
     public function index()
     {
-        return response()->json(
-            Product::with(['category', 'brand', 'subCategory', 'subItem', 'unit', 'productType'])->get()
-        );
+        return Product::with([
+            'category',
+            'brand',
+            'subCategory',
+            'subItem',
+            'unit',
+            'productType'
+        ])->orderBy('id', 'desc')->get();
     }
 
-    // CREATE
+    // search
+    public function search(Request $request)
+    {
+        $q = $request->search ?? '';
+
+        return Product::with([
+            'category',
+            'brand',
+            'subCategory',
+            'subItem',
+            'unit',
+            'productType'
+        ])
+            ->where('name', 'like', "%{$q}%")
+            ->get();
+    }
+
+    // create
     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'name'             => 'required|string|max:255',
-            'description'      => 'nullable|string',
-            'status'           => 'required|boolean',
-            'category_id'      => 'nullable|exists:categories,id',
-            'brand_id'         => 'nullable|exists:brands,id',
-            'sub_category_id'  => 'nullable|exists:sub_categories,id',
-            'sub_item_id'      => 'nullable|exists:sub_items,id',
-            'unit_id'          => 'nullable|exists:units,id',
-            'product_type_id'  => 'nullable|exists:product_types,id',
-            'specifications'   => 'nullable|string',
-            'image'            => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+        $request->validate([
+            'name' => 'required|max:255',
+            'image' => 'nullable|image|max:2048'
         ]);
 
-        // Handle image upload
+        $data = $request->all();
+
+        // IMAGE UPLOAD
         if ($request->hasFile('image')) {
-            $file = $request->image;
-            $filename = time().'_'.$file->getClientOriginalName();
-            $file->move(public_path('products'), $filename);
-            $validated['image'] = 'products/'.$filename;
+            $file = $request->file('image');
+            $path = $file->store('products', 'public');
+            $data['image'] = 'storage/' . $path;
         }
 
-        // Convert empty strings to null for foreign keys
-        $validated['category_id'] = $validated['category_id'] ?: null;
-        $validated['brand_id'] = $validated['brand_id'] ?: null;
-        $validated['sub_category_id'] = $validated['sub_category_id'] ?: null;
-        $validated['sub_item_id'] = $validated['sub_item_id'] ?: null;
-        $validated['unit_id'] = $validated['unit_id'] ?: null;
-        $validated['product_type_id'] = $validated['product_type_id'] ?: null;
+        $product = Product::create($data);
 
-        $product = Product::create($validated);
-
-        return response()->json($product, 201);
+        return response([
+            'message' => 'Product created successfully',
+            'data' => $product
+        ], 201);
     }
 
-    // SHOW
-    public function show($id)
-    {
-        $product = Product::with(['category','brand','subCategory','subItem','unit','productType'])->findOrFail($id);
-        return response()->json($product);
-    }
-
-    // UPDATE
+    // update
     public function update(Request $request, $id)
     {
         $product = Product::findOrFail($id);
 
-        $validated = $request->validate([
-            'name'             => 'required|string|max:255',
-            'description'      => 'nullable|string',
-            'status'           => 'required|boolean',
-            'category_id'      => 'nullable|exists:categories,id',
-            'brand_id'         => 'nullable|exists:brands,id',
-            'sub_category_id'  => 'nullable|exists:sub_categories,id',
-            'sub_item_id'      => 'nullable|exists:sub_items,id',
-            'unit_id'          => 'nullable|exists:units,id',
-            'product_type_id'  => 'nullable|exists:product_types,id',
-            'specifications'   => 'nullable|string',
-            'image'            => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+        $request->validate([
+            'name' => 'required|max:255',
+            'image' => 'nullable|image|max:2048'
         ]);
 
-        // Handle image upload
+        $data = $request->all();
+
+        // IMAGE UPDATE
         if ($request->hasFile('image')) {
-            // Delete old image
-            if ($product->image && file_exists(public_path($product->image))) {
-                unlink(public_path($product->image));
-            }
-
-            $file = $request->image;
-            $filename = time().'_'.$file->getClientOriginalName();
-            $file->move(public_path('products'), $filename);
-
-            $validated['image'] = 'products/'.$filename;
+            $file = $request->file('image');
+            $path = $file->store('products', 'public');
+            $data['image'] = 'storage/' . $path;
         }
 
-        // Convert empty strings to null for foreign keys
-        $validated['category_id'] = $validated['category_id'] ?: null;
-        $validated['brand_id'] = $validated['brand_id'] ?: null;
-        $validated['sub_category_id'] = $validated['sub_category_id'] ?: null;
-        $validated['sub_item_id'] = $validated['sub_item_id'] ?: null;
-        $validated['unit_id'] = $validated['unit_id'] ?: null;
-        $validated['product_type_id'] = $validated['product_type_id'] ?: null;
+        $product->update($data);
 
-        $product->update($validated);
-
-        return response()->json($product);
+        return response([
+            'message' => 'Product updated successfully',
+            'data' => $product
+        ]);
     }
 
-    // DELETE
+    // delete
     public function destroy($id)
     {
         $product = Product::findOrFail($id);
 
-        if ($product->image && file_exists(public_path($product->image))) {
-            unlink(public_path($product->image));
-        }
-
         $product->delete();
 
-        return response()->json(['message' => 'Deleted successfully']);
-    }
-
-    // SEARCH
-    public function search(Request $request)
-    {
-        $search = $request->search;
-
-        $results = Product::where('name', 'like', "%{$search}%")
-            ->orWhere('description', 'like', "%{$search}%")
-            ->orWhereHas('category', function($q) use ($search){
-                $q->where('name', 'like', "%{$search}%");
-            })
-            ->get();
-
-        return response()->json($results);
+        return response(['message' => 'Product deleted']);
     }
 }

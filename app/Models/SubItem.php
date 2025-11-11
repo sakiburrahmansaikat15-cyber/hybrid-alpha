@@ -16,6 +16,10 @@ class SubItem extends Model
         'status',
     ];
 
+    protected $casts = [
+        'status' => 'boolean',
+    ];
+
     public function subCategory()
     {
         return $this->belongsTo(SubCategory::class);

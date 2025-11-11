@@ -8,26 +8,33 @@ use Illuminate\Http\Request;
 
 class SubItemController extends Controller
 {
-    // LIST ALL
-    public function index()
+    public function index(Request $request)
     {
-        return response()->json(SubItem::with('subCategory')->get());
+        $query = SubItem::with('subCategory');
+
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $query->where('name', 'like', "%{$search}%");
+        }
+
+        $limit = $request->input('limit', 10);
+        $subItems = $query->paginate($limit);
+
+        return response()->json($subItems);
     }
 
-    // CREATE
     public function store(Request $request)
     {
         $validated = $request->validate([
             'sub_category_id' => 'required|exists:sub_categories,id',
             'name' => 'required|string|max:255',
-            'status' => 'required|boolean',
+            'status' => 'boolean',
             'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
         ]);
 
         if ($request->hasFile('image')) {
-            $file = $request->image;
-            $fileName = time() . '_' . $file->getClientOriginalName();
-            $file->move(public_path('sub-items'), $fileName);
+            $fileName = time() . '_' . $request->image->getClientOriginalName();
+            $request->image->move(public_path('sub-items'), $fileName);
             $validated['image'] = 'sub-items/' . $fileName;
         }
 
@@ -36,30 +43,31 @@ class SubItemController extends Controller
         return response()->json($subItem, 201);
     }
 
-    // SHOW
-    public function show(SubItem $subItem)
+    public function show($id)
     {
-        return response()->json($subItem->load('subCategory'));
+        $subItem = SubItem::with('subCategory')->findOrFail($id);
+        return response()->json($subItem);
     }
 
-    // UPDATE
-    public function update(Request $request, SubItem $subItem)
+    public function update(Request $request, $id)
     {
+        $subItem = SubItem::findOrFail($id);
+
         $validated = $request->validate([
             'sub_category_id' => 'required|exists:sub_categories,id',
             'name' => 'required|string|max:255',
-            'status' => 'required|boolean',
+            'status' => 'boolean',
             'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
         ]);
 
         if ($request->hasFile('image')) {
+
             if ($subItem->image && file_exists(public_path($subItem->image))) {
                 unlink(public_path($subItem->image));
             }
 
-            $file = $request->image;
-            $fileName = time() . '_' . $file->getClientOriginalName();
-            $file->move(public_path('sub-items'), $fileName);
+            $fileName = time() . '_' . $request->image->getClientOriginalName();
+            $request->image->move(public_path('sub-items'), $fileName);
             $validated['image'] = 'sub-items/' . $fileName;
         }
 
@@ -68,9 +76,10 @@ class SubItemController extends Controller
         return response()->json($subItem);
     }
 
-    // DELETE
-    public function destroy(SubItem $subItem)
+    public function destroy($id)
     {
+        $subItem = SubItem::findOrFail($id);
+
         if ($subItem->image && file_exists(public_path($subItem->image))) {
             unlink(public_path($subItem->image));
         }

@@ -6,17 +6,23 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    /**
+     * Run the migrations.
+     */
     public function up(): void
     {
-        Schema::create('categories', function (Blueprint $table) {
+Schema::create('categories', function (Blueprint $table) {
             $table->id();
             $table->string('name');
-            $table->json('images')->nullable();
-            $table->enum('status', ['active', 'inactive'])->default('active');
+            $table->string('image')->nullable(); // Stores path like "categories/abc.png"
+            $table->boolean('status')->default(true);
             $table->timestamps();
         });
     }
 
+    /**
+     * Reverse the migrations.
+     */
     public function down(): void
     {
         Schema::dropIfExists('categories');
