@@ -3,114 +3,71 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\ProductTypeResource;
 use App\Models\ProductType;
 use Illuminate\Http\Request;
-use Illuminate\Http\JsonResponse;
 
 class ProductTypeController extends Controller
 {
-    /**
-     * GET /api/product-types
-     */
-    public function index(): JsonResponse
+    // List all product types
+    public function index()
     {
-        $productTypes = ProductType::select('id', 'type', 'status', 'created_at')->get();
-        
-        return response()->json([
-            'success' => true,
-            'data' => $productTypes,
-            'count' => $productTypes->count()
-        ]);
+        $productTypes = ProductType::get();
+        return ProductTypeResource::collection($productTypes);
     }
 
-    /**
-     * POST /api/product-types
-     */
-    public function store(Request $request): JsonResponse
+    // Store a new product type
+    public function store(Request $request)
     {
-        $validated = $request->validate([
-            'type' => 'required|string|max:255|unique:product_types,type',
-            'status' => 'sometimes|in:active,inactive'
+        $data = $request->validate([
+            'name' => 'required|string|max:255',
+            'status' => 'sometimes|boolean',
         ]);
 
-        $productType = ProductType::create($validated);
+        $productType = ProductType::create($data);
 
         return response()->json([
             'success' => true,
             'message' => 'Product type created successfully',
-            'data' => $productType
+            'data' => new ProductTypeResource($productType)
         ], 201);
     }
 
-    /**
-     * GET /api/product-types/{id}
-     */
-    public function show($id): JsonResponse
+    // Show a single product type
+    public function show($id)
     {
-        $productType = ProductType::select('id', 'type', 'status', 'created_at', 'updated_at')
-            ->find($id);
-
-        if (!$productType) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Product type not found'
-            ], 404);
-        }
-
-        return response()->json([
-            'success' => true,
-            'data' => $productType
-        ]);
+        $productType = ProductType::findOrFail($id);
+        return new ProductTypeResource($productType);
     }
 
-    /**
-     * PUT /api/product-types/{id}
-     */
-    public function update(Request $request, $id): JsonResponse
+    // Update a product type
+    public function update(Request $request, $id)
     {
-        $productType = ProductType::find($id);
+        $productType = ProductType::findOrFail($id);
 
-        if (!$productType) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Product type not found'
-            ], 404);
-        }
-
-        $validated = $request->validate([
-            'type' => 'sometimes|string|max:255|unique:product_types,type,' . $id,
-            'status' => 'sometimes|in:active,inactive'
+        $data = $request->validate([
+            'name' => 'sometimes|string|max:255',
+            'status' => 'sometimes|boolean',
         ]);
 
-        $productType->update($validated);
+        $productType->update($data);
 
         return response()->json([
             'success' => true,
             'message' => 'Product type updated successfully',
-            'data' => $productType
-        ]);
+            'data' => new ProductTypeResource($productType)
+        ], 200);
     }
 
-    /**
-     * DELETE /api/product-types/{id}
-     */
-    public function destroy($id): JsonResponse
+    // Delete a product type
+    public function destroy($id)
     {
-        $productType = ProductType::find($id);
-
-        if (!$productType) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Product type not found'
-            ], 404);
-        }
-
+        $productType = ProductType::findOrFail($id);
         $productType->delete();
 
         return response()->json([
             'success' => true,
-            'message' => 'Product type deleted successfully',
-            'deleted_id' => (int)$id
+            'message' => 'Product type deleted successfully'
         ]);
     }
 }

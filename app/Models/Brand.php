@@ -8,16 +8,12 @@ use Illuminate\Database\Eloquent\Model;
 class Brand extends Model
 {
     use HasFactory;
+    protected $guarded = [];
 
-    protected $fillable = [
-        'name',
-        'image',
-        'status',
-    ];
 
-    // Cast JSON column to array
-    protected $casts = [
-        'image' => 'array',
-        'status' => 'boolean',
-    ];
+        public function products()
+    {
+        return $this->hasMany(Prooducts::class, 'brand_id');
+    }
+
 }

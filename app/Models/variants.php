@@ -5,14 +5,15 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class Unit extends Model
+class variants extends Model
 {
     use HasFactory;
-    protected $guarded = [];
 
+     protected $guarded = [];
 
-        public function products()
+        public function product()
     {
-        return $this->hasMany(Prooducts::class, 'unit_id');
+        return $this->belongsTo(Prooducts::class, 'product_id');
     }
+
 }

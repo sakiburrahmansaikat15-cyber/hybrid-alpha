@@ -3,84 +3,115 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\SubCategoryResource;
 use App\Models\SubCategory;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\File;
+
 
 class SubCategoryController extends Controller
 {
-    // LIST ALL
-    public function index()
+     public function index()
     {
-        return response()->json(SubCategory::with('category')->get());
+        $categories = SubCategory::latest()->get();
+        return SubCategoryResource::collection($categories);
     }
 
-    // CREATE
-    public function store(Request $request)
+    // ✅ Store a new category
+     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'category_id' => 'required|exists:categories,id',
+        $data = $request->validate([
             'name' => 'required|string|max:255',
-            'status' => 'required|boolean',
             'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'status' => 'sometimes|boolean',
+            'category_id' => 'nullable'
         ]);
 
-        // handle image upload
         if ($request->hasFile('image')) {
-            $file = $request->image;
-            $fileName = time() . '_' . $file->getClientOriginalName();
-            $file->move(public_path('sub_category'), $fileName);
-            $validated['image'] = 'sub_category/' . $fileName;
-        }
+            $image = $request->file('image');
+            $folder = public_path('sub_categories');
 
-        $subCategory = SubCategory::create($validated);
-
-        return response()->json($subCategory, 201);
-    }
-
-    // SHOW ONE
-    public function show(SubCategory $subCategory)
-    {
-        return response()->json($subCategory->load('category'));
-    }
-
-    // UPDATE
-    public function update(Request $request, SubCategory $subCategory)
-    {
-        $validated = $request->validate([
-            'category_id' => 'required|exists:categories,id',
-            'name' => 'required|string|max:255',
-            'status' => 'required|boolean',
-            'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
-        ]);
-
-        // update image if exists
-        if ($request->hasFile('image')) {
-            // delete old image
-            if ($subCategory->image && file_exists(public_path($subCategory->image))) {
-                unlink(public_path($subCategory->image));
+            // Create folder if not exists
+            if (!File::exists($folder)) {
+                File::makeDirectory($folder, 0777, true, true);
             }
 
-            $file = $request->image;
-            $fileName = time() . '_' . $file->getClientOriginalName();
-            $file->move(public_path('sub_category'), $fileName);
-            $validated['image'] = 'sub_category/' . $fileName;
+            $imageName = time() . '_' . $image->getClientOriginalName();
+            $image->move($folder, $imageName);
+            $data['image'] = 'sub_categories/' . $imageName;
         }
 
-        $subCategory->update($validated);
+        $category = SubCategory::create($data);
 
-        return response()->json($subCategory);
+        return response()->json([
+            'success' => true,
+            'message' => 'Sub_Category created successfully',
+            'data' => new SubCategoryResource($category)
+        ], 201);
     }
 
-    // DELETE
-    public function destroy(SubCategory $subCategory)
+    // ✅ Show a single category
+    public function show($id)
     {
-        // delete image
-        if ($subCategory->image && file_exists(public_path($subCategory->image))) {
-            unlink(public_path($subCategory->image));
+        $category = SubCategory::findOrFail($id);
+        return new SubCategoryResource($category);
+    }
+
+    // ✅ Update category
+public function update(Request $request, $id)
+{
+    $category = SubCategory::findOrFail($id);
+
+    $data = $request->validate([
+    'name' => 'nullable|string|max:255',
+    'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+    'status' => 'nullable|boolean',
+    'category_id' => 'nullable|exists:categories,id'
+]);
+
+
+    if ($request->hasFile('image')) {
+        if ($category->image && File::exists(public_path($category->image))) {
+            File::delete(public_path($category->image));
         }
 
-        $subCategory->delete();
+        $image = $request->file('image');
+        $folder = public_path('sub_categories');
+        if (!File::exists($folder)) {
+            File::makeDirectory($folder, 0777, true, true);
+        }
 
-        return response()->json(['message' => 'Deleted successfully']);
+        $imageName = time() . '_' . $image->getClientOriginalName();
+        $image->move($folder, $imageName);
+        $data['image'] = 'sub_categories/' . $imageName;
+    }
+
+
+    $category->update($data);
+    $category->refresh();
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Sub_Category updated successfully',
+        'data' => new SubCategoryResource($category)
+    ], 200);
+}
+
+    // ✅ Delete category
+    public function destroy($id)
+    {
+        $category = SubCategory::findOrFail($id);
+
+        // Delete image if exists
+        if ($category->image && File::exists(public_path($category->image))) {
+            File::delete(public_path($category->image));
+        }
+
+        $category->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Sub_Category deleted successfully'
+        ]);
     }
 }

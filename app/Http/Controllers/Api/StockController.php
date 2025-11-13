@@ -3,104 +3,115 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Stock;
+use App\Http\Resources\StocksResource;
+use App\Models\Stocks;
 use Illuminate\Http\Request;
 
 class StockController extends Controller
 {
-    // LIST
+    // List all stocks
     public function index()
     {
-        return response()->json(
-            Stock::with(['vendor', 'product', 'warehouse'])->get()
-        );
+        $stocks = Stocks::all();
+        return response()->json([
+            'success' => true,
+            'data' => StocksResource::collection($stocks)
+        ]);
     }
 
-    // CREATE
+    // Store a new stock
     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'name'           => 'required|string|max:255',
-            'vendor_id'      => 'required|exists:vendors,id',
-            'product_id'     => 'required|exists:products,id',
-            'warehouse_id'   => 'required|exists:warehouses,id',
-            'quantity'       => 'required|integer|min:1',
-            'buying_price'   => 'required|numeric',
-            'selling_price'  => 'required|numeric',
-            'total_amount'   => 'required|numeric',
-            'due_amount'     => 'required|numeric',
-            'stock_date'     => 'required|date',
-            'commission'     => 'nullable|numeric',
-            'sku'            => 'nullable|string',
-            'barcode'        => 'nullable|string',
-            'status'         => 'required|boolean',
+        $data = $request->validate([
+            'product_id' => 'required|exists:products,id',
+            'vendor_id' => 'required|exists:vendors,id',
+            'quantity' => 'required|integer|min:0',
+            'buying_price' => 'required|numeric|min:0',
+            'selling_price' => 'required|numeric|min:0',
+            'total_amount' => 'sometimes|numeric|min:0',
+            'due_amount' => 'sometimes|numeric|min:0',
+            'stock_date' => 'nullable|date',
+            'comission' => 'nullable|numeric|min:0',
+            'status' => 'sometimes|boolean',
+            'sku' => 'nullable|string|max:255',
         ]);
 
-        $stock = Stock::create($validated);
+        $stock = Stocks::create($data);
 
-        return response()->json($stock, 201);
+        return response()->json([
+            'success' => true,
+            'message' => 'Stock created successfully',
+            'data' => new StocksResource($stock)
+        ], 201);
     }
 
-    // SHOW
+    // Show a single stock
     public function show($id)
     {
-        return response()->json(
-            Stock::with(['vendor', 'product', 'warehouse'])->findOrFail($id)
-        );
+        $stock = Stocks::find($id);
+        if (!$stock) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Stock not found'
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => new StocksResource($stock)
+        ]);
     }
 
-    // UPDATE
+    // Update a stock
     public function update(Request $request, $id)
     {
-        $stock = Stock::findOrFail($id);
+        $stock = Stocks::find($id);
+        if (!$stock) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Stock not found'
+            ], 404);
+        }
 
-        $validated = $request->validate([
-            'name'           => 'required|string|max:255',
-            'vendor_id'      => 'required|exists:vendors,id',
-            'product_id'     => 'required|exists:products,id',
-            'warehouse_id'   => 'required|exists:warehouses,id',
-            'quantity'       => 'required|integer|min:1',
-            'buying_price'   => 'required|numeric',
-            'selling_price'  => 'required|numeric',
-            'total_amount'   => 'required|numeric',
-            'due_amount'     => 'required|numeric',
-            'stock_date'     => 'required|date',
-            'commission'     => 'nullable|numeric',
-            'sku'            => 'nullable|string',
-            'barcode'        => 'nullable|string',
-            'status'         => 'required|boolean',
+        $data = $request->validate([
+            'product_id' => 'sometimes|exists:products,id',
+            'vendor_id' => 'sometimes|exists:vendors,id',
+            'quantity' => 'sometimes|integer|min:0',
+            'buying_price' => 'sometimes|numeric|min:0',
+            'selling_price' => 'sometimes|numeric|min:0',
+            'total_amount' => 'sometimes|numeric|min:0',
+            'due_amount' => 'sometimes|numeric|min:0',
+            'stock_date' => 'nullable|date',
+            'comission' => 'nullable|numeric|min:0',
+            'status' => 'sometimes|boolean',
+            'sku' => 'nullable|string|max:255',
         ]);
 
-        $stock->update($validated);
+        $stock->update($data);
 
-        return response()->json($stock);
+        return response()->json([
+            'success' => true,
+            'message' => 'Stock updated successfully',
+            'data' => new StocksResource($stock)
+        ]);
     }
 
-    // DELETE
+    // Delete a stock
     public function destroy($id)
     {
-        $stock = Stock::findOrFail($id);
+        $stock = Stocks::find($id);
+        if (!$stock) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Stock not found'
+            ], 404);
+        }
+
         $stock->delete();
 
-        return response()->json(['message' => 'Deleted successfully']);
-    }
-
-    // SEARCH
-    public function search(Request $request)
-    {
-        $search = $request->search;
-
-        $results = Stock::where('name', 'like', "%{$search}%")
-            ->orWhere('sku', 'like', "%{$search}%")
-            ->orWhere('barcode', 'like', "%{$search}%")
-            ->orWhereHas('product', function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%");
-            })
-            ->orWhereHas('vendor', function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%");
-            })
-            ->get();
-
-        return response()->json($results);
+        return response()->json([
+            'success' => true,
+            'message' => 'Stock deleted successfully'
+        ]);
     }
 }

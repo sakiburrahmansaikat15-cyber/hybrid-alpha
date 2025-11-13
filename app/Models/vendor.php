@@ -5,8 +5,14 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class vendor extends Model
+class Vendor extends Model
 {
-    protected $fillable=['name','shop_name','email','contact','address','image','status'];
     use HasFactory;
+    protected $guarded = [];
+
+    public function stocks()
+{
+    return $this->hasMany(Stocks::class, 'vendor_id');
+}
+
 }

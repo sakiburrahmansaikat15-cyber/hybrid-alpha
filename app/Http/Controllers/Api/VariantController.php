@@ -3,82 +3,77 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Variant;
+use App\Http\Resources\VariantsResource;
+use App\Models\variants;
 use Illuminate\Http\Request;
 
 class VariantController extends Controller
 {
-    // LIST ALL
+    // List all variants
     public function index()
     {
-        return response()->json(
-            Variant::with('product')->get()
-        );
+        $variants = variants::get();
+        return VariantsResource::collection($variants);
     }
 
-    // CREATE
+    // Store a new variant
     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'product_id'   => 'required|exists:products,id',
-            'name'         => 'required|string|max:255',
-            'value'        => 'required|string|max:255',
-            'description'  => 'nullable|string',
-            'status'       => 'required|boolean',
+        $data = $request->validate([
+            'name' => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'value' => 'required|string|max:255',
+            'status' => 'sometimes|boolean',
+            'product_id' => 'required|exists:prooducts,id',
         ]);
 
-        $variant = Variant::create($validated);
+        $variant = variants::create($data);
 
-        return response()->json($variant, 201);
+        return response()->json([
+            'success' => true,
+            'message' => 'Variant created successfully',
+            'data' => new VariantsResource($variant)
+        ], 201);
     }
 
-    // SHOW
+    // Show a single variant
     public function show($id)
     {
-        return response()->json(
-            Variant::with('product')->findOrFail($id)
-        );
+        $variant = variants::findOrFail($id);
+        return new VariantsResource($variant);
     }
 
-    // UPDATE
+    // Update a variant
     public function update(Request $request, $id)
     {
-        $variant = Variant::findOrFail($id);
+        $variant = variants::findOrFail($id);
 
-        $validated = $request->validate([
-            'product_id'   => 'required|exists:products,id',
-            'name'         => 'required|string|max:255',
-            'value'        => 'required|string|max:255',
-            'description'  => 'nullable|string',
-            'status'       => 'required|boolean',
+        $data = $request->validate([
+            'name' => 'sometimes|string|max:255',
+            'description' => 'nullable|string',
+            'value' => 'sometimes|string|max:255',
+            'status' => 'sometimes|boolean',
+            'product_id' => 'sometimes|exists:prooducts,id',
         ]);
 
-        $variant->update($validated);
+        $variant->update($data);
 
-        return response()->json($variant);
+        return response()->json([
+            'success' => true,
+            'message' => 'Variant updated successfully',
+            'data' => new VariantsResource($variant)
+        ], 200);
     }
 
-    // DELETE
+    // Delete a variant
     public function destroy($id)
     {
-        $variant = Variant::findOrFail($id);
+        $variant = variants::findOrFail($id);
         $variant->delete();
 
-        return response()->json(['message' => 'Deleted successfully']);
-    }
-
-    // SEARCH
-    public function search(Request $request)
-    {
-        $search = $request->search;
-
-        $results = Variant::where('name', 'like', "%{$search}%")
-            ->orWhere('value', 'like', "%{$search}%")
-            ->orWhereHas('product', function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%");
-            })
-            ->get();
-
-        return response()->json($results);
+        return response()->json([
+            'success' => true,
+            'message' => 'Variant deleted successfully'
+        ]);
     }
 }
