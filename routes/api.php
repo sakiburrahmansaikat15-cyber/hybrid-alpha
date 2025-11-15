@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\CategoriesController;
 use App\Http\Controllers\Api\PaymentTypeController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\ProductTypeController;
+use App\Http\Controllers\Api\SerialListController;
 use App\Http\Controllers\Api\StockController;
 use App\Http\Controllers\Api\SubCategoryController;
 use App\Http\Controllers\Api\SubItemController;
@@ -128,22 +129,23 @@ Route::prefix('stocks')->group(function () {
 
 
 
-Route::prefix('transactions')->group(function () {
-    // LIST ALL WITH PAGINATION
-    Route::get('/', [TransactionsController::class, 'index']);
-
-    // CREATE
-    Route::post('/', [TransactionsController::class, 'store']);
-
-    // SHOW
-    Route::get('/{id}', [TransactionsController::class, 'show']);
-
-    // UPDATE
-    Route::put('/{id}', [TransactionsController::class, 'update']);
-
-    // DELETE
-    Route::delete('/{id}', [TransactionsController::class, 'destroy']);
-
-    // SEARCH
-    Route::get('/search', [TransactionsController::class, 'search']);
+Route::prefix('serial-list')->group(function () {
+    Route::get('/', [SerialListController::class, 'index']);
+    Route::post('/', [SerialListController::class, 'store']);
+    Route::get('/{id}', [SerialListController::class, 'show']);
+    Route::put('/{id}', [SerialListController::class, 'update']);
+    Route::delete('/{id}', [SerialListController::class, 'destroy']);
 });
+
+
+
+
+Route::prefix('transaction')->group(function () {
+    Route::get('/', [TransactionsController::class, 'index']);
+    Route::post('/', [TransactionsController::class, 'store']);
+    Route::get('/{id}', [TransactionsController::class, 'show']);
+    Route::put('/{id}', [TransactionsController::class, 'update']);
+    Route::delete('/{id}', [TransactionsController::class, 'destroy']);
+});
+
+

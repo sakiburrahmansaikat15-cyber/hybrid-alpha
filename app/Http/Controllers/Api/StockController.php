@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\StocksResource;
 use App\Models\Stocks;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class StockController extends Controller
 {
@@ -23,7 +24,7 @@ class StockController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'product_id' => 'required|exists:products,id',
+            'product_id' => 'required|exists:prooducts,id',
             'vendor_id' => 'required|exists:vendors,id',
             'quantity' => 'required|integer|min:0',
             'buying_price' => 'required|numeric|min:0',

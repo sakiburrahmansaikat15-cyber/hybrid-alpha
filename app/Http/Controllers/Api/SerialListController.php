@@ -3,118 +3,124 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\SerialListResource;
 use App\Models\SerialList;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\File;
+
 
 class SerialListController extends Controller
 {
-    // LIST
+
     public function index()
     {
-        return response()->json(
-            SerialList::with(['stock', 'warehouse'])->get()
-        );
+        $serials = SerialList::latest()->get();
+        return SerialListResource::collection($serials);
     }
 
-    // CREATE
+
     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'name'          => 'required|string|max:255',
-            'stocks_id'     => 'required|exists:stocks,id',
-            'warehouse_id'  => 'required|exists:warehouses,id',
-            'sku'           => 'nullable|string',
-            'barcode'       => 'nullable|string',
-            'color'         => 'nullable|string',
-            'notes'         => 'nullable|string',
-            'status'        => 'required|boolean',
-            'image'         => 'nullable|image|max:2048',
+
+        $data = $request->validate([
+            'stock_id' => 'required|exists:stocks,id',
+            'sku' => 'required|string|max:255',
+            'barcode' => 'nullable|string|max:255',
+            'color' => 'nullable|string|max:255',
+            'notes' => 'nullable|string',
+            'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'status' => 'sometimes|boolean',
         ]);
 
-        // Image Upload
+
         if ($request->hasFile('image')) {
             $image = $request->file('image');
-            $name = time().'_'.$image->getClientOriginalName();
-            $image->move(public_path('serial-list'), $name);
-            $validated['image'] = 'serial-list/'.$name;
+            $folder = public_path('serial_images');
+
+            if (!File::exists($folder)) {
+                File::makeDirectory($folder, 0777, true, true);
+            }
+
+            $imageName = time() . '_' . $image->getClientOriginalName();
+            $image->move($folder, $imageName);
+            $data['image'] = 'serial_images/' . $imageName;
         }
 
-        $serial = SerialList::create($validated);
+        $serial = SerialList::create($data);
 
-        return response()->json($serial, 201);
+        return response()->json([
+            'success' => true,
+            'message' => 'Serial created successfully',
+            'data' => new SerialListResource($serial)
+        ], 201);
     }
 
-    // SHOW
+
     public function show($id)
     {
-        return response()->json(
-            SerialList::with(['stock', 'warehouse'])->findOrFail($id)
-        );
+        $serial = SerialList::findOrFail($id);
+        return new SerialListResource($serial);
     }
 
-    // UPDATE
+
+
     public function update(Request $request, $id)
     {
         $serial = SerialList::findOrFail($id);
 
-        $validated = $request->validate([
-            'name'          => 'required|string|max:255',
-            'stocks_id'     => 'required|exists:stocks,id',
-            'warehouse_id'  => 'required|exists:warehouses,id',
-            'sku'           => 'nullable|string',
-            'barcode'       => 'nullable|string',
-            'color'         => 'nullable|string',
-            'notes'         => 'nullable|string',
-            'status'        => 'required|boolean',
-            'image'         => 'nullable|image|max:2048',
+        $data = $request->validate([
+            'stock_id' => 'nullable|exists:stocks,id',
+            'sku' => 'nullable|string|max:255',
+            'barcode' => 'nullable|string|max:255',
+            'color' => 'nullable|string|max:255',
+            'notes' => 'nullable|string',
+            'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'status' => 'nullable|boolean',
         ]);
 
-        // Replace Image
+
         if ($request->hasFile('image')) {
 
-            if ($serial->image && file_exists(public_path($serial->image))) {
-                unlink(public_path($serial->image));
+            if ($serial->image && File::exists(public_path($serial->image))) {
+                File::delete(public_path($serial->image));
             }
 
             $image = $request->file('image');
-            $name = time().'_'.$image->getClientOriginalName();
-            $image->move(public_path('serial-list'), $name);
-            $validated['image'] = 'serial-list/'.$name;
+            $folder = public_path('serial_images');
+
+            if (!File::exists($folder)) {
+                File::makeDirectory($folder, 0777, true, true);
+            }
+
+            $imageName = time() . '_' . $image->getClientOriginalName();
+            $image->move($folder, $imageName);
+            $data['image'] = 'serial_images/' . $imageName;
         }
 
-        $serial->update($validated);
+        $serial->update($data);
+        $serial->refresh();
 
-        return response()->json($serial);
+        return response()->json([
+            'success' => true,
+            'message' => 'Serial updated successfully',
+            'data' => new SerialListResource($serial)
+        ], 200);
     }
 
-    // DELETE
+
     public function destroy($id)
     {
         $serial = SerialList::findOrFail($id);
 
-        if ($serial->image && file_exists(public_path($serial->image))) {
-            unlink(public_path($serial->image));
+        if ($serial->image && File::exists(public_path($serial->image))) {
+            File::delete(public_path($serial->image));
         }
 
         $serial->delete();
 
-        return response()->json(['message' => 'Deleted Successfully']);
-    }
-
-    // SEARCH
-    public function search(Request $request)
-    {
-        $search = $request->search;
-
-        $results = SerialList::where('name', 'like', "%{$search}%")
-            ->orWhere('sku', 'like', "%{$search}%")
-            ->orWhere('barcode', 'like', "%{$search}%")
-            ->orWhere('color', 'like', "%{$search}%")
-            ->orWhereHas('stock', function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%");
-            })
-            ->get();
-
-        return response()->json($results);
+        return response()->json([
+            'success' => true,
+            'message' => 'Serial deleted successfully'
+        ]);
     }
 }

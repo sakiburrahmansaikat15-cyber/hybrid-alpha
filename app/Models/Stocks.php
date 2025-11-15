@@ -22,4 +22,16 @@ class Stocks extends Model
     {
         return $this->belongsTo(Vendor::class, 'vendor_id');
     }
+
+    public function serialLists()
+{
+    return $this->hasMany(SerialList::class, 'stock_id');
+}
+
+
+    public function transactions()
+    {
+        return $this->hasMany(Transaction::class, 'stock_id');
+    }
+    
 }

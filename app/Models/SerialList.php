@@ -5,15 +5,14 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class PaymentType extends Model
+class SerialList extends Model
 {
     use HasFactory;
 
     protected $guarded = [];
 
-
-        public function transactions()
+     public function stock()
     {
-        return $this->hasMany(Transaction::class, 'payment_type_id');
+        return $this->belongsTo(Stocks::class, 'stock_id');
     }
 }

@@ -3,80 +3,83 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\transactions;
+use App\Http\Resources\TransactionResource;
+use App\Models\Transaction;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\Response;
 
 class TransactionsController extends Controller
 {
-     public function index(Request $request)
+    public function index()
     {
-        $limit = $request->limit ?? 10; // default limit = 10
-
-        $transactions = transactions::paginate($limit);
-
-        return response()->json($transactions);
+        $transactions = Transaction::latest()->get();
+        return TransactionResource::collection($transactions);
     }
 
-    // CREATE
+    // ✅ Store a new transaction
     public function store(Request $request)
     {
-
-        $validated = $request->validate([
-            'type'             => 'required|string|max:255',
-            'amount'           => 'required|numeric',
-            'status'           => 'required|string|max:255',
-            // 'stock_id'         => 'required',
-            // 'payment_type_id'  => 'required',
+        $data = $request->validate([
+            'stock_id' => 'required|exists:stocks,id',
+            'payment_type_id' => 'required|exists:payment_types,id',
+            'type' => 'nullable|string|max:255',
+            'amount' => 'required|numeric|min:0',
+            'status' => 'sometimes|boolean',
         ]);
 
-        $transaction = transactions::create($validated);
+        $transaction = Transaction::create($data);
 
-        return response()->json($transaction, 201);
+        return response()->json([
+            'success' => true,
+            'message' => 'Transaction created successfully',
+            'data' => new TransactionResource($transaction)
+        ], 201);
     }
 
-
+    // ✅ Show a single transaction
     public function show($id)
     {
-        $transaction = transactions::findOrFail($id);
-        return response()->json($transaction);
+        $transaction = Transaction::findOrFail($id);
+
+        if(!$transaction){
+            return response()->json("message:data not found");
+        }
+
+        return new TransactionResource($transaction);
     }
 
-    // UPDATE
+    // ✅ Update a transaction
     public function update(Request $request, $id)
     {
-        $transaction = transactions::findOrFail($id);
+        $transaction = Transaction::findOrFail($id);
 
-        $validated = $request->validate([
-            'type'             => 'required|string|max:255',
-            'amount'           => 'required|numeric',
-            'status'           => 'required|string|max:255',
-            'stock_id'         => 'required|exists:stocks,id',
-            'payment_type_id'  => 'required|exists:product_types,id',
+        $data = $request->validate([
+            'stock_id' => 'nullable|exists:stocks,id',
+            'payment_type_id' => 'nullable|exists:payment_types,id',
+            'type' => 'nullable|string|max:255',
+            'amount' => 'nullable|numeric|min:0',
+            'status' => 'nullable|boolean',
         ]);
 
-        $transaction->update($validated);
+        $transaction->update($data);
+        $transaction->refresh();
 
-        return response()->json($transaction);
+        return response()->json([
+            'success' => true,
+            'message' => 'Transaction updated successfully',
+            'data' => new TransactionResource($transaction)
+        ], 200);
     }
 
-
+    // ✅ Delete a transaction
     public function destroy($id)
     {
-        $transaction = transactions::findOrFail($id);
+        $transaction = Transaction::findOrFail($id);
         $transaction->delete();
 
-        return response()->json(['message' => 'Deleted successfully']);
-    }
-
-
-    public function search(Request $request)
-    {
-        $search = $request->search;
-
-        $results = transactions::where('type', 'like', "%{$search}%")
-            ->orWhere('status', 'like', "%{$search}%")
-            ->get();
-
-        return response()->json($results);
+        return response()->json([
+            'success' => true,
+            'message' => 'Transaction deleted successfully'
+        ]);
     }
 }
