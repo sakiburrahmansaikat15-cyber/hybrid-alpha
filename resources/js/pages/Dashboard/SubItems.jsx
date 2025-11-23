@@ -1,22 +1,32 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { 
-  Plus, 
-  Search, 
-  Edit, 
-  Trash2, 
-  X, 
+import {
+  Plus,
+  Search,
+  Edit,
+  Trash2,
+  X,
   Image as ImageIcon,
   Check,
-  AlertCircle 
+  AlertCircle,
+  Filter,
+  Eye,
+  EyeOff,
+  ChevronDown,
+  ChevronUp,
+  Package
 } from 'lucide-react';
 
 const SubItemsManager = () => {
   const [subItems, setSubItems] = useState([]);
+  const [subCategories, setSubCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [sortBy, setSortBy] = useState('newest');
+  const [expandedItem, setExpandedItem] = useState(null);
   const [formData, setFormData] = useState({
     sub_category_id: '',
     name: '',
@@ -25,44 +35,59 @@ const SubItemsManager = () => {
   });
   const [errors, setErrors] = useState({});
   const [imagePreview, setImagePreview] = useState(null);
+  const [notification, setNotification] = useState({ show: false, message: '', type: '' });
+
+  // Get CSRF token for Laravel
+  const getCSRFToken = () => {
+    return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+  };
+
+  // Configure axios defaults
+  useEffect(() => {
+    axios.defaults.headers.common['X-CSRF-TOKEN'] = getCSRFToken();
+    axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
+  }, []);
+
+  // Show notification
+  const showNotification = (message, type = 'success') => {
+    setNotification({ show: true, message, type });
+    setTimeout(() => setNotification({ show: false, message: '', type: '' }), 4000);
+  };
 
   // Fetch sub-items
   const fetchSubItems = async () => {
     setLoading(true);
     try {
       const response = await axios.get('/api/sub-items');
-      setSubItems(response.data);
+      // Handle API response structure from your controller
+      const items = response.data.data || response.data || [];
+      setSubItems(Array.isArray(items) ? items : []);
     } catch (error) {
       console.error('Error fetching sub-items:', error);
       showNotification('Error fetching sub-items', 'error');
+      setSubItems([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // Search sub-items
-  const searchSubItems = async () => {
-    if (!searchTerm.trim()) {
-      fetchSubItems();
-      return;
-    }
-
-    setLoading(true);
+  // Fetch sub-categories for dropdown
+  const fetchSubCategories = async () => {
     try {
-      const response = await axios.get(`/api/sub-items/search?search=${searchTerm}`);
-      setSubItems(response.data);
+      const response = await axios.get('/api/sub-categories');
+      const categories = response.data.data || response.data || [];
+      setSubCategories(Array.isArray(categories) ? categories : []);
     } catch (error) {
-      console.error('Error searching sub-items:', error);
-      showNotification('Error searching sub-items', 'error');
-    } finally {
-      setLoading(false);
+      console.error('Error fetching sub-categories:', error);
+      showNotification('Error fetching categories', 'error');
+      setSubCategories([]);
     }
   };
 
   // Handle form input changes
   const handleInputChange = (e) => {
     const { name, value, type, checked, files } = e.target;
-    
+
     if (type === 'file') {
       const file = files[0];
       setFormData(prev => ({
@@ -104,16 +129,27 @@ const SubItemsManager = () => {
     e.preventDefault();
     setErrors({});
 
+    // Validation
+    const newErrors = {};
+    if (!formData.sub_category_id) newErrors.sub_category_id = 'Sub category is required';
+    if (!formData.name.trim()) newErrors.name = 'Name is required';
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
     try {
       const submitData = new FormData();
       submitData.append('sub_category_id', formData.sub_category_id);
       submitData.append('name', formData.name);
-      submitData.append('status', formData.status);
+      submitData.append('status', formData.status ? '1' : '0');
       if (formData.image) {
         submitData.append('image', formData.image);
       }
 
       if (editingItem) {
+        // Use PUT method for update
         await axios.put(`/api/sub-items/${editingItem.id}`, submitData, {
           headers: { 'Content-Type': 'multipart/form-data' }
         });
@@ -129,10 +165,13 @@ const SubItemsManager = () => {
       fetchSubItems();
       setShowModal(false);
     } catch (error) {
+      console.error('Error saving sub-item:', error);
       if (error.response?.data?.errors) {
         setErrors(error.response.data.errors);
+      } else if (error.response?.data?.message) {
+        showNotification(error.response.data.message, 'error');
       } else {
-        showNotification('Error saving sub-item', 'error');
+        showNotification('Error saving sub-item. Please try again.', 'error');
       }
     }
   };
@@ -141,25 +180,49 @@ const SubItemsManager = () => {
   const handleEdit = (item) => {
     setEditingItem(item);
     setFormData({
-      sub_category_id: item.sub_category_id,
-      name: item.name,
-      status: item.status,
+      sub_category_id: item.sub_category_id?.toString() || '',
+      name: item.name || '',
+      status: item.status !== undefined ? item.status : true,
       image: null
     });
-    setImagePreview(item.image ? `${window.location.origin}/${item.image}` : null);
+    // Fix image path - your controller stores images in public/sub_item/
+    setImagePreview(item.image ? `/${item.image}` : null);
     setShowModal(true);
   };
 
   // Delete sub-item
   const handleDelete = async (id) => {
-    if (!confirm('Are you sure you want to delete this sub-item?')) return;
+    if (!confirm('Are you sure you want to delete this sub-item? This action cannot be undone.')) return;
 
     try {
       await axios.delete(`/api/sub-items/${id}`);
       showNotification('Sub-item deleted successfully!', 'success');
       fetchSubItems();
     } catch (error) {
+      console.error('Error deleting sub-item:', error);
       showNotification('Error deleting sub-item', 'error');
+    }
+  };
+
+  // Toggle item status
+  const toggleStatus = async (item) => {
+    try {
+      const newStatus = !item.status;
+      const submitData = new FormData();
+      submitData.append('sub_category_id', item.sub_category_id);
+      submitData.append('name', item.name);
+      submitData.append('status', newStatus ? '1' : '0');
+      submitData.append('_method', 'PUT');
+
+      await axios.post(`/api/sub-items/${item.id}`, submitData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      showNotification(`Sub-item ${newStatus ? 'activated' : 'deactivated'}!`, 'success');
+      fetchSubItems();
+    } catch (error) {
+      console.error('Error updating status:', error);
+      showNotification('Error updating status', 'error');
     }
   };
 
@@ -176,143 +239,308 @@ const SubItemsManager = () => {
     setErrors({});
   };
 
-  // Show notification
-  const showNotification = (message, type = 'info') => {
-    // You can integrate with a proper notification system here
-    alert(`${type.toUpperCase()}: ${message}`);
+  // Filter and sort sub-items
+  const getFilteredAndSortedItems = () => {
+    const items = Array.isArray(subItems) ? subItems : [];
+
+    let filtered = items.filter(item => {
+      if (!item || typeof item !== 'object') return false;
+
+      const itemName = item.name || '';
+      const categoryName = item.sub_category?.name || '';
+
+      const matchesSearch = itemName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        categoryName.toLowerCase().includes(searchTerm.toLowerCase());
+
+      const matchesStatus = filterStatus === 'all' ||
+        (filterStatus === 'active' && item.status) ||
+        (filterStatus === 'inactive' && !item.status);
+
+      return matchesSearch && matchesStatus;
+    });
+
+    // Sort items
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case 'name':
+          return (a.name || '').localeCompare(b.name || '');
+        case 'category':
+          return (a.sub_category?.name || '').localeCompare(b.sub_category?.name || '');
+        case 'newest':
+          return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+        case 'oldest':
+          return new Date(a.created_at || 0) - new Date(b.created_at || 0);
+        default:
+          return 0;
+      }
+    });
+
+    return filtered;
   };
 
   // Initialize
   useEffect(() => {
     fetchSubItems();
+    fetchSubCategories();
   }, []);
 
-  // Filter sub-items based on search (client-side fallback)
-  const filteredSubItems = subItems.filter(item =>
-    item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.sub_category?.name?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredSubItems = getFilteredAndSortedItems();
 
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100 p-4 md:p-6">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 text-gray-100 p-4 md:p-6">
+      {/* Notification */}
+      {notification.show && (
+        <div className={`fixed top-4 right-4 z-50 max-w-sm ${
+          notification.type === 'error' ? 'bg-red-500' : 'bg-green-500'
+        } text-white px-6 py-3 rounded-lg shadow-lg transform transition-transform duration-300 animate-in slide-in-from-right`}>
+          <div className="flex items-center gap-3">
+            <Check size={20} />
+            <span className="font-medium">{notification.message}</span>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="max-w-7xl mx-auto">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-white">Sub Items Manager</h1>
-            <p className="text-gray-400 mt-1">Manage your sub-items efficiently</p>
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8 gap-6">
+          <div className="flex-1">
+            <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+              Sub Items Manager
+            </h1>
+            <p className="text-gray-400 mt-2 text-lg">
+              Manage your sub-items with ease and precision
+            </p>
           </div>
-          
-          <button
-            onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors duration-200 font-medium"
-          >
-            <Plus size={20} />
-            Add Sub Item
-          </button>
+
+          <div className="flex flex-col sm:flex-row gap-4 w-full lg:w-auto">
+            <button
+              onClick={() => setShowModal(true)}
+              className="flex items-center justify-center gap-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-6 py-3 rounded-xl transition-all duration-200 font-semibold shadow-lg hover:shadow-blue-500/25 transform hover:-translate-y-0.5"
+            >
+              <Plus size={22} />
+              Add Sub Item
+            </button>
+          </div>
         </div>
 
-        {/* Search Bar */}
-        <div className="bg-gray-800 rounded-lg p-4 mb-6">
-          <div className="flex flex-col sm:flex-row gap-4">
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <div className="bg-gray-800/50 backdrop-blur-sm rounded-2xl p-6 border border-gray-700/50">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-400 text-sm font-medium">Total Items</p>
+                <p className="text-2xl font-bold text-white mt-1">{subItems.length}</p>
+              </div>
+              <div className="p-3 bg-blue-500/10 rounded-xl">
+                <Package size={24} className="text-blue-400" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-gray-800/50 backdrop-blur-sm rounded-2xl p-6 border border-gray-700/50">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-400 text-sm font-medium">Active Items</p>
+                <p className="text-2xl font-bold text-white mt-1">
+                  {subItems.filter(item => item?.status).length}
+                </p>
+              </div>
+              <div className="p-3 bg-green-500/10 rounded-xl">
+                <Check size={24} className="text-green-400" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-gray-800/50 backdrop-blur-sm rounded-2xl p-6 border border-gray-700/50">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-400 text-sm font-medium">Inactive Items</p>
+                <p className="text-2xl font-bold text-white mt-1">
+                  {subItems.filter(item => item && !item.status).length}
+                </p>
+              </div>
+              <div className="p-3 bg-red-500/10 rounded-xl">
+                <EyeOff size={24} className="text-red-400" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-gray-800/50 backdrop-blur-sm rounded-2xl p-6 border border-gray-700/50">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-400 text-sm font-medium">Categories</p>
+                <p className="text-2xl font-bold text-white mt-1">{subCategories.length}</p>
+              </div>
+              <div className="p-3 bg-purple-500/10 rounded-xl">
+                <Filter size={24} className="text-purple-400" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Controls Section */}
+        <div className="bg-gray-800/30 backdrop-blur-sm rounded-2xl p-6 mb-8 border border-gray-700/30">
+          <div className="flex flex-col lg:flex-row gap-6">
+            {/* Search */}
             <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
               <input
                 type="text"
-                placeholder="Search sub-items by name or category..."
+                placeholder="Search by name or category..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && searchSubItems()}
-                className="w-full pl-10 pr-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full pl-12 pr-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent backdrop-blur-sm transition-all duration-200"
               />
             </div>
-            <button
-              onClick={searchSubItems}
-              className="bg-gray-700 hover:bg-gray-600 text-white px-6 py-2 rounded-lg transition-colors duration-200 font-medium"
-            >
-              Search
-            </button>
-            {searchTerm && (
-              <button
-                onClick={() => {
-                  setSearchTerm('');
-                  fetchSubItems();
-                }}
-                className="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded-lg transition-colors duration-200 font-medium"
+
+            {/* Filters */}
+            <div className="flex flex-col sm:flex-row gap-4">
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 backdrop-blur-sm"
               >
-                Clear
-              </button>
-            )}
+                <option value="all">All Status</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 backdrop-blur-sm"
+              >
+                <option value="newest">Newest First</option>
+                <option value="oldest">Oldest First</option>
+                <option value="name">Name A-Z</option>
+                <option value="category">Category</option>
+              </select>
+            </div>
           </div>
         </div>
 
         {/* Loading State */}
         {loading && (
-          <div className="flex justify-center items-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+          <div className="flex justify-center items-center py-20">
+            <div className="relative">
+              <div className="w-16 h-16 border-4 border-blue-500/20 rounded-full animate-spin"></div>
+              <div className="w-16 h-16 border-4 border-transparent border-t-blue-500 rounded-full animate-spin absolute top-0 left-0"></div>
+            </div>
           </div>
         )}
 
         {/* Sub Items Grid */}
         {!loading && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6">
             {filteredSubItems.map((item) => (
               <div
                 key={item.id}
-                className="bg-gray-800 rounded-lg overflow-hidden border border-gray-700 hover:border-gray-600 transition-all duration-200 hover:shadow-lg hover:shadow-blue-500/10"
+                className="group bg-gray-800/30 backdrop-blur-sm rounded-2xl overflow-hidden border border-gray-700/30 hover:border-blue-500/50 transition-all duration-300 hover:shadow-2xl hover:shadow-blue-500/10"
               >
-                {/* Image */}
-                <div className="relative h-48 bg-gray-700">
+                {/* Image Section */}
+                <div className="relative h-48 bg-gradient-to-br from-gray-700 to-gray-800 overflow-hidden">
                   {item.image ? (
                     <img
                       src={`/${item.image}`}
-                      alt={item.name}
-                      className="w-full h-full object-cover"
+                      alt={item.name || 'Sub item image'}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                      }}
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
-                      <ImageIcon className="text-gray-500" size={48} />
+                      <ImageIcon className="text-gray-500 group-hover:text-gray-400 transition-colors" size={48} />
                     </div>
                   )}
-                  <div className="absolute top-3 right-3">
-                    <span
-                      className={`px-2 py-1 rounded-full text-xs font-medium ${
+
+                  {/* Status Badge */}
+                  <div className="absolute top-4 right-4">
+                    <button
+                      onClick={() => toggleStatus(item)}
+                      className={`px-3 py-1 rounded-full text-xs font-semibold backdrop-blur-sm border transition-all duration-200 ${
                         item.status
-                          ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                          : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                          ? 'bg-green-500/20 text-green-400 border-green-500/30 hover:bg-green-500/30'
+                          : 'bg-red-500/20 text-red-400 border-red-500/30 hover:bg-red-500/30'
                       }`}
                     >
                       {item.status ? 'Active' : 'Inactive'}
-                    </span>
+                    </button>
+                  </div>
+
+                  {/* Overlay Actions */}
+                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-3">
+                    <button
+                      onClick={() => handleEdit(item)}
+                      className="p-3 bg-blue-500 hover:bg-blue-600 text-white rounded-xl transition-all duration-200 transform translate-y-4 group-hover:translate-y-0"
+                      title="Edit"
+                    >
+                      <Edit size={18} />
+                    </button>
+                    <button
+                      onClick={() => setExpandedItem(expandedItem === item.id ? null : item.id)}
+                      className="p-3 bg-purple-500 hover:bg-purple-600 text-white rounded-xl transition-all duration-200 transform translate-y-4 group-hover:translate-y-0 delay-75"
+                      title="View Details"
+                    >
+                      {expandedItem === item.id ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                    </button>
+                    <button
+                      onClick={() => handleDelete(item.id)}
+                      className="p-3 bg-red-500 hover:bg-red-600 text-white rounded-xl transition-all duration-200 transform translate-y-4 group-hover:translate-y-0 delay-100"
+                      title="Delete"
+                    >
+                      <Trash2 size={18} />
+                    </button>
                   </div>
                 </div>
 
-                {/* Content */}
-                <div className="p-4">
-                  <h3 className="font-semibold text-white text-lg mb-1 truncate">
-                    {item.name}
+                {/* Content Section */}
+                <div className="p-5">
+                  <h3 className="font-bold text-white text-lg mb-2 line-clamp-1">
+                    {item.name || 'Unnamed Item'}
                   </h3>
-                  <p className="text-gray-400 text-sm mb-3">
-                    Category: {item.sub_category?.name || 'N/A'}
-                  </p>
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-gray-500">
-                      {new Date(item.created_at).toLocaleDateString()}
+                  <p className="text-gray-400 text-sm mb-3 flex items-center gap-2">
+                    <span className="bg-gray-700/50 px-2 py-1 rounded-lg text-xs">
+                      {item.sub_category?.name || 'Uncategorized'}
                     </span>
-                    <div className="flex gap-2">
+                  </p>
+
+                  {/* Expanded Details */}
+                  {expandedItem === item.id && (
+                    <div className="mt-4 pt-4 border-t border-gray-700/50 animate-in slide-in-from-top duration-300">
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">Created:</span>
+                          <span className="text-white">
+                            {item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Unknown'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">Updated:</span>
+                          <span className="text-white">
+                            {item.updated_at ? new Date(item.updated_at).toLocaleDateString() : 'Unknown'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">ID:</span>
+                          <span className="text-white font-mono">#{item.id}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Quick Actions */}
+                  <div className="flex justify-between items-center mt-4">
+                    <span className="text-xs text-gray-500">
+                      {item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Unknown date'}
+                    </span>
+                    <div className="flex gap-2 opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                       <button
-                        onClick={() => handleEdit(item)}
-                        className="p-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 rounded-lg transition-colors duration-200"
-                        title="Edit"
+                        onClick={() => toggleStatus(item)}
+                        className="p-2 bg-gray-700/50 hover:bg-gray-600/50 text-gray-300 rounded-lg transition-colors duration-200"
+                        title={item.status ? 'Deactivate' : 'Activate'}
                       >
-                        <Edit size={16} />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(item.id)}
-                        className="p-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded-lg transition-colors duration-200"
-                        title="Delete"
-                      >
-                        <Trash2 size={16} />
+                        {item.status ? <EyeOff size={14} /> : <Eye size={14} />}
                       </button>
                     </div>
                   </div>
@@ -324,23 +552,26 @@ const SubItemsManager = () => {
 
         {/* Empty State */}
         {!loading && filteredSubItems.length === 0 && (
-          <div className="text-center py-12">
-            <div className="bg-gray-800 rounded-lg p-8 max-w-md mx-auto">
-              <AlertCircle className="mx-auto text-gray-500 mb-4" size={48} />
-              <h3 className="text-xl font-semibold text-white mb-2">
-                No Sub Items Found
+          <div className="text-center py-16">
+            <div className="bg-gray-800/30 backdrop-blur-sm rounded-3xl p-12 max-w-2xl mx-auto border border-gray-700/30">
+              <div className="w-24 h-24 mx-auto mb-6 bg-gradient-to-br from-gray-700 to-gray-800 rounded-full flex items-center justify-center">
+                <AlertCircle className="text-gray-500" size={48} />
+              </div>
+              <h3 className="text-2xl font-bold text-white mb-3">
+                {searchTerm || filterStatus !== 'all' ? 'No Items Found' : 'No Sub Items Yet'}
               </h3>
-              <p className="text-gray-400 mb-4">
-                {searchTerm
-                  ? 'No sub-items match your search criteria. Try different keywords.'
-                  : 'Get started by creating your first sub-item.'}
+              <p className="text-gray-400 text-lg mb-8 max-w-md mx-auto">
+                {searchTerm || filterStatus !== 'all'
+                  ? 'Try adjusting your search or filter criteria to find what you\'re looking for.'
+                  : 'Get started by creating your first sub-item to organize your content efficiently.'}
               </p>
-              {!searchTerm && (
+              {!searchTerm && filterStatus === 'all' && (
                 <button
                   onClick={() => setShowModal(true)}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors duration-200 font-medium"
+                  className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-8 py-3 rounded-xl transition-all duration-200 font-semibold inline-flex items-center gap-3"
                 >
-                  Create Sub Item
+                  <Plus size={20} />
+                  Create Your First Sub Item
                 </button>
               )}
             </div>
@@ -348,12 +579,13 @@ const SubItemsManager = () => {
         )}
       </div>
 
-      {/* Modal */}
+      {/* Create/Edit Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
-          <div className="bg-gray-800 rounded-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center p-6 border-b border-gray-700">
-              <h2 className="text-xl font-semibold text-white">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-300">
+          <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-3xl max-w-md w-full max-h-[90vh] overflow-y-auto border border-gray-700/50 shadow-2xl">
+            {/* Header */}
+            <div className="flex justify-between items-center p-6 border-b border-gray-700/50">
+              <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
                 {editingItem ? 'Edit Sub Item' : 'Create Sub Item'}
               </h2>
               <button
@@ -361,62 +593,76 @@ const SubItemsManager = () => {
                   setShowModal(false);
                   resetForm();
                 }}
-                className="p-2 hover:bg-gray-700 rounded-lg transition-colors duration-200"
+                className="p-2 hover:bg-gray-700/50 rounded-xl transition-all duration-200 hover:rotate-90"
               >
-                <X size={20} />
+                <X size={24} />
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            {/* Form */}
+            <form onSubmit={handleSubmit} className="p-6 space-y-6">
               {/* Image Upload */}
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Image
+                <label className="block text-sm font-semibold text-gray-300 mb-3">
+                  Item Image
                 </label>
-                <div className="flex items-center gap-4">
-                  <div className="w-20 h-20 bg-gray-700 rounded-lg border-2 border-dashed border-gray-600 flex items-center justify-center overflow-hidden">
+                <div className="flex flex-col items-center gap-4">
+                  <div className="w-32 h-32 bg-gray-700/50 rounded-2xl border-2 border-dashed border-gray-600/50 flex items-center justify-center overflow-hidden group hover:border-blue-500/50 transition-all duration-300">
                     {imagePreview ? (
                       <img
                         src={imagePreview}
                         alt="Preview"
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                       />
                     ) : (
-                      <ImageIcon className="text-gray-500" size={24} />
+                      <div className="text-center p-4">
+                        <ImageIcon className="mx-auto text-gray-500 mb-2" size={32} />
+                        <span className="text-xs text-gray-400">Upload Image</span>
+                      </div>
                     )}
                   </div>
-                  <div className="flex-1">
+                  <div className="w-full">
                     <input
                       type="file"
+                      name="image"
                       accept="image/*"
                       onChange={handleInputChange}
-                      className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-600 file:text-white hover:file:bg-blue-700"
+                      className="block w-full text-sm text-gray-400 file:mr-4 file:py-3 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-gradient-to-r file:from-blue-600 file:to-purple-600 file:text-white hover:file:from-blue-700 hover:file:to-purple-700 transition-all duration-200"
                     />
-                    <p className="text-xs text-gray-500 mt-1">
-                      JPG, PNG, WEBP up to 2MB
+                    <p className="text-xs text-gray-500 mt-2 text-center">
+                      JPG, PNG, WEBP • Max 2MB
                     </p>
                   </div>
                 </div>
                 {errors.image && (
-                  <p className="text-red-400 text-sm mt-1">{errors.image}</p>
+                  <p className="text-red-400 text-sm mt-2 flex items-center gap-2">
+                    <AlertCircle size={16} />
+                    {errors.image}
+                  </p>
                 )}
               </div>
 
-              {/* Sub Category ID */}
+              {/* Sub Category */}
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Sub Category ID *
+                <label className="block text-sm font-semibold text-gray-300 mb-3">
+                  Sub Category *
                 </label>
-                <input
-                  type="text"
+                <select
                   name="sub_category_id"
                   value={formData.sub_category_id}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Enter sub category ID"
-                />
+                  className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent backdrop-blur-sm transition-all duration-200"
+                >
+                  <option value="">Select a category</option>
+                  {subCategories.map(cat => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </option>
+                  ))}
+                </select>
                 {errors.sub_category_id && (
-                  <p className="text-red-400 text-sm mt-1">
+                  <p className="text-red-400 text-sm mt-2 flex items-center gap-2">
+                    <AlertCircle size={16} />
                     {errors.sub_category_id}
                   </p>
                 )}
@@ -424,24 +670,35 @@ const SubItemsManager = () => {
 
               {/* Name */}
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Name *
+                <label className="block text-sm font-semibold text-gray-300 mb-3">
+                  Item Name *
                 </label>
                 <input
                   type="text"
                   name="name"
                   value={formData.name}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent backdrop-blur-sm transition-all duration-200"
                   placeholder="Enter sub item name"
                 />
                 {errors.name && (
-                  <p className="text-red-400 text-sm mt-1">{errors.name}</p>
+                  <p className="text-red-400 text-sm mt-2 flex items-center gap-2">
+                    <AlertCircle size={16} />
+                    {errors.name}
+                  </p>
                 )}
               </div>
 
-              {/* Status */}
-              <div className="flex items-center gap-3">
+              {/* Status Toggle */}
+              <div className="flex items-center justify-between p-4 bg-gray-700/30 rounded-xl border border-gray-600/30">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-300">
+                    Status
+                  </label>
+                  <p className="text-xs text-gray-400">
+                    {formData.status ? 'Item is active and visible' : 'Item is hidden and inactive'}
+                  </p>
+                </div>
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input
                     type="checkbox"
@@ -450,28 +707,25 @@ const SubItemsManager = () => {
                     onChange={handleInputChange}
                     className="sr-only peer"
                   />
-                  <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                  <div className="w-14 h-8 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-6 peer-checked:after:border-white after:content-[''] after:absolute after:top-1 after:left-1 after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-green-500"></div>
                 </label>
-                <span className="text-sm font-medium text-gray-300">
-                  Active Status
-                </span>
               </div>
 
-              {/* Submit Button */}
-              <div className="flex gap-3 pt-4">
+              {/* Submit Buttons */}
+              <div className="flex gap-4 pt-4">
                 <button
                   type="button"
                   onClick={() => {
                     setShowModal(false);
                     resetForm();
                   }}
-                  className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors duration-200 font-medium"
+                  className="flex-1 px-6 py-3 bg-gray-700/50 hover:bg-gray-600/50 text-white rounded-xl transition-all duration-200 font-semibold border border-gray-600/50 hover:border-gray-500/50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors duration-200 font-medium flex items-center justify-center gap-2"
+                  className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl transition-all duration-200 font-semibold flex items-center justify-center gap-3 shadow-lg hover:shadow-blue-500/25"
                 >
                   <Check size={20} />
                   {editingItem ? 'Update' : 'Create'}

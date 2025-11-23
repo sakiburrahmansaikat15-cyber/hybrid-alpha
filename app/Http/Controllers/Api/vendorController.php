@@ -7,111 +7,107 @@ use App\Http\Resources\VendorResource;
 use App\Models\Vendor;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Storage;
 
 class VendorController extends Controller
 {
-    // List all vendors
+    /**
+     * Display a listing of vendors.
+     */
     public function index()
     {
-        $vendors = Vendor::get();
+        $vendors = Vendor::latest()->get();
+
         return VendorResource::collection($vendors);
     }
 
-    // Store a new vendor
+    /**
+     * Store a newly created vendor.
+     */
     public function store(Request $request)
     {
-        $data = $request->validate([
-            'name' => 'required|string|max:255',
+        $validated = $request->validate([
+            'name'      => 'required|string|max:255',
             'shop_name' => 'required|string|max:255',
-            'email' => 'required|email|unique:vendors,email',
-            'contact' => 'required|string|max:20',
-            'address' => 'required|string',
-            'status' => 'sometimes|boolean',
-            'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'email'     => 'required|email|unique:vendors,email',
+            'contact'   => 'required|string|max:20',
+            'address'   => 'required|string',
+            'status'    => 'required|boolean', // true = active, false = inactive
+            'image'     => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048', // max 2MB
         ]);
 
-        // Handle image upload
+        // Handle image upload (clean & safe)
         if ($request->hasFile('image')) {
-            $image = $request->file('image');
-            $folder = public_path('vendors');
-            if (!File::exists($folder)) {
-                File::makeDirectory($folder, 0777, true, true);
-            }
-            $imageName = time() . '_' . $image->getClientOriginalName();
-            $image->move($folder, $imageName);
-            $data['image'] = 'vendors/' . $imageName;
+            $path = $request->file('image')->store('vendors', 'public');
+            $validated['image'] = $path;
         }
 
-        $vendor = Vendor::create($data);
+        $vendor = Vendor::create($validated);
 
         return response()->json([
             'success' => true,
-            'message' => 'Vendor created successfully',
-            'data' => new VendorResource($vendor)
+            'message' => 'Vendor created successfully.',
+            'data'    => new VendorResource($vendor)
         ], 201);
     }
 
-    // Show a single vendor
-    public function show($id)
+    /**
+     * Display the specified vendor.
+     */
+    public function show(Vendor $vendor)
     {
-        $vendor = Vendor::findOrFail($id);
         return new VendorResource($vendor);
     }
 
-    // Update a vendor
-    public function update(Request $request, $id)
+    /**
+     * Update the specified vendor.
+     */
+    public function update(Request $request, Vendor $vendor)
     {
-        $vendor = Vendor::findOrFail($id);
-
-        $data = $request->validate([
-            'name' => 'sometimes|string|max:255',
-            'shop_name' => 'sometimes|string|max:255',
-            'email' => 'sometimes|email|unique:vendors,email,' . $vendor->id,
-            'contact' => 'sometimes|string|max:20',
-            'address' => 'sometimes|string',
-            'status' => 'sometimes|boolean',
-            'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+        $validated = $request->validate([
+            'name'      => 'sometimes|required|string|max:255',
+            'shop_name' => 'sometimes|required|string|max:255',
+            'email'     => 'sometimes|required|email|unique:vendors,email,' . $vendor->id,
+            'contact'   => 'sometimes|required|string|max:20',
+            'address'   => 'sometimes|required|string',
+            'status'    => 'sometimes|required|boolean',
+            'image'     => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
         ]);
 
-        // Handle image update
+        // Handle image replacement
         if ($request->hasFile('image')) {
-            if ($vendor->image && File::exists(public_path($vendor->image))) {
-                File::delete(public_path($vendor->image));
+            // Delete old image
+            if ($vendor->image) {
+                Storage::disk('public')->delete($vendor->image);
             }
-            $image = $request->file('image');
-            $folder = public_path('vendors');
-            if (!File::exists($folder)) {
-                File::makeDirectory($folder, 0777, true, true);
-            }
-            $imageName = time() . '_' . $image->getClientOriginalName();
-            $image->move($folder, $imageName);
-            $data['image'] = 'vendors/' . $imageName;
+            $path = $request->file('image')->store('vendors', 'public');
+            $validated['image'] = $path;
         }
 
-        $vendor->update($data);
+        $vendor->update($validated);
 
         return response()->json([
             'success' => true,
-            'message' => 'Vendor updated successfully',
-            'data' => new VendorResource($vendor)
-        ], 200);
+            'message' => 'Vendor updated successfully.',
+            'data'    => new VendorResource($vendor)
+        ]);
     }
 
-    // Delete a vendor
-    public function destroy($id)
+    /**
+     * Remove the specified vendor.
+     */
+    public function destroy(Vendor $vendor)
     {
-        $vendor = Vendor::findOrFail($id);
-
-        // Delete image if exists
-        if ($vendor->image && File::exists(public_path($vendor->image))) {
-            File::delete(public_path($vendor->image));
+        // Delete image from storage
+        if ($vendor->image) {
+            Storage::disk('public')->delete($vendor->image);
         }
 
         $vendor->delete();
 
         return response()->json([
             'success' => true,
-            'message' => 'Vendor deleted successfully'
+            'message' => 'Vendor deleted successfully.'
         ]);
     }
 }

@@ -23,7 +23,7 @@ class BrandController extends Controller
         $data = $request->validate([
             'name' => 'required|string|max:255',
             'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
-            'status' => 'sometimes|boolean',
+            'status' => 'required|in:active,inactive',
         ]);
 
         // Handle image upload
@@ -60,6 +60,12 @@ class BrandController extends Controller
     public function update(Request $request, $id)
     {
         $brand = Brand::findOrFail($id);
+
+
+    if ($request->has('status')) {
+        if ($request->status === 'active') $request->merge(['status' => true]);
+        if ($request->status === 'inactive') $request->merge(['status' => false]);
+    }
 
         $data = $request->validate([
             'name' => 'sometimes|string|max:255',

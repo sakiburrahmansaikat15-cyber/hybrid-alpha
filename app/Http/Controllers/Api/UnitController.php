@@ -22,7 +22,7 @@ class UnitController extends Controller
     {
         $data = $request->validate([
             'name' => 'required|string|max:255',
-            'status' => 'sometimes|boolean',
+             'status' => 'required|in:active,inactive',
         ]);
 
         $unit = Unit::create($data);
@@ -48,6 +48,11 @@ class UnitController extends Controller
   {
 
     $unit = Unit::findOrFail($id);
+
+     if ($request->has('status')) {
+        if ($request->status === 'active') $request->merge(['status' => true]);
+        if ($request->status === 'inactive') $request->merge(['status' => false]);
+        }
 
     $data = $request->validate([
         'name' => 'sometimes|string|max:255',

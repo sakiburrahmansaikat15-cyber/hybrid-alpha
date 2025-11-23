@@ -23,7 +23,7 @@ class VariantController extends Controller
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
             'value' => 'required|string|max:255',
-            'status' => 'sometimes|boolean',
+             'status' => 'required|in:active,inactive',
             'product_id' => 'required|exists:prooducts,id',
         ]);
 
@@ -47,6 +47,12 @@ class VariantController extends Controller
     public function update(Request $request, $id)
     {
         $variant = variants::findOrFail($id);
+
+
+     if ($request->has('status')) {
+        if ($request->status === 'active') $request->merge(['status' => true]);
+        if ($request->status === 'inactive') $request->merge(['status' => false]);
+        }
 
         $data = $request->validate([
             'name' => 'sometimes|string|max:255',

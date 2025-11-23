@@ -23,11 +23,14 @@ class PaymentTypeController extends Controller
         $data = $request->validate([
             'name' => 'required|string|max:255',
             'type' => 'required|string|max:255',
-            'account_number' => 'sometimes|string|max:255',
+            'account_number' => 'required|string|max:255',
             'notes' => 'sometimes|string',
-            'status' => 'sometimes|boolean',
+            'status' => 'required|in:active,inactive',
             'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
         ]);
+
+        // Convert status string to boolean
+        $data['status'] = $request->status === 'active' ? 1 : 0;
 
         // Handle image upload
         if ($request->hasFile('image')) {
@@ -67,9 +70,14 @@ class PaymentTypeController extends Controller
             'type' => 'sometimes|string|max:255',
             'account_number' => 'sometimes|string|max:255',
             'notes' => 'sometimes|string',
-            'status' => 'sometimes|boolean',
+            'status' => 'sometimes|in:active,inactive',
             'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
         ]);
+
+        // Convert status string to boolean if present
+        if ($request->has('status')) {
+            $data['status'] = $request->status === 'active' ? 1 : 0;
+        }
 
         // Handle image update
         if ($request->hasFile('image')) {

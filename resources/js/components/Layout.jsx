@@ -60,7 +60,7 @@ const Layout = () => {
           <Header onMenuToggle={toggleSidebar} isSidebarOpen={isMobile ? mobileSidebarOpen : isSidebarOpen} />
         </div>
         <main className="flex-1 overflow-auto">
-          <div className="container mx-auto p-4 lg:p-6 max-w-8xl">
+          <div className=" mx-auto  max-w-8xl">
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
               <Outlet />
             </motion.div>

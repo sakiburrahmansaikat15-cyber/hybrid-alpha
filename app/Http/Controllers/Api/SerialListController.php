@@ -29,7 +29,7 @@ class SerialListController extends Controller
             'color' => 'nullable|string|max:255',
             'notes' => 'nullable|string',
             'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
-            'status' => 'sometimes|boolean',
+            'status' => 'required|in:active,inactive',
         ]);
 
 
@@ -67,6 +67,12 @@ class SerialListController extends Controller
     public function update(Request $request, $id)
     {
         $serial = SerialList::findOrFail($id);
+
+
+        if ($request->has('status')) {
+        if ($request->status === 'active') $request->merge(['status' => true]);
+        if ($request->status === 'inactive') $request->merge(['status' => false]);
+    }
 
         $data = $request->validate([
             'stock_id' => 'nullable|exists:stocks,id',

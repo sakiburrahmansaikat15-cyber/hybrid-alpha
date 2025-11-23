@@ -1,13 +1,13 @@
 <?php
 
 use App\Http\Controllers\Api\BrandController;
+use App\Http\Controllers\Api\CategoriesController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 
 use App\Http\Controllers\Api\TransactionsController;
 use App\Http\Controllers\Api\UnitController;
-use App\Http\Controllers\Api\CategoriesController;
 use App\Http\Controllers\Api\PaymentTypeController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\ProductTypeController;
@@ -17,7 +17,24 @@ use App\Http\Controllers\Api\SubCategoryController;
 use App\Http\Controllers\Api\SubItemController;
 use App\Http\Controllers\Api\VariantController;
 use App\Http\Controllers\Api\VendorController;
+use App\Http\Controllers\Api\RoleController;
 
+
+
+
+
+
+
+
+
+
+Route::prefix('roles')->group(function () {
+    Route::get('/', [RoleController::class, 'index']);
+    Route::post('/', [RoleController::class, 'store']);
+    Route::get('/{id}', [RoleController::class, 'show']);
+    Route::put('/{id}', [RoleController::class, 'update']);
+    Route::delete('/{id}', [RoleController::class, 'destroy']);
+});
 Route::prefix('units')->group(function () {
     Route::get('/', [UnitController::class, 'index']);
     Route::post('/', [UnitController::class, 'store']);
@@ -33,7 +50,11 @@ Route::prefix('categories')->group(function () {
     Route::get('/{id}', [CategoriesController::class, 'show']);
     Route::put('/{id}', [CategoriesController::class, 'update']);
     Route::delete('/{id}', [CategoriesController::class, 'destroy']);
+
+    // ✅ Add this route to fix your error
+    Route::post('/{id}/toggle-status', [CategoriesController::class, 'toggleStatus']);
 });
+
 
 
 
@@ -48,7 +69,7 @@ Route::prefix('sub-categories')->group(function () {
 
 
 
-Route::prefix('sub-item')->group(function () {
+Route::prefix('sub-items')->group(function () {
     Route::get('/', [SubItemController::class, 'index']);
     Route::post('/', [SubItemController::class, 'store']);
     Route::get('/{id}', [SubItemController::class, 'show']);
@@ -58,12 +79,14 @@ Route::prefix('sub-item')->group(function () {
 
 
 
+
+
 Route::prefix('brands')->group(function () {
-    Route::get('/', [BrandController::class, 'index']);
-    Route::post('/', [BrandController::class, 'store']);
-    Route::get('/{id}', [BrandController::class, 'show']);
-    Route::put('/{id}', [BrandController::class, 'update']);
-    Route::delete('/{id}', [BrandController::class, 'destroy']);
+    Route::get('/', [BrandController::class, 'index']);           // GET list
+    Route::post('/', [BrandController::class, 'store']);          // Create
+    Route::get('/{id}', [BrandController::class, 'show']);         // Show one
+    Route::post('/{id}', [BrandController::class, 'update']);      // Update (accepts _method=PUT)
+    Route::delete('/{id}', [BrandController::class, 'destroy']);   // Delete
 });
 
 
@@ -77,7 +100,7 @@ Route::prefix('product-type')->group(function () {
 
 
 
-Route::prefix('product')->group(function () {
+Route::prefix('products')->group(function () {
     Route::get('/', [ProductController::class, 'index']);
     Route::post('/', [ProductController::class, 'store']);
     Route::get('/{id}', [ProductController::class, 'show']);
@@ -98,7 +121,7 @@ Route::prefix('variants')->group(function () {
 
 
 
-Route::prefix('vendor')->group(function () {
+Route::prefix('vendors')->group(function () {
     Route::get('/', [VendorController::class, 'index']);
     Route::post('/', [VendorController::class, 'store']);
     Route::get('/{id}', [VendorController::class, 'show']);
@@ -108,7 +131,7 @@ Route::prefix('vendor')->group(function () {
 
 
 
-Route::prefix('payment-type')->group(function () {
+Route::prefix('payment-types')->group(function () {
     Route::get('/', [PaymentTypeController::class, 'index']);
     Route::post('/', [PaymentTypeController::class, 'store']);
     Route::get('/{id}', [PaymentTypeController::class, 'show']);

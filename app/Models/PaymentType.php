@@ -11,8 +11,11 @@ class PaymentType extends Model
 
     protected $guarded = [];
 
+    protected $casts = [
+        'status' => 'boolean'
+    ];
 
-        public function transactions()
+    public function transactions()
     {
         return $this->hasMany(Transaction::class, 'payment_type_id');
     }

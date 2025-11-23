@@ -108,6 +108,13 @@ export const menuData = {
           description: "View all your projects",
           icon: "Folder"
         },
+    {
+          id: 36,
+          title: "Transactions",
+          path: "/Transactions",
+          description: "View all your projects",
+          icon: "Folder"
+        },
 
 
 

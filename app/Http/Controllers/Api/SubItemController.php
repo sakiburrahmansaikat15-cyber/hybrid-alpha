@@ -23,7 +23,7 @@ class SubItemController extends Controller
         $data = $request->validate([
             'name' => 'required|string|max:255',
             'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
-            'status' => 'sometimes|boolean',
+             'status' => 'required|in:active,inactive',
             'sub_category_id' => 'nullable'
         ]);
 
@@ -61,6 +61,12 @@ class SubItemController extends Controller
 public function update(Request $request, $id)
 {
     $category = SubItems::findOrFail($id);
+
+
+        if ($request->has('status')) {
+        if ($request->status === 'active') $request->merge(['status' => true]);
+        if ($request->status === 'inactive') $request->merge(['status' => false]);
+        }
 
     $data = $request->validate([
     'name' => 'nullable|string|max:255',

@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const API_URL = 'http://localhost:8000/api/roles';
+const API_URL = '/api/roles';
 
 // Predefined lists for permissions and accesses
 const AVAILABLE_PERMISSIONS = [
-  'read', 'write', 'delete', 'update', 'create', 'export', 'import', 
+  'read', 'write', 'delete', 'update', 'create', 'export', 'import',
   'manage_users', 'manage_roles', 'view_reports', 'manage_settings'
 ];
 
@@ -46,10 +46,10 @@ const Roles = () => {
         limit: pagination.per_page,
         ...(search && { search })
       };
-      
+
       const response = await axios.get(API_URL, { params });
       const data = response.data.data || response.data;
-      
+
       setRoles(Array.isArray(data) ? data : (data.data || []));
       setPagination(prev => ({
         ...prev,
@@ -309,7 +309,7 @@ const Roles = () => {
                 className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-white placeholder-gray-400 transition-all duration-200"
               />
             </div>
-            
+
             <div className="flex flex-wrap gap-4">
               <div className="bg-gray-800 rounded-xl px-4 py-3 border border-gray-700">
                 <span className="text-sm text-gray-400">
@@ -325,7 +325,7 @@ const Roles = () => {
               </div>
               <div className="flex items-center gap-2 bg-gray-800 rounded-xl px-4 py-3 border border-gray-700">
                 <span className="text-sm text-gray-400">Show:</span>
-                <select 
+                <select
                   value={pagination.per_page}
                   onChange={(e) => handleLimitChange(e.target.value)}
                   className="bg-gray-700 border border-gray-600 rounded-lg px-2 py-1 text-white text-sm focus:ring-2 focus:ring-indigo-500"
@@ -389,8 +389,8 @@ const Roles = () => {
                   </h3>
                   <div className="flex items-center gap-3">
                     <div className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      role.status 
-                        ? 'bg-green-900/50 text-green-400 border border-green-800' 
+                      role.status
+                        ? 'bg-green-900/50 text-green-400 border border-green-800'
                         : 'bg-red-900/50 text-red-400 border border-red-800'
                     }`}>
                       {role.status ? 'Active' : 'Inactive'}
@@ -495,7 +495,7 @@ const Roles = () => {
               {Math.min(pagination.current_page * pagination.per_page, pagination.total)} of{' '}
               {pagination.total} entries
             </div>
-            
+
             <div className="flex gap-2">
               {/* Previous Button */}
               <button
@@ -512,9 +512,9 @@ const Roles = () => {
 
               {/* Page Numbers */}
               {Array.from({ length: pagination.last_page }, (_, i) => i + 1)
-                .filter(page => 
-                  page === 1 || 
-                  page === pagination.last_page || 
+                .filter(page =>
+                  page === 1 ||
+                  page === pagination.last_page ||
                   Math.abs(page - pagination.current_page) <= 2
                 )
                 .map((page, index, array) => {
@@ -570,7 +570,7 @@ const Roles = () => {
               </div>
               <h3 className="text-2xl font-bold text-white mb-3">No roles found</h3>
               <p className="text-gray-400 mb-8">
-                {searchTerm 
+                {searchTerm
                   ? "No roles match your search criteria. Try adjusting your search terms."
                   : "Get started by creating your first role to manage permissions and accesses."
                 }
