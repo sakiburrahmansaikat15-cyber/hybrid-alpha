@@ -51,7 +51,6 @@ Route::prefix('categories')->group(function () {
     Route::put('/{id}', [CategoriesController::class, 'update']);
     Route::delete('/{id}', [CategoriesController::class, 'destroy']);
 
-    // ✅ Add this route to fix your error
     Route::post('/{id}/toggle-status', [CategoriesController::class, 'toggleStatus']);
 });
 
@@ -82,11 +81,11 @@ Route::prefix('sub-items')->group(function () {
 
 
 Route::prefix('brands')->group(function () {
-    Route::get('/', [BrandController::class, 'index']);           // GET list
-    Route::post('/', [BrandController::class, 'store']);          // Create
-    Route::get('/{id}', [BrandController::class, 'show']);         // Show one
-    Route::post('/{id}', [BrandController::class, 'update']);      // Update (accepts _method=PUT)
-    Route::delete('/{id}', [BrandController::class, 'destroy']);   // Delete
+    Route::get('/', [BrandController::class, 'index']);           
+    Route::post('/', [BrandController::class, 'store']);          
+    Route::get('/{id}', [BrandController::class, 'show']);         
+    Route::post('/{id}', [BrandController::class, 'update']);      
+    Route::delete('/{id}', [BrandController::class, 'destroy']);   
 });
 
 
