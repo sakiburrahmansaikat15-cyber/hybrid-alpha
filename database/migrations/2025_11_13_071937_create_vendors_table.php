@@ -19,7 +19,7 @@ return new class extends Migration
             $table->string('contact');
             $table->text('address');
             $table->string('image')->nullable();
-            $table->boolean('status')->default(1);
+           $table->enum('status', ['active', 'inactive'])->default('active');
             $table->timestamps();
         });
     }

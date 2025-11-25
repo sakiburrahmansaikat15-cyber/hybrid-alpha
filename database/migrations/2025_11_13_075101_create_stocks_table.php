@@ -24,7 +24,7 @@ return new class extends Migration
             $table->decimal('due_amount', 15, 2)->default(0.00);
             $table->date('stock_date')->nullable();
             $table->decimal('comission', 10, 2)->nullable();
-            $table->boolean('status')->default(1);
+            $table->enum('status', ['active', 'inactive'])->default('active');
             $table->string('sku')->nullable();
             $table->timestamps();
         });

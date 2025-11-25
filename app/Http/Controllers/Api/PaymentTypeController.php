@@ -7,6 +7,7 @@ use App\Http\Resources\PaymentTypeResource;
 use App\Models\PaymentType;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 
 class PaymentTypeController extends Controller
 {
@@ -29,8 +30,8 @@ class PaymentTypeController extends Controller
             'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
         ]);
 
-        // Convert status string to boolean
-        $data['status'] = $request->status === 'active' ? 1 : 0;
+           $data['status'] = $request->status;
+
 
         // Handle image upload
         if ($request->hasFile('image')) {
@@ -62,46 +63,65 @@ class PaymentTypeController extends Controller
 
     // Update a payment type
     public function update(Request $request, $id)
-    {
-        $paymentType = PaymentType::findOrFail($id);
+{
+    Log::info("---- UPDATE PAYMENT TYPE START ----");
 
-        $data = $request->validate([
-            'name' => 'sometimes|string|max:255',
-            'type' => 'sometimes|string|max:255',
-            'account_number' => 'sometimes|string|max:255',
-            'notes' => 'sometimes|string',
-            'status' => 'sometimes|in:active,inactive',
-            'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
-        ]);
+    Log::info("Raw Input:", $request->all());
 
-        // Convert status string to boolean if present
-        if ($request->has('status')) {
-            $data['status'] = $request->status === 'active' ? 1 : 0;
+    $paymentType = PaymentType::findOrFail($id);
+
+    $data = $request->validate([
+        'name' => 'sometimes|string|max:255',
+        'type' => 'sometimes|string|max:255',
+        'account_number' => 'sometimes|string|max:255',
+        'notes' => 'sometimes|string',
+        'status' => 'required|in:active,inactive',
+        'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+    ]);
+
+    Log::info("Validated Data:", $data);
+
+    // Force correct status
+    $data['status'] = $request->status;
+
+    Log::info("Final Status Value:", ['status' => $data['status']]);
+
+    // Handle image update
+    if ($request->hasFile('image')) {
+
+        Log::info("Image uploaded: " . $request->file('image')->getClientOriginalName());
+
+        if ($paymentType->image && File::exists(public_path($paymentType->image))) {
+            File::delete(public_path($paymentType->image));
+            Log::info("Old image deleted");
         }
 
-        // Handle image update
-        if ($request->hasFile('image')) {
-            if ($paymentType->image && File::exists(public_path($paymentType->image))) {
-                File::delete(public_path($paymentType->image));
-            }
-            $image = $request->file('image');
-            $folder = public_path('payment_types');
-            if (!File::exists($folder)) {
-                File::makeDirectory($folder, 0777, true, true);
-            }
-            $imageName = time() . '_' . $image->getClientOriginalName();
-            $image->move($folder, $imageName);
-            $data['image'] = 'payment_types/' . $imageName;
+        $image = $request->file('image');
+        $folder = public_path('payment_types');
+
+        if (!File::exists($folder)) {
+            File::makeDirectory($folder, 0777, true, true);
+            Log::info("Image folder created");
         }
 
-        $paymentType->update($data);
+        $imageName = time() . '_' . $image->getClientOriginalName();
+        $image->move($folder, $imageName);
+        $data['image'] = 'payment_types/' . $imageName;
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Payment Type updated successfully',
-            'data' => new PaymentTypeResource($paymentType)
-        ], 200);
+        Log::info("New image saved: " . $data['image']);
     }
+
+    $paymentType->update($data);
+
+    Log::info("Updated Model:", $paymentType->toArray());
+    Log::info("---- UPDATE PAYMENT TYPE END ----");
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Payment Type updated successfully',
+        'data' => new PaymentTypeResource($paymentType)
+    ], 200);
+}
 
     // Delete a payment type
     public function destroy($id)

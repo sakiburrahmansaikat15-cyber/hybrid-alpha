@@ -74,12 +74,6 @@ class StockController extends Controller
             ], 404);
         }
 
-
-        if ($request->has('status')) {
-        if ($request->status === 'active') $request->merge(['status' => true]);
-        if ($request->status === 'inactive') $request->merge(['status' => false]);
-    }
-
         $data = $request->validate([
             'product_id' => 'sometimes|exists:products,id',
             'vendor_id' => 'sometimes|exists:vendors,id',
@@ -90,7 +84,7 @@ class StockController extends Controller
             'due_amount' => 'sometimes|numeric|min:0',
             'stock_date' => 'nullable|date',
             'comission' => 'nullable|numeric|min:0',
-            'status' => 'sometimes|boolean',
+            'status' => 'required|in:active,inactive',
             'sku' => 'nullable|string|max:255',
         ]);
 

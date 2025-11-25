@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 class SubItems extends Model
 {
     use HasFactory;
-     protected $table = 'sub_items';
+    protected $table = 'sub_items';
     protected $guarded = [];
 
     public function subcategory()

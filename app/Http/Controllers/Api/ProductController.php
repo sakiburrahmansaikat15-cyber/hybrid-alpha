@@ -10,21 +10,25 @@ use Illuminate\Support\Facades\File;
 
 class ProductController extends Controller
 {
-    // List all products
+    
     public function index()
     {
         $products = Prooducts::get();
+
+        if(!$products){
+            return response()->json("no product found");
+        }
         return ProductsResource::collection($products);
     }
 
-    // Store a new product
+ 
     public function store(Request $request)
     {
         $data = $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
             'specification' => 'nullable|string',
-             'status' => 'required|in:active,inactive',
+            'status' => 'required|in:active,inactive',
             'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
             'cat_id' => 'nullable|exists:categories,id',
             'brand_id' => 'nullable|exists:brands,id',
@@ -34,7 +38,7 @@ class ProductController extends Controller
             'product_type_id' => 'nullable|exists:product_types,id',
         ]);
 
-        // Handle image upload
+       
         if ($request->hasFile('image')) {
             $image = $request->file('image');
             $folder = public_path('products');
@@ -57,22 +61,26 @@ class ProductController extends Controller
         ], 201);
     }
 
-    // Show a single product
+    
     public function show($id)
     {
         $product = Prooducts::findOrFail($id);
+
+           if(!$product){
+            return response()->json("no product found");
+        }
+
         return new ProductsResource($product);
     }
 
-    // Update a product
+  
     public function update(Request $request, $id)
     {
         $product = Prooducts::findOrFail($id);
 
-            if ($request->has('status')) {
-        if ($request->status === 'active') $request->merge(['status' => true]);
-        if ($request->status === 'inactive') $request->merge(['status' => false]);
-    }
+           if(!$product){
+            return response()->json("no product found");
+        }
 
         $data = $request->validate([
             'name' => 'sometimes|string|max:255',
@@ -88,7 +96,7 @@ class ProductController extends Controller
             'product_type_id' => 'nullable|exists:product_types,id',
         ]);
 
-        // Handle image update
+       
         if ($request->hasFile('image')) {
             if ($product->image && File::exists(public_path($product->image))) {
                 File::delete(public_path($product->image));
@@ -114,12 +122,16 @@ class ProductController extends Controller
         ], 200);
     }
 
-    // Delete a product
+    
     public function destroy($id)
     {
         $product = Prooducts::findOrFail($id);
 
-        // Delete image if exists
+           if(!$product){
+            return response()->json("no product found");
+        }
+
+        
         if ($product->image && File::exists(public_path($product->image))) {
             File::delete(public_path($product->image));
         }

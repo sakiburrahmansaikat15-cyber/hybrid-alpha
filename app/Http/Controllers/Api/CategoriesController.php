@@ -141,16 +141,10 @@ class CategoriesController extends Controller
     {
         $category = Categories::findOrFail($id);
 
-        if ($request->has('status')) {
-            $request->merge([
-                'status' => $request->status === 'active'
-            ]);
-        }
-
         $data = $request->validate([
             'name' => 'sometimes|string|max:255',
             'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
-            'status' => 'sometimes|boolean',
+           'status' => 'required|in:active,inactive',
         ]);
 
         if ($request->hasFile('image')) {
@@ -212,29 +206,5 @@ class CategoriesController extends Controller
                 'error' => $e->getMessage()
             ], 500);
         }
-    }
-
-    // ===========================
-    // ✅ FIXED: TOGGLE STATUS
-    // ===========================
-    public function toggleStatus($id)
-    {
-        $category = Categories::find($id);
-
-        if (!$category) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Category not found'
-            ], 404);
-        }
-
-        $category->status = !$category->status;
-        $category->save();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Status toggled successfully',
-            'data' => new CategoriesResource($category)
-        ], 200);
     }
 }

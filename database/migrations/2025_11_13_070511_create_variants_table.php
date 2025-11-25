@@ -16,7 +16,7 @@ return new class extends Migration
             $table->string('name'); // Variant name
             $table->string('description')->nullable(); // Optional description
             $table->string('value'); // Variant value
-            $table->boolean('status')->default(1); // Status
+            $table->enum('status', ['active', 'inactive'])->default('active');
             $table->foreignId('product_id')->constrained('prooducts')->onDelete('cascade'); // Foreign key to products
             $table->timestamps();
         });

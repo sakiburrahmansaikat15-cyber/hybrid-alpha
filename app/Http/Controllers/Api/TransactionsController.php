@@ -24,7 +24,7 @@ class TransactionsController extends Controller
             'payment_type_id' => 'required|exists:payment_types,id',
             'type' => 'nullable|string|max:255',
             'amount' => 'required|numeric|min:0',
-            'status' => 'required|in:active,inactive',
+           'status' => 'required|in:active,inactive',
         ]);
 
         $transaction = Transaction::create($data);
@@ -53,17 +53,12 @@ class TransactionsController extends Controller
     {
         $transaction = Transaction::findOrFail($id);
 
-         if ($request->has('status')) {
-        if ($request->status === 'active') $request->merge(['status' => true]);
-        if ($request->status === 'inactive') $request->merge(['status' => false]);
-        }
-
         $data = $request->validate([
             'stock_id' => 'nullable|exists:stocks,id',
             'payment_type_id' => 'nullable|exists:payment_types,id',
             'type' => 'nullable|string|max:255',
             'amount' => 'nullable|numeric|min:0',
-            'status' => 'nullable|boolean',
+            'status' => 'required|in:active,inactive',
         ]);
 
         $transaction->update($data);

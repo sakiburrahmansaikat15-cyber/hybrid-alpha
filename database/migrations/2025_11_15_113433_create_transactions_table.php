@@ -21,7 +21,7 @@ return new class extends Migration
 
             $table->string('type')->nullable();
             $table->decimal('amount', 15, 2)->default(0.00);
-            $table->boolean('status')->default(1);
+            $table->enum('status', ['active', 'inactive'])->default('active');
 
             $table->timestamps();
         });

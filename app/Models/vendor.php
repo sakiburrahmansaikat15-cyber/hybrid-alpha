@@ -11,19 +11,10 @@ class Vendor extends Model
 
     protected $guarded = [];
 
-    // This is the key fix: cast status as boolean
-    protected $casts = [
-        'status' => 'boolean',  // true = active, false = inactive
-    ];
 
     public function stocks()
     {
         return $this->hasMany(Stocks::class, 'vendor_id');
     }
 
-    // Optional: Human-readable accessor for frontend
-    public function getStatusTextAttribute()
-    {
-        return $this->status ? 'active' : 'inactive';
-    }
 }
