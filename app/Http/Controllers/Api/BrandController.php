@@ -7,34 +7,55 @@ use App\Http\Resources\BrandResource;
 use App\Models\Brand;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Validator;
 
 class BrandController extends Controller
 {
-    // List all brands
-    public function index()
+    
+    public function index(Request $request)
     {
-        $brands = Brand::get();
-        return BrandResource::collection($brands);
+        $limit = (int) $request->query('limit', 10);
+        $page = (int) $request->query('page', 1);
+
+        $brands = Brand::latest()->paginate($limit, ['*'], 'page', $page);
+
+        return response()->json([
+            'message' => 'Brands fetched successfully',
+            'page' => $brands->currentPage(),
+            'perPage' => $brands->perPage(),
+            'totalItems' => $brands->total(),
+            'totalPages' => $brands->lastPage(),
+            'data' => BrandResource::collection($brands->items()),
+        ]);
     }
 
-    // Store a new brand
+    
     public function store(Request $request)
     {
-        $data = $request->validate([
+        $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
             'status' => 'required|in:active,inactive',
         ]);
 
-        // Handle image upload
-        if ($request->hasFile('image')) {
-            $image = $request->file('image');
-            $folder = public_path('brand');
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
 
+        $data = $validator->validated();
+
+       
+        if ($request->hasFile('image')) {
+            $folder = public_path('brand');
             if (!File::exists($folder)) {
-                File::makeDirectory($folder, 0777, true, true);
+                File::makeDirectory($folder, 0777, true);
             }
 
+            $image = $request->file('image');
             $imageName = time() . '_' . $image->getClientOriginalName();
             $image->move($folder, $imageName);
             $data['image'] = 'brand/' . $imageName;
@@ -49,14 +70,25 @@ class BrandController extends Controller
         ], 201);
     }
 
-    // Show a single brand
+    
     public function show($id)
     {
-        $brand = Brand::findOrFail($id);
-        return new BrandResource($brand);
+        $brand = Brand::find($id);
+
+        if (!$brand) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Brand not found'
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => new BrandResource($brand)
+        ], 200);
     }
 
-    // Update a brand
+    
     public function update(Request $request, $id)
     {
         $brand = Brand::findOrFail($id);
@@ -64,22 +96,21 @@ class BrandController extends Controller
         $data = $request->validate([
             'name' => 'sometimes|string|max:255',
             'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
-            'status' => 'required|in:active,inactive',
+            'status' => 'sometimes|in:active,inactive',
         ]);
 
-        // Handle image upload
+    
         if ($request->hasFile('image')) {
             if ($brand->image && File::exists(public_path($brand->image))) {
                 File::delete(public_path($brand->image));
             }
 
-            $image = $request->file('image');
             $folder = public_path('brand');
-
             if (!File::exists($folder)) {
-                File::makeDirectory($folder, 0777, true, true);
+                File::makeDirectory($folder, 0777, true);
             }
 
+            $image = $request->file('image');
             $imageName = time() . '_' . $image->getClientOriginalName();
             $image->move($folder, $imageName);
             $data['image'] = 'brand/' . $imageName;
@@ -94,12 +125,18 @@ class BrandController extends Controller
         ], 200);
     }
 
-    // Delete a brand
+   
     public function destroy($id)
     {
-        $brand = Brand::findOrFail($id);
+        $brand = Brand::find($id);
 
-        // Delete image if exists
+        if (!$brand) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Brand not found'
+            ], 404);
+        }
+
         if ($brand->image && File::exists(public_path($brand->image))) {
             File::delete(public_path($brand->image));
         }
@@ -109,6 +146,19 @@ class BrandController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Brand deleted successfully'
+        ], 200);
+    }
+
+   
+    public function search(Request $request)
+    {
+        $keyword = $request->query('keyword', '');
+
+        $brands = Brand::where('name', 'like', "%{$keyword}%")->latest()->get();
+
+        return response()->json([
+            'message' => 'Search results fetched successfully',
+            'data' => BrandResource::collection($brands),
         ]);
     }
 }

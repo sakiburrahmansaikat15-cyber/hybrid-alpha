@@ -12,15 +12,13 @@ import {
   MoreVertical,
   Eye,
   EyeOff,
-  ChevronDown,
-  Image as ImageIcon,
-  Folder,
-  Calendar,
-  Shield,
   Upload,
   ChevronLeft,
   ChevronRight,
-  Loader
+  Loader,
+  Image as ImageIcon,
+  Folder,
+  Calendar
 } from 'lucide-react';
 
 const API_URL = 'http://localhost:8000/api/categories';
@@ -43,7 +41,6 @@ const Categories = () => {
   const [imagePreview, setImagePreview] = useState(null);
   const [errors, setErrors] = useState({});
   const [notification, setNotification] = useState({ show: false, message: '', type: '' });
-
   const [pagination, setPagination] = useState({
     current_page: 1,
     last_page: 1,
@@ -59,62 +56,63 @@ const Categories = () => {
   const handleApiError = useCallback((error, defaultMessage) => {
     if (error.response?.status === 404) {
       showNotification('Category not found.', 'error');
-      return { _general: 'Category not found.' };
-    } else if (error.response?.status === 500) {
-      showNotification('Server error. Please try again later.', 'error');
-      return { _general: 'Internal server error.' };
-    } else if (error.response?.data?.errors) {
-      const validationErrors = error.response.data.errors;
+    } else if (error.response?.status === 422) {
+      const validationErrors = error.response.data.errors || {};
       const firstError = Object.values(validationErrors)[0]?.[0];
-      showNotification(firstError || 'Validation error', 'error');
-      return validationErrors;
+      showNotification(firstError || 'Validation failed', 'error');
+      setErrors(validationErrors);
     } else if (error.response?.data?.message) {
       showNotification(error.response.data.message, 'error');
-      return { _general: error.response.data.message };
+      setErrors({ _general: error.response.data.message });
     } else if (error.message === 'Network Error') {
       showNotification('Network error - please check your connection', 'error');
-      return { _general: 'Network error' };
     } else {
-      showNotification(defaultMessage, 'error');
-      return { _general: defaultMessage };
+      showNotification(defaultMessage || 'An error occurred', 'error');
     }
   }, [showNotification]);
 
-  const fetchCategories = useCallback(async (page = 1, search = '') => {
+  const fetchCategories = useCallback(async (page = 1) => {
     setLoading(true);
     try {
-      const params = {
-        page,
-        limit: pagination.per_page,
-        ...(search && { search })
-      };
+      const response = await axios.get(API_URL, {
+        params: { page, limit: pagination.per_page }
+      });
 
-      const response = await axios.get(API_URL, { params });
-
-      if (response.data.success) {
-        setCategories(response.data.data || []);
-        setPagination({
-          current_page: response.data.pagination?.current_page || 1,
-          last_page: response.data.pagination?.last_page || 1,
-          per_page: response.data.pagination?.per_page || 10,
-          total: response.data.pagination?.total || 0
-        });
-      } else {
-        throw new Error(response.data.message || 'Failed to fetch categories');
-      }
+      const res = response.data;
+      setCategories(res.data || []);
+      setPagination({
+        current_page: res.page,
+        last_page: res.totalPages,
+        per_page: res.perPage,
+        total: res.totalItems
+      });
     } catch (error) {
-      handleApiError(error, 'Error fetching categories');
+      handleApiError(error, 'Failed to load categories');
       setCategories([]);
     } finally {
       setLoading(false);
     }
   }, [handleApiError, pagination.per_page]);
 
+  const performSearch = async (keyword) => {
+    if (!keyword.trim()) {
+      fetchCategories(1);
+      return;
+    }
+    try {
+      const response = await axios.get(`${API_URL}/search`, {
+        params: { keyword }
+      });
+      setCategories(response.data.data || []);
+      setPagination(prev => ({ ...prev, current_page: 1, last_page: 1, total: response.data.data.length }));
+    } catch (error) {
+      handleApiError(error, 'Search failed');
+    }
+  };
+
   const validateForm = () => {
     const newErrors = {};
-    if (!formData.name.trim()) {
-      newErrors.name = 'Category name is required';
-    }
+    if (!formData.name.trim()) newErrors.name = 'Category name is required';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -122,29 +120,26 @@ const Categories = () => {
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-    if (errors[name]) {
-      setErrors(prev => ({ ...prev, [name]: '' }));
-    }
+    if (errors[name]) setErrors(prev => ({ ...prev, [name]: undefined }));
   };
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
-    if (file) {
-      const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-      if (!validTypes.includes(file.type)) {
-        setErrors(prev => ({ ...prev, image: 'Please select a valid image file (JPEG, PNG, WebP)' }));
-        return;
-      }
-      if (file.size > 2 * 1024 * 1024) {
-        setErrors(prev => ({ ...prev, image: 'Image size must be less than 2MB' }));
-        return;
-      }
-      setFormData(prev => ({ ...prev, image: file }));
-      setImagePreview(URL.createObjectURL(file));
-      if (errors.image) {
-        setErrors(prev => ({ ...prev, image: '' }));
-      }
+    if (!file) return;
+
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (!validTypes.includes(file.type)) {
+      setErrors(prev => ({ ...prev, image: 'Invalid file type. Use JPG, PNG or WebP' }));
+      return;
     }
+    if (file.size > 2 * 1024 * 1024) {
+      setErrors(prev => ({ ...prev, image: 'Image must be under 2MB' }));
+      return;
+    }
+
+    setFormData(prev => ({ ...prev, image: file }));
+    setImagePreview(URL.createObjectURL(file));
+    setErrors(prev => ({ ...prev, image: undefined }));
   };
 
   const handleSubmit = async (e) => {
@@ -156,40 +151,51 @@ const Categories = () => {
     submitData.append('name', formData.name.trim());
     submitData.append('status', formData.status);
 
-    // Only append image if a new one is selected
     if (formData.image instanceof File) {
       submitData.append('image', formData.image);
     }
 
     try {
-      let response;
       if (editingCategory) {
-        // Laravel: Use POST + _method=PUT for update with file upload
-        submitData.append('_method', 'PUT');
-        response = await axios.post(`${API_URL}/${editingCategory.id}`, submitData, {
+        await axios.post(`${API_URL}/${editingCategory.id}`, submitData, {
           headers: { 'Content-Type': 'multipart/form-data' }
         });
       } else {
-        response = await axios.post(API_URL, submitData, {
+        await axios.post(API_URL, submitData, {
           headers: { 'Content-Type': 'multipart/form-data' }
         });
       }
 
-      if (response.data.success) {
-        showNotification(
-          response.data.message || `Category ${editingCategory ? 'updated' : 'created'} successfully!`,
-          'success'
-        );
-        fetchCategories(pagination.current_page, searchTerm);
-        closeModal();
-      } else {
-        throw new Error(response.data.message || `Failed to ${editingCategory ? 'update' : 'create'} category`);
-      }
+      showNotification(editingCategory ? 'Category updated!' : 'Category created!', 'success');
+      fetchCategories(pagination.current_page);
+      closeModal();
     } catch (error) {
-      const err = handleApiError(error, 'Error saving category');
-      setErrors(prev => ({ ...prev, ...err }));
+      handleApiError(error, 'Failed to save category');
     } finally {
       setOperationLoading(null);
+    }
+  };
+
+  // FIXED: Add toggle status functionality
+  const toggleStatus = async (category) => {
+    setOperationLoading(`status-${category.id}`);
+    try {
+      const newStatus = !category.status;
+      const submitData = new FormData();
+      submitData.append('name', category.name);
+      submitData.append('status', newStatus ? 'active' : 'inactive');
+
+      await axios.post(`${API_URL}/${category.id}`, submitData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      showNotification(`Category ${newStatus ? 'activated' : 'deactivated'}!`, 'success');
+      fetchCategories(pagination.current_page);
+    } catch (error) {
+      handleApiError(error, 'Failed to update status');
+    } finally {
+      setOperationLoading(null);
+      setActionMenu(null);
     }
   };
 
@@ -207,40 +213,15 @@ const Categories = () => {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this category? This action cannot be undone.')) {
-      setActionMenu(null);
-      return;
-    }
+    if (!window.confirm('Delete this category permanently?')) return;
 
     setOperationLoading(`delete-${id}`);
     try {
-      const response = await axios.delete(`${API_URL}/${id}`);
-      if (response.data.success) {
-        showNotification(response.data.message || 'Category deleted successfully!', 'success');
-        fetchCategories(pagination.current_page, searchTerm);
-      } else {
-        throw new Error(response.data.message || 'Failed to delete category');
-      }
+      await axios.delete(`${API_URL}/${id}`);
+      showNotification('Category deleted!', 'success');
+      fetchCategories(pagination.current_page);
     } catch (error) {
-      handleApiError(error, 'Error deleting category');
-    } finally {
-      setOperationLoading(null);
-      setActionMenu(null);
-    }
-  };
-
-  const toggleStatus = async (category) => {
-    setOperationLoading(`status-${category.id}`);
-    try {
-      const response = await axios.post(`${API_URL}/${category.id}/toggle-status`);
-      if (response.data.success) {
-        showNotification(response.data.message || `Category ${!category.status ? 'activated' : 'deactivated'}!`, 'success');
-        fetchCategories(pagination.current_page, searchTerm);
-      } else {
-        throw new Error(response.data.message || 'Failed to update category status');
-      }
-    } catch (error) {
-      handleApiError(error, 'Error updating status');
+      handleApiError(error, 'Failed to delete category');
     } finally {
       setOperationLoading(null);
       setActionMenu(null);
@@ -254,12 +235,8 @@ const Categories = () => {
     setErrors({});
   };
 
-  const openModal = (category = null) => {
-    if (category) {
-      handleEdit(category);
-    } else {
-      resetForm();
-    }
+  const openModal = () => {
+    resetForm();
     setShowModal(true);
   };
 
@@ -268,73 +245,63 @@ const Categories = () => {
     setTimeout(resetForm, 300);
   };
 
-  const handlePageChange = (newPage) => {
-    if (newPage >= 1 && newPage <= pagination.last_page) {
-      fetchCategories(newPage, searchTerm);
+  const handlePageChange = (page) => {
+    if (page >= 1 && page <= pagination.last_page && page !== pagination.current_page) {
+      fetchCategories(page);
     }
   };
 
   const handleLimitChange = (newLimit) => {
     setPagination(prev => ({ ...prev, per_page: parseInt(newLimit) }));
-    fetchCategories(1, searchTerm);
+    fetchCategories(1);
   };
 
-  const filteredCategories = React.useMemo(() => {
-    let filtered = categories.filter(item => {
-      const matchesSearch = item.name?.toLowerCase().includes(searchTerm.toLowerCase()) || false;
-      const matchesStatus = filterStatus === 'all' ||
-        (filterStatus === 'active' ? item.status : !item.status);
-      return matchesSearch && matchesStatus;
-    });
+  const filteredAndSortedCategories = React.useMemo(() => {
+    let filtered = [...categories];
+
+    if (filterStatus !== 'all') {
+      filtered = filtered.filter(c => (filterStatus === 'active') === c.status);
+    }
 
     return filtered.sort((a, b) => {
       switch (sortBy) {
-        case 'name': return (a.name || '').localeCompare(b.name || '');
-        case 'status': return (b.status ? 1 : -1) - (a.status ? 1 : -1);
-        case 'newest': return new Date(b.created_at || 0) - new Date(a.created_at || 0);
-        case 'oldest': return new Date(a.created_at || 0) - new Date(b.created_at || 0);
-        default: return 0;
+        case 'name':
+          return a.name.localeCompare(b.name);
+        case 'newest':
+          return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+        case 'oldest':
+          return new Date(a.created_at || 0) - new Date(b.created_at || 0);
+        case 'status':
+          return (b.status ? 1 : 0) - (a.status ? 1 : 0);
+        default:
+          return 0;
       }
     });
-  }, [categories, searchTerm, filterStatus, sortBy]);
+  }, [categories, filterStatus, sortBy]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchTerm) {
+        performSearch(searchTerm);
+      } else {
+        fetchCategories(1);
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
   useEffect(() => {
     fetchCategories(1);
-  }, [fetchCategories]);
-
-  useEffect(() => {
-    const delayDebounceFn = setTimeout(() => {
-      fetchCategories(1, searchTerm);
-    }, 500);
-    return () => clearTimeout(delayDebounceFn);
-  }, [searchTerm, fetchCategories]);
-
-  useEffect(() => {
-    const handleClickOutside = () => setActionMenu(null);
-    document.addEventListener('click', handleClickOutside);
-    return () => document.removeEventListener('click', handleClickOutside);
   }, []);
 
   const stats = {
     total: pagination.total,
-    active: categories.filter(item => item.status).length,
-    inactive: categories.filter(item => !item.status).length
+    active: categories.filter(c => c.status).length,
+    inactive: categories.filter(c => !c.status).length
   };
 
-  const formatDate = (dateString) => {
-    try {
-      if (!dateString) return 'N/A';
-      return new Date(dateString).toLocaleDateString();
-    } catch {
-      return 'Invalid Date';
-    }
-  };
-
-  const getImageUrl = (imagePath) => {
-    if (!imagePath) return null;
-    if (imagePath.startsWith('http')) return imagePath;
-    return `http://localhost:8000/${imagePath}`;
-  };
+  const formatDate = (date) => date ? new Date(date).toLocaleDateString() : 'N/A';
+  const getImageUrl = (path) => path ? `http://localhost:8000/${path}` : null;
 
   if (loading && categories.length === 0) {
     return (
@@ -350,8 +317,8 @@ const Categories = () => {
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            {[...Array(3)].map((_, index) => (
-              <div key={index} className="bg-gray-800/40 rounded-2xl p-6 border border-gray-700/40 animate-pulse">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="bg-gray-800/40 rounded-2xl p-6 border border-gray-700/40 animate-pulse">
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="h-4 bg-gray-700 rounded w-24 mb-2"></div>
@@ -363,8 +330,8 @@ const Categories = () => {
             ))}
           </div>
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {[...Array(6)].map((_, index) => (
-              <div key={index} className="bg-gray-800/30 backdrop-blur-sm rounded-2xl p-6 border border-gray-700/30 animate-pulse">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="bg-gray-800/30 backdrop-blur-sm rounded-2xl p-6 border border-gray-700/30 animate-pulse">
                 <div className="flex justify-between mb-4">
                   <div className="h-6 bg-gray-700 rounded w-32"></div>
                   <div className="h-6 bg-gray-700 rounded w-12"></div>
@@ -413,7 +380,7 @@ const Categories = () => {
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
-              onClick={() => openModal()}
+              onClick={openModal}
               className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-200 shadow-lg hover:shadow-blue-500/25 flex items-center gap-3"
             >
               <Plus size={22} />
@@ -535,7 +502,7 @@ const Categories = () => {
           animate="visible"
           className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mb-8"
         >
-          {filteredCategories.map((category) => (
+          {filteredAndSortedCategories.map((category) => (
             <motion.div
               key={category.id}
               variants={{
@@ -580,18 +547,31 @@ const Categories = () => {
                             <Edit size={16} />
                             Edit
                           </button>
+                          {/* FIXED: Add toggle status button to action menu */}
                           <button
                             onClick={() => toggleStatus(category)}
-                            className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-300 hover:bg-gray-700/50 transition-colors duration-200"
+                            disabled={operationLoading === `status-${category.id}`}
+                            className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-300 hover:bg-gray-700/50 transition-colors duration-200 disabled:opacity-50"
                           >
-                            {category.status ? <EyeOff size={16} /> : <Eye size={16} />}
+                            {operationLoading === `status-${category.id}` ? (
+                              <Loader size={16} className="animate-spin" />
+                            ) : category.status ? (
+                              <EyeOff size={16} />
+                            ) : (
+                              <Eye size={16} />
+                            )}
                             {category.status ? 'Deactivate' : 'Activate'}
                           </button>
                           <button
                             onClick={() => handleDelete(category.id)}
-                            className="w-full flex items-center gap-3 px-4 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors duration-200"
+                            disabled={operationLoading === `delete-${category.id}`}
+                            className="w-full flex items-center gap-3 px-4 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors duration-200 disabled:opacity-50"
                           >
-                            <Trash2 size={16} />
+                            {operationLoading === `delete-${category.id}` ? (
+                              <Loader size={16} className="animate-spin" />
+                            ) : (
+                              <Trash2 size={16} />
+                            )}
                             Delete
                           </button>
                         </motion.div>
@@ -624,32 +604,28 @@ const Categories = () => {
                 </div>
 
                 <div className="mb-4">
+                  {/* FIXED: Make status badge clickable for toggling */}
                   <button
                     onClick={() => toggleStatus(category)}
+                    disabled={operationLoading === `status-${category.id}`}
                     className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold transition-all duration-200 ${
                       category.status
                         ? 'bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30'
                         : 'bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30'
-                    }`}
+                    } disabled:opacity-50`}
                   >
-                    {category.status ? (
-                      <>
-                        <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                        Active
-                      </>
+                    {operationLoading === `status-${category.id}` ? (
+                      <Loader size={12} className="animate-spin" />
                     ) : (
-                      <>
-                        <div className="w-2 h-2 bg-red-400 rounded-full"></div>
-                        Inactive
-                      </>
+                      <div className={`w-2 h-2 rounded-full ${category.status ? 'bg-green-400' : 'bg-red-400'}`}></div>
                     )}
+                    {category.status ? 'Active' : 'Inactive'}
                   </button>
                 </div>
 
                 <div className="space-y-3 mb-6">
                   <div className="flex items-center gap-2 text-sm text-gray-400">
-                    <Shield size={16} />
-                    <span>ID: #{category.id}</span>
+                    ID: #{category.id}
                   </div>
                   <div className="flex items-center gap-2 text-sm text-gray-400">
                     <Calendar size={16} />
@@ -689,8 +665,7 @@ const Categories = () => {
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row justify-between items-center gap-4 py-6 border-t border-gray-700/30">
             <div className="text-sm text-gray-400">
               Showing {((pagination.current_page - 1) * pagination.per_page) + 1} to{' '}
-              {Math.min(pagination.current_page * pagination.per_page, pagination.total)} of{' '}
-              {pagination.total} entries
+              {Math.min(pagination.current_page * pagination.per_page, pagination.total)} of {pagination.total} entries
             </div>
             <div className="flex gap-2">
               <button
@@ -705,12 +680,9 @@ const Categories = () => {
                 <ChevronLeft size={16} />
                 Previous
               </button>
+
               {Array.from({ length: pagination.last_page }, (_, i) => i + 1)
-                .filter(page =>
-                  page === 1 ||
-                  page === pagination.last_page ||
-                  Math.abs(page - pagination.current_page) <= 2
-                )
+                .filter(page => page === 1 || page === pagination.last_page || Math.abs(page - pagination.current_page) <= 1)
                 .map((page, index, array) => {
                   const showEllipsis = index > 0 && page - array[index - 1] > 1;
                   return (
@@ -729,6 +701,7 @@ const Categories = () => {
                     </React.Fragment>
                   );
                 })}
+
               <button
                 onClick={() => handlePageChange(pagination.current_page + 1)}
                 disabled={pagination.current_page === pagination.last_page}
@@ -764,7 +737,7 @@ const Categories = () => {
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  onClick={() => openModal()}
+                  onClick={openModal} // FIXED: Added proper onClick handler
                   className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white px-8 py-3 rounded-xl font-semibold transition-all duration-200 shadow-lg hover:shadow-blue-500/25 flex items-center gap-3 mx-auto"
                 >
                   <Plus size={20} />
@@ -807,9 +780,7 @@ const Categories = () => {
 
                 <form onSubmit={handleSubmit} className="space-y-6">
                   <div>
-                    <label className="block text-sm font-semibold text-gray-300 mb-3">
-                      Category Name *
-                    </label>
+                    <label className="block text-sm font-semibold text-gray-300 mb-3">Category Name *</label>
                     <input
                       type="text"
                       name="name"
@@ -830,9 +801,7 @@ const Categories = () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-semibold text-gray-300 mb-3">
-                      Category Image
-                    </label>
+                    <label className="block text-sm font-semibold text-gray-300 mb-3">Category Image</label>
                     <div className="border-2 border-dashed border-gray-600 rounded-xl p-6 text-center hover:border-blue-500 transition-colors duration-200 group cursor-pointer">
                       <input
                         type="file"
@@ -846,16 +815,12 @@ const Categories = () => {
                         <span className="text-gray-400 text-sm group-hover:text-blue-300 transition-colors">
                           Click to upload image
                         </span>
-                        <p className="text-gray-500 text-xs mt-1">
-                          PNG, JPG, WebP up to 2MB
-                        </p>
+                        <p className="text-gray-500 text-xs mt-1">PNG, JPG, WebP up to 2MB</p>
                       </label>
                     </div>
                     {imagePreview && (
                       <div className="mt-4">
-                        <label className="block text-sm font-semibold text-gray-300 mb-2">
-                          Image Preview
-                        </label>
+                        <label className="block text-sm font-semibold text-gray-300 mb-2">Image Preview</label>
                         <div className="relative inline-block">
                           <img
                             src={imagePreview}
@@ -884,9 +849,7 @@ const Categories = () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-semibold text-gray-300 mb-3">
-                      Status
-                    </label>
+                    <label className="block text-sm font-semibold text-gray-300 mb-3">Status</label>
                     <div className="grid grid-cols-2 gap-4">
                       <label className={`relative flex items-center justify-center p-4 border-2 rounded-xl cursor-pointer transition-all duration-200 ${
                         formData.status === 'active'
@@ -902,12 +865,8 @@ const Categories = () => {
                           className="sr-only"
                         />
                         <div className="text-center">
-                          <Eye size={20} className={`mx-auto mb-2 ${
-                            formData.status === 'active' ? 'text-green-400' : 'text-gray-400'
-                          }`} />
-                          <span className={`font-medium ${
-                            formData.status === 'active' ? 'text-green-400' : 'text-gray-400'
-                          }`}>
+                          <Eye size={20} className={`mx-auto mb-2 ${formData.status === 'active' ? 'text-green-400' : 'text-gray-400'}`} />
+                          <span className={`font-medium ${formData.status === 'active' ? 'text-green-400' : 'text-gray-400'}`}>
                             Active
                           </span>
                         </div>
@@ -926,12 +885,8 @@ const Categories = () => {
                           className="sr-only"
                         />
                         <div className="text-center">
-                          <EyeOff size={20} className={`mx-auto mb-2 ${
-                            formData.status === 'inactive' ? 'text-red-400' : 'text-gray-400'
-                          }`} />
-                          <span className={`font-medium ${
-                            formData.status === 'inactive' ? 'text-red-400' : 'text-gray-400'
-                          }`}>
+                          <EyeOff size={20} className={`mx-auto mb-2 ${formData.status === 'inactive' ? 'text-red-400' : 'text-gray-400'}`} />
+                          <span className={`font-medium ${formData.status === 'inactive' ? 'text-red-400' : 'text-gray-400'}`}>
                             Inactive
                           </span>
                         </div>

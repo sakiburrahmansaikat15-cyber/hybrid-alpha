@@ -38,6 +38,7 @@ Route::prefix('roles')->group(function () {
 
 
 Route::prefix('units')->group(function () {
+    Route::get('/search', [UnitController::class, 'search']);
     Route::get('/', [UnitController::class, 'index']);
     Route::post('/', [UnitController::class, 'store']);
     Route::get('/{id}', [UnitController::class, 'show']);
@@ -47,19 +48,19 @@ Route::prefix('units')->group(function () {
 
 
 Route::prefix('categories')->group(function () {
+    Route::get('/search', [CategoriesController::class, 'search']);
     Route::get('/', [CategoriesController::class, 'index']);
     Route::post('/', [CategoriesController::class, 'store']);
     Route::get('/{id}', [CategoriesController::class, 'show']);
     Route::post('/{id}', [CategoriesController::class, 'update']);
     Route::delete('/{id}', [CategoriesController::class, 'destroy']);
-
-    
 });
 
 
 
 
 Route::prefix('sub-categories')->group(function () {
+    Route::get('/search', [SubCategoryController::class, 'search']);
     Route::get('/', [SubCategoryController::class, 'index']);
     Route::post('/', [SubCategoryController::class, 'store']);
     Route::get('/{id}', [SubCategoryController::class, 'show']);
@@ -71,6 +72,7 @@ Route::prefix('sub-categories')->group(function () {
 
 
 Route::prefix('sub-items')->group(function () {
+    Route::get('/search', [SubItemController::class, 'search']);
     Route::get('/', [SubItemController::class, 'index']);
     Route::post('/', [SubItemController::class, 'store']);
     Route::get('/{id}', [SubItemController::class, 'show']);
@@ -83,6 +85,7 @@ Route::prefix('sub-items')->group(function () {
 
 
 Route::prefix('brands')->group(function () {
+    Route::get('/search', [BrandController::class, 'search']);
     Route::get('/', [BrandController::class, 'index']);           
     Route::post('/', [BrandController::class, 'store']);          
     Route::get('/{id}', [BrandController::class, 'show']);         
@@ -92,6 +95,7 @@ Route::prefix('brands')->group(function () {
 
 
 Route::prefix('product-type')->group(function () {
+    Route::get('/search', [ProductTypeController::class, 'search']);
     Route::get('/', [ProductTypeController::class, 'index']);
     Route::post('/', [ProductTypeController::class, 'store']);
     Route::get('/{id}', [ProductTypeController::class, 'show']);
@@ -102,6 +106,7 @@ Route::prefix('product-type')->group(function () {
 
 
 Route::prefix('products')->group(function () {
+    Route::get('/search', [ProductController::class, 'search']);
     Route::get('/', [ProductController::class, 'index']);
     Route::post('/', [ProductController::class, 'store']);
     Route::get('/{id}', [ProductController::class, 'show']);
@@ -112,6 +117,7 @@ Route::prefix('products')->group(function () {
 
 
 Route::prefix('variants')->group(function () {
+    Route::get('/search', [VariantController::class, 'search']);
     Route::get('/', [VariantController::class, 'index']);
     Route::post('/', [VariantController::class, 'store']);
     Route::get('/{id}', [VariantController::class, 'show']);
@@ -123,6 +129,7 @@ Route::prefix('variants')->group(function () {
 
 
 Route::prefix('vendors')->group(function () {
+    Route::get('/search', [VendorController::class, 'search']);
     Route::get('/', [VendorController::class, 'index']);
     Route::post('/', [VendorController::class, 'store']);
     Route::get('/{id}', [VendorController::class, 'show']);
@@ -133,6 +140,7 @@ Route::prefix('vendors')->group(function () {
 
 
 Route::prefix('payment-types')->group(function () {
+    Route::get('/search', [PaymentTypeController::class, 'search']);
     Route::get('/', [PaymentTypeController::class, 'index']);
     Route::post('/', [PaymentTypeController::class, 'store']);
     Route::get('/{id}', [PaymentTypeController::class, 'show']);
@@ -144,6 +152,7 @@ Route::prefix('payment-types')->group(function () {
 
 
 Route::prefix('stocks')->group(function () {
+    Route::get('/search', [StockController::class, 'search']);
     Route::get('/', [StockController::class, 'index']);
     Route::post('/', [StockController::class, 'store']);
     Route::get('/{id}', [StockController::class, 'show']);
@@ -154,6 +163,7 @@ Route::prefix('stocks')->group(function () {
 
 
 Route::prefix('serial-list')->group(function () {
+    Route::get('/search', [SerialListController::class, 'search']);
     Route::get('/', [SerialListController::class, 'index']);
     Route::post('/', [SerialListController::class, 'store']);
     Route::get('/{id}', [SerialListController::class, 'show']);
@@ -165,6 +175,7 @@ Route::prefix('serial-list')->group(function () {
 
 
 Route::prefix('transaction')->group(function () {
+    Route::get('/search', [TransactionsController::class, 'search']);
     Route::get('/', [TransactionsController::class, 'index']);
     Route::post('/', [TransactionsController::class, 'store']);
     Route::get('/{id}', [TransactionsController::class, 'show']);

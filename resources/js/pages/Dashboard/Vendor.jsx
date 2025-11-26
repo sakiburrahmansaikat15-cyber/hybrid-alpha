@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Plus, Search, Edit, Trash2, X, Check, AlertCircle,
-  Store, Mail, Phone, MapPin, Upload, Shield
+  Plus, Search, Edit, Trash2, X, Check,
+  Store, Mail, Phone, MapPin, Upload, Shield,
+  ChevronLeft, ChevronRight, Loader
 } from 'lucide-react';
 
 const API_URL = '/api/vendors';
@@ -12,13 +13,13 @@ const APP_URL = import.meta.env.VITE_APP_URL?.replace(/\/$/, '') || 'http://loca
 const VendorManagement = () => {
   const [vendors, setVendors] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [submitLoading, setSubmitLoading] = useState(false);
+  const [operationLoading, setOperationLoading] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingVendor, setEditingVendor] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [notification, setNotification] = useState({ show: false, message: '', type: '' });
-  const [error, setError] = useState('');
+  const [errors, setErrors] = useState({});
 
   const [formData, setFormData] = useState({
     name: '',
@@ -26,62 +27,115 @@ const VendorManagement = () => {
     email: '',
     contact: '',
     address: '',
-    status: true,
+    status: 'active',
     image: null
   });
   const [imagePreview, setImagePreview] = useState(null);
 
-  // Notification
-  const showNotification = (message, type = 'success') => {
-    setNotification({ show: true, message, type });
-    setTimeout(() => setNotification({ show: false }), 4000);
-  };
+  const [pagination, setPagination] = useState({
+    current_page: 1,
+    last_page: 1,
+    per_page: 10,
+    total: 0
+  });
 
-  // Fetch vendors
-  const fetchVendors = async () => {
+  const showNotification = useCallback((message, type = 'success') => {
+    setNotification({ show: true, message, type });
+    setTimeout(() => setNotification({ show: false, message: '', type: '' }), 4000);
+  }, []);
+
+  const handleApiError = useCallback((error, defaultMessage) => {
+    if (error.response?.status === 422) {
+      const validationErrors = error.response.data.errors || {};
+      setErrors(validationErrors);
+      const firstError = Object.values(validationErrors)[0]?.[0];
+      showNotification(firstError || 'Validation error', 'error');
+    } else if (error.response?.data?.message) {
+      showNotification(error.response.data.message, 'error');
+      setErrors({ _general: error.response.data.message });
+    } else {
+      showNotification(defaultMessage || 'Something went wrong', 'error');
+    }
+  }, [showNotification]);
+
+  // Fetch vendors with pagination
+  const fetchVendors = useCallback(async (page = 1, limit = pagination.per_page) => {
     setLoading(true);
     try {
-      const res = await axios.get(API_URL);
-      setVendors(res.data.data || []);
+      const res = await axios.get(API_URL, { params: { page, limit } });
+      const data = res.data;
+      setVendors(data.data || []);
+      setPagination({
+        current_page: data.page || 1,
+        last_page: data.totalPages || 1,
+        per_page: data.perPage || 10,
+        total: data.totalItems || 0
+      });
     } catch (err) {
-      showNotification('Failed to load vendors', 'error');
+      handleApiError(err, 'Failed to fetch vendors');
+      setVendors([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [handleApiError, pagination.per_page]);
 
+  // Search vendors using /search endpoint (non-paginated)
+  const searchVendors = useCallback(async (keyword) => {
+    if (!keyword.trim()) {
+      fetchVendors(pagination.current_page, pagination.per_page);
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await axios.get(`${API_URL}/search`, { params: { keyword } });
+      setVendors(res.data.data || []);
+      setPagination({
+        current_page: 1,
+        last_page: 1,
+        per_page: res.data.data?.length || 0,
+        total: res.data.data?.length || 0
+      });
+    } catch (err) {
+      handleApiError(err, 'Search failed');
+      setVendors([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchVendors, pagination.per_page]);
+
+  // Debounced search
   useEffect(() => {
-    fetchVendors();
+    const timer = setTimeout(() => {
+      searchVendors(searchTerm);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchTerm, searchVendors]);
+
+  // Initial load
+  useEffect(() => {
+    fetchVendors(1, 10);
   }, []);
 
-  // Search filter
-  const filteredVendors = vendors.filter(v =>
-    v.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    v.shop_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    v.email?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  // Image handler
-  const handleImageChange = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    if (!file.type.startsWith('image/')) {
-      showNotification('Please select a valid image', 'error');
-      return;
-    }
-    if (file.size > 2 * 1024 * 1024) {
-      showNotification('Image must be less than 2MB', 'error');
-      return;
-    }
-
-    setFormData(prev => ({ ...prev, image: file }));
-    const reader = new FileReader();
-    reader.onloadend = () => setImagePreview(reader.result);
-    reader.readAsDataURL(file);
+  const handlePageChange = (newPage) => {
+    if (newPage < 1 || newPage > pagination.last_page || searchTerm) return;
+    fetchVendors(newPage, pagination.per_page);
   };
 
-  // Open modal
+  const handleLimitChange = (newLimit) => {
+    const limit = parseInt(newLimit);
+    setPagination(prev => ({ ...prev, per_page: limit, current_page: 1 }));
+    fetchVendors(1, limit);
+  };
+
+  const resetForm = () => {
+    setFormData({
+      name: '', shop_name: '', email: '', contact: '', address: '', status: 'active', image: null
+    });
+    setImagePreview(null);
+    setEditingVendor(null);
+    setErrors({});
+  };
+
   const openModal = (vendor = null) => {
     if (vendor) {
       setEditingVendor(vendor);
@@ -91,97 +145,126 @@ const VendorManagement = () => {
         email: vendor.email || '',
         contact: vendor.contact || '',
         address: vendor.address || '',
-        status: vendor.status === true || vendor.status === 1,
+        status: vendor.status === true || vendor.status === 'active' || vendor.status === 1 ? 'active' : 'inactive',
         image: null
       });
-      setImagePreview(vendor.image ? `${APP_URL}/storage/${vendor.image}` : null);
+      setImagePreview(vendor.image ? `${APP_URL}/${vendor.image}` : null);
     } else {
-      setFormData({ name: '', shop_name: '', email: '', contact: '', address: '', status: true, image: null });
-      setImagePreview(null);
-      setEditingVendor(null);
+      resetForm();
     }
-    setError('');
     setShowModal(true);
   };
 
-  const closeModal = () => setShowModal(false);
+  const closeModal = () => {
+    setShowModal(false);
+    setTimeout(resetForm, 300);
+  };
 
-  // Submit
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (!validTypes.includes(file.type)) {
+      setErrors(prev => ({ ...prev, image: 'Only JPG, PNG, WebP allowed' }));
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setErrors(prev => ({ ...prev, image: 'Image must be less than 2MB' }));
+      return;
+    }
+
+    setFormData(prev => ({ ...prev, image: file }));
+    setImagePreview(URL.createObjectURL(file));
+    if (errors.image) setErrors(prev => ({ ...prev, image: undefined }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setSubmitLoading(true);
-    setError('');
+    setOperationLoading('saving');
+    setErrors({});
 
     const data = new FormData();
-    data.append('name', formData.name);
-    data.append('shop_name', formData.shop_name);
-    data.append('email', formData.email);
-    data.append('contact', formData.contact);
-    data.append('address', formData.address);
-    data.append('status', formData.status ? '1' : '0'); // Laravel boolean
+    data.append('name', formData.name.trim());
+    data.append('shop_name', formData.shop_name.trim());
+    data.append('email', formData.email.trim());
+    data.append('contact', formData.contact.trim());
+    data.append('address', formData.address.trim());
+    data.append('status', formData.status === 'active' ? 'active' : 'inactive');
     if (formData.image) data.append('image', formData.image);
 
     try {
       if (editingVendor) {
-        data.append('_method', 'PUT');
         await axios.post(`${API_URL}/${editingVendor.id}`, data, {
           headers: { 'Content-Type': 'multipart/form-data' }
         });
-        showNotification('Vendor updated successfully!', 'success');
+        showNotification('Vendor updated successfully!');
       } else {
         await axios.post(API_URL, data, {
           headers: { 'Content-Type': 'multipart/form-data' }
         });
-        showNotification('Vendor created successfully!', 'success');
+        showNotification('Vendor created successfully!');
       }
-      fetchVendors();
+
+      searchTerm ? searchVendors(searchTerm) : fetchVendors(pagination.current_page, pagination.per_page);
       closeModal();
     } catch (err) {
-      const msg = err.response?.data?.message || 'Something went wrong';
-      setError(msg);
-      showNotification(msg, 'error');
+      handleApiError(err, 'Failed to save vendor');
     } finally {
-      setSubmitLoading(false);
+      setOperationLoading(null);
     }
   };
 
-  // Toggle status
   const toggleStatus = async (vendor) => {
-    try {
-      const data = new FormData();
-      data.append('_method', 'PUT');
-      data.append('status', vendor.status ? '0' : '1');
+    setOperationLoading(`status-${vendor.id}`);
+    const newStatus = vendor.status === true || vendor.status === 'active' || vendor.status === 1 ? 'inactive' : 'active';
 
+    const data = new FormData();
+    data.append('status', newStatus);
+    data.append('name', vendor.name);
+    data.append('shop_name', vendor.shop_name);
+    data.append('email', vendor.email);
+    data.append('contact', vendor.contact || '');
+    data.append('address', vendor.address || '');
+
+    try {
       await axios.post(`${API_URL}/${vendor.id}`, data, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-      showNotification(`Vendor ${vendor.status ? 'deactivated' : 'activated'}`, 'success');
-      fetchVendors();
+      showNotification(`Vendor ${newStatus === 'active' ? 'activated' : 'deactivated'}`);
+      searchTerm ? searchVendors(searchTerm) : fetchVendors(pagination.current_page, pagination.per_page);
     } catch (err) {
-      showNotification('Failed to update status', 'error');
+      handleApiError(err, 'Failed to update status');
+    } finally {
+      setOperationLoading(null);
     }
   };
 
-  // Delete
   const handleDelete = async (id) => {
+    setOperationLoading(`delete-${id}`);
     try {
       await axios.delete(`${API_URL}/${id}`);
-      showNotification('Vendor deleted successfully', 'success');
-      fetchVendors();
+      showNotification('Vendor deleted successfully');
+      if (vendors.length === 1 && pagination.current_page > 1) {
+        fetchVendors(pagination.current_page - 1, pagination.per_page);
+      } else {
+        searchTerm ? searchVendors(searchTerm) : fetchVendors(pagination.current_page, pagination.per_page);
+      }
     } catch (err) {
-      showNotification('Failed to delete', 'error');
+      handleApiError(err, 'Delete failed');
+    } finally {
+      setOperationLoading(null);
+      setDeleteConfirm(null);
     }
-    setDeleteConfirm(null);
   };
 
-  // Stats
   const stats = {
-    total: vendors.length,
-    active: vendors.filter(v => v.status).length,
-    inactive: vendors.filter(v => !v.status).length
+    total: pagination.total,
+    active: vendors.filter(v => v.status === true || v.status === 'active' || v.status === 1).length,
+    inactive: vendors.filter(v => v.status === false || v.status === 'inactive' || v.status === 0).length
   };
 
-  if (loading) {
+  if (loading && vendors.length === 0) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center">
         <div className="text-2xl text-gray-400">Loading vendors...</div>
@@ -191,7 +274,6 @@ const VendorManagement = () => {
 
   return (
     <>
-      {/* Notification */}
       <AnimatePresence>
         {notification.show && (
           <motion.div
@@ -210,7 +292,6 @@ const VendorManagement = () => {
 
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-gray-100 py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-
           {/* Header */}
           <div className="mb-10 flex justify-between items-center">
             <div>
@@ -258,9 +339,9 @@ const VendorManagement = () => {
             </div>
           </div>
 
-          {/* Search */}
-          <div className="mb-8">
-            <div className="relative max-w-md">
+          {/* Search + Limit */}
+          <div className="mb-8 flex flex-col sm:flex-row gap-4">
+            <div className="relative flex-1 max-w-md">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
               <input
                 type="text"
@@ -270,6 +351,16 @@ const VendorManagement = () => {
                 className="w-full pl-12 pr-4 py-3 bg-gray-800/50 border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-500"
               />
             </div>
+            <select
+              value={pagination.per_page}
+              onChange={(e) => handleLimitChange(e.target.value)}
+              className="px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-violet-500"
+            >
+              <option value="5">5 per page</option>
+              <option value="10">10 per page</option>
+              <option value="25">25 per page</option>
+              <option value="50">50 per page</option>
+            </select>
           </div>
 
           {/* Table */}
@@ -286,13 +377,13 @@ const VendorManagement = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-700/20">
-                  {filteredVendors.map((vendor) => (
+                  {vendors.map((vendor) => (
                     <tr key={vendor.id} className="hover:bg-gray-700/10 transition">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-4">
                           {vendor.image ? (
                             <img
-                              src={`${APP_URL}/storage/${vendor.image}`}
+                              src={`${APP_URL}/${vendor.image}`}
                               alt={vendor.name}
                               className="w-12 h-12 rounded-lg object-cover border border-gray-600"
                             />
@@ -318,21 +409,27 @@ const VendorManagement = () => {
                       <td className="px-6 py-4">
                         <button
                           onClick={() => toggleStatus(vendor)}
-                          className={`px-4 py-2 rounded-full text-xs font-bold ${
-                            vendor.status
+                          disabled={operationLoading === `status-${vendor.id}`}
+                          className={`px-4 py-2 rounded-full text-xs font-bold flex items-center gap-2 ${
+                            (vendor.status === true || vendor.status === 'active' || vendor.status === 1)
                               ? 'bg-green-500/20 text-green-400 border border-green-500/40'
                               : 'bg-red-500/20 text-red-400 border border-red-500/40'
                           }`}
                         >
-                          {vendor.status ? 'Active' : 'Inactive'}
+                          {operationLoading === `status-${vendor.id}` && <Loader size={14} className="animate-spin" />}
+                          {(vendor.status === true || vendor.status === 'active' || vendor.status === 1) ? 'Active' : 'Inactive'}
                         </button>
                       </td>
                       <td className="px-6 py-4 text-right">
                         <button onClick={() => openModal(vendor)} className="text-blue-400 hover:bg-blue-500/20 p-2 rounded">
                           <Edit size={18} />
                         </button>
-                        <button onClick={() => setDeleteConfirm(vendor.id)} className="text-red-400 hover:bg-red-500/20 p-2 rounded ml-2">
-                          <Trash2 size={18} />
+                        <button
+                          onClick={() => setDeleteConfirm(vendor.id)}
+                          className="text-red-400 hover:bg-red-500/20 p-2 rounded ml-2"
+                          disabled={operationLoading === `delete-${vendor.id}`}
+                        >
+                          {operationLoading === `delete-${vendor.id}` ? <Loader size={18} className="animate-spin" /> : <Trash2 size={18} />}
                         </button>
                       </td>
                     </tr>
@@ -340,7 +437,46 @@ const VendorManagement = () => {
                 </tbody>
               </table>
             </div>
+
+            {/* Pagination */}
+            {!searchTerm && pagination.last_page > 1 && (
+              <div className="flex justify-between items-center px-6 py-4 border-t border-gray-700/30">
+                <div className="text-sm text-gray-400">
+                  Showing {(pagination.current_page - 1) * pagination.per_page + 1} to{' '}
+                  {Math.min(pagination.current_page * pagination.per_page, pagination.total)} of {pagination.total}
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handlePageChange(pagination.current_page - 1)}
+                    disabled={pagination.current_page === 1}
+                    className="px-4 py-2 rounded-xl border border-gray-600 disabled:opacity-50 flex items-center gap-2"
+                  >
+                    <ChevronLeft size={16} /> Previous
+                  </button>
+                  <button
+                    onClick={() => handlePageChange(pagination.current_page + 1)}
+                    disabled={pagination.current_page === pagination.last_page}
+                    className="px-4 py-2 rounded-xl border border-gray-600 disabled:opacity-50 flex items-center gap-2"
+                  >
+                    Next <ChevronRight size={16} />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
+
+          {/* Empty State */}
+          {vendors.length === 0 && !loading && (
+            <div className="text-center py-20">
+              <Store size={80} className="mx-auto text-gray-600 mb-6" />
+              <h3 className="text-2xl font-bold mb-3">
+                {searchTerm ? 'No vendors found' : 'No vendors yet'}
+              </h3>
+              <p className="text-gray-400">
+                {searchTerm ? 'Try searching with different keywords' : 'Start by adding your first vendor'}
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Modal */}
@@ -360,47 +496,125 @@ const VendorManagement = () => {
                   <button onClick={closeModal}><X size={28} className="text-gray-400" /></button>
                 </div>
 
-                {error && <div className="mb-4 p-4 bg-red-900/50 border border-red-700 rounded-xl text-red-300">{error}</div>}
+                {errors._general && (
+                  <div className="mb-4 p-4 bg-red-900/50 border border-red-700 rounded-xl text-red-300">
+                    {errors._general}
+                  </div>
+                )}
 
                 <form onSubmit={handleSubmit} className="space-y-6">
-                  {/* Image */}
                   <div>
                     <label className="block text-sm font-medium mb-3">Image</label>
-                    <div className="border-2 border-dashed border-gray-600 rounded-xl p-8 text-center hover:border-violet-500 cursor-pointer">
-                      <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" id="img" />
-                      <label htmlFor="img">
+                    <div className="border-2 border-dashed border-gray-600 rounded-xl p-8 text-center hover:border-violet-500 cursor-pointer transition">
+                      <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" id="vendor-img" />
+                      <label htmlFor="vendor-img" className="cursor-pointer">
                         <Upload className="mx-auto mb-3 text-gray-400" size={32} />
-                        <span className="text-gray-400">Click to upload</span>
+                        <span className="text-gray-400">Click to upload (Max 2MB)</span>
                       </label>
                     </div>
                     {imagePreview && (
-                      <img src={imagePreview} alt="Preview" className="mt-4 w-32 h-32 object-cover rounded-lg mx-auto" />
+                      <div className="mt-4 relative inline-block">
+                        <img src={imagePreview} alt="Preview" className="w-32 h-32 object-cover rounded-lg border border-gray-600" />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setImagePreview(null);
+                            setFormData(prev => ({ ...prev, image: null }));
+                          }}
+                          className="absolute -top-2 -right-2 bg-red-500 p-1 rounded-full"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
                     )}
+                    {errors.image && <p className="text-red-400 text-sm mt-2">{errors.image}</p>}
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
-                    <input type="text" placeholder="Name *" value={formData.name} onChange={e => setFormData(prev => ({...prev, name: e.target.value}))} required className="px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-xl text-white" />
-                    <input type="text" placeholder="Shop Name *" value={formData.shop_name} onChange={e => setFormData(prev => ({...prev, shop_name: e.target.value}))} required className="px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-xl text-white" />
-                    <input type="email" placeholder="Email *" value={formData.email} onChange={e => setFormData(prev => ({...prev, email: e.target.value}))} required className="px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-xl text-white" />
-                    <input type="text" placeholder="Contact" value={formData.contact} onChange={e => setFormData(prev => ({...prev, contact: e.target.value}))} className="px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-xl text-white" />
-                    <textarea placeholder="Address" value={formData.address} onChange={e => setFormData(prev => ({...prev, address: e.target.value}))} rows={3} className="col-span-2 px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-xl text-white"></textarea>
+                    <div>
+                      <input
+                        type="text"
+                        placeholder="Name *"
+                        value={formData.name}
+                        onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                        required
+                        className={`w-full px-4 py-3 bg-gray-700/50 border rounded-xl text-white ${errors.name ? 'border-red-500' : 'border-gray-600'}`}
+                      />
+                      {errors.name && <p className="text-red-400 text-xs mt-1">{errors.name[0]}</p>}
+                    </div>
+                    <div>
+                      <input
+                        type="text"
+                        placeholder="Shop Name *"
+                        value={formData.shop_name}
+                        onChange={e => setFormData(prev => ({ ...prev, shop_name: e.target.value }))}
+                        required
+                        className={`w-full px-4 py-3 bg-gray-700/50 border rounded-xl text-white ${errors.shop_name ? 'border-red-500' : 'border-gray-600'}`}
+                      />
+                      {errors.shop_name && <p className="text-red-400 text-xs mt-1">{errors.shop_name[0]}</p>}
+                    </div>
+                    <div>
+                      <input
+                        type="email"
+                        placeholder="Email *"
+                        value={formData.email}
+                        onChange={e => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                        required
+                        className={`w-full px-4 py-3 bg-gray-700/50 border rounded-xl text-white ${errors.email ? 'border-red-500' : 'border-gray-600'}`}
+                      />
+                      {errors.email && <p className="text-red-400 text-xs mt-1">{errors.email[0]}</p>}
+                    </div>
+                    <div>
+                      <input
+                        type="text"
+                        placeholder="Contact"
+                        value={formData.contact}
+                        onChange={e => setFormData(prev => ({ ...prev, contact: e.target.value }))}
+                        className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-xl text-white"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <textarea
+                        placeholder="Address"
+                        value={formData.address}
+                        onChange={e => setFormData(prev => ({ ...prev, address: e.target.value }))}
+                        rows={3}
+                        className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-xl text-white"
+                      />
+                    </div>
                   </div>
 
                   <div className="flex gap-6">
-                    <label className={`flex-1 p-4 rounded-xl border-2 cursor-pointer text-center ${formData.status ? 'border-green-500 bg-green-500/10' : 'border-gray-600'}`}>
-                      <input type="radio" name="status" checked={formData.status} onChange={() => setFormData(prev => ({...prev, status: true}))} className="sr-only" />
-                      <span className="text-green-400 font-medium">Active</span>
-                    </label>
-                    <label className={`flex-1 p-4 rounded-xl border-2 cursor-pointer text-center ${!formData.status ? 'border-red-500 bg-red-500/10' : 'border-gray-600'}`}>
-                      <input type="radio" name="status" checked={!formData.status} onChange={() => setFormData(prev => ({...prev, status: false}))} className="sr-only" />
-                      <span className="text-red-400 font-medium">Inactive</span>
-                    </label>
+                    {['active', 'inactive'].map(st => (
+                      <label
+                        key={st}
+                        onClick={() => setFormData(prev => ({ ...prev, status: st }))}
+                        className={`flex-1 p-4 rounded-xl border-2 cursor-pointer text-center transition ${
+                          formData.status === st
+                            ? st === 'active'
+                              ? 'border-green-500 bg-green-500/10'
+                              : 'border-red-500 bg-red-500/10'
+                            : 'border-gray-600'
+                        }`}
+                      >
+                        <span className={`font-medium ${st === 'active' ? 'text-green-400' : 'text-red-400'}`}>
+                          {st.charAt(0).toUpperCase() + st.slice(1)}
+                        </span>
+                      </label>
+                    ))}
                   </div>
 
                   <div className="flex justify-end gap-4">
-                    <button type="button" onClick={closeModal} className="px-6 py-3 bg-gray-700 rounded-xl">Cancel</button>
-                    <button type="submit" disabled={submitLoading} className="px-8 py-3 bg-gradient-to-r from-violet-600 to-purple-600 rounded-xl text-white font-bold">
-                      {submitLoading ? 'Saving...' : editingVendor ? 'Update' : 'Create'}
+                    <button type="button" onClick={closeModal} className="px-6 py-3 bg-gray-700 rounded-xl">
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={operationLoading === 'saving'}
+                      className="px-8 py-3 bg-gradient-to-r from-violet-600 to-purple-600 rounded-xl text-white font-bold flex items-center gap-2"
+                    >
+                      {operationLoading === 'saving' ? <Loader size={20} className="animate-spin" /> : <Check size={20} />}
+                      {editingVendor ? 'Update' : 'Create'} Vendor
                     </button>
                   </div>
                 </form>
@@ -415,10 +629,17 @@ const VendorManagement = () => {
             <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50" onClick={() => setDeleteConfirm(null)}>
               <div className="bg-gray-800 rounded-2xl p-8 max-w-sm border border-gray-700">
                 <h3 className="text-xl font-bold mb-4">Delete Vendor?</h3>
-                <p className="text-gray-400 mb-6">This cannot be undone.</p>
+                <p className="text-gray-400 mb-6">This action cannot be undone.</p>
                 <div className="flex gap-4">
-                  <button onClick={() => setDeleteConfirm(null)} className="flex-1 py-3 bg-gray-700 rounded-xl">Cancel</button>
-                  <button onClick={() => handleDelete(deleteConfirm)} className="flex-1 py-3 bg-red-600 rounded-xl text-white font-bold">Delete</button>
+                  <button onClick={() => setDeleteConfirm(null)} className="flex-1 py-3 bg-gray-700 rounded-xl">
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => handleDelete(deleteConfirm)}
+                    className="flex-1 py-3 bg-red-600 rounded-xl text-white font-bold"
+                  >
+                    Delete
+                  </button>
                 </div>
               </div>
             </div>

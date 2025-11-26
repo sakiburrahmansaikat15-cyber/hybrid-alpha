@@ -7,39 +7,58 @@ use App\Http\Resources\PaymentTypeResource;
 use App\Models\PaymentType;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
-use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
 
 class PaymentTypeController extends Controller
 {
-    // List all payment types
-    public function index()
+    // ✅ List all payment types with pagination
+    public function index(Request $request)
     {
-        $paymentTypes = PaymentType::get();
-        return PaymentTypeResource::collection($paymentTypes);
+        $limit = (int) $request->query('limit', 10);
+        $page = (int) $request->query('page', 1);
+
+        $paymentTypes = PaymentType::latest()->paginate($limit, ['*'], 'page', $page);
+
+        return response()->json([
+            'message' => 'Payment Types fetched successfully',
+            'page' => $paymentTypes->currentPage(),
+            'perPage' => $paymentTypes->perPage(),
+            'totalItems' => $paymentTypes->total(),
+            'totalPages' => $paymentTypes->lastPage(),
+            'data' => PaymentTypeResource::collection($paymentTypes->items()),
+        ]);
     }
 
-    // Store a new payment type
+    // ✅ Store a new payment type
     public function store(Request $request)
     {
-        $data = $request->validate([
+        $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'type' => 'required|string|max:255',
             'account_number' => 'required|string|max:255',
-            'notes' => 'sometimes|string',
+            'notes' => 'nullable|string',
             'status' => 'required|in:active,inactive',
             'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
         ]);
 
-           $data['status'] = $request->status;
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
 
+        $data = $validator->validated();
 
-        // Handle image upload
+        // ✅ Handle image upload
         if ($request->hasFile('image')) {
-            $image = $request->file('image');
             $folder = public_path('payment_types');
             if (!File::exists($folder)) {
-                File::makeDirectory($folder, 0777, true, true);
+                File::makeDirectory($folder, 0777, true);
             }
+
+            $image = $request->file('image');
             $imageName = time() . '_' . $image->getClientOriginalName();
             $image->move($folder, $imageName);
             $data['image'] = 'payment_types/' . $imageName;
@@ -54,81 +73,76 @@ class PaymentTypeController extends Controller
         ], 201);
     }
 
-    // Show a single payment type
+    // ✅ Show a single payment type
     public function show($id)
     {
-        $paymentType = PaymentType::findOrFail($id);
-        return new PaymentTypeResource($paymentType);
+        $paymentType = PaymentType::find($id);
+
+        if (!$paymentType) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Payment Type not found'
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => new PaymentTypeResource($paymentType)
+        ], 200);
     }
 
-    // Update a payment type
+    // ✅ Update a payment type
     public function update(Request $request, $id)
-{
-    Log::info("---- UPDATE PAYMENT TYPE START ----");
-
-    Log::info("Raw Input:", $request->all());
-
-    $paymentType = PaymentType::findOrFail($id);
-
-    $data = $request->validate([
-        'name' => 'sometimes|string|max:255',
-        'type' => 'sometimes|string|max:255',
-        'account_number' => 'sometimes|string|max:255',
-        'notes' => 'sometimes|string',
-        'status' => 'required|in:active,inactive',
-        'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
-    ]);
-
-    Log::info("Validated Data:", $data);
-
-    // Force correct status
-    $data['status'] = $request->status;
-
-    Log::info("Final Status Value:", ['status' => $data['status']]);
-
-    // Handle image update
-    if ($request->hasFile('image')) {
-
-        Log::info("Image uploaded: " . $request->file('image')->getClientOriginalName());
-
-        if ($paymentType->image && File::exists(public_path($paymentType->image))) {
-            File::delete(public_path($paymentType->image));
-            Log::info("Old image deleted");
-        }
-
-        $image = $request->file('image');
-        $folder = public_path('payment_types');
-
-        if (!File::exists($folder)) {
-            File::makeDirectory($folder, 0777, true, true);
-            Log::info("Image folder created");
-        }
-
-        $imageName = time() . '_' . $image->getClientOriginalName();
-        $image->move($folder, $imageName);
-        $data['image'] = 'payment_types/' . $imageName;
-
-        Log::info("New image saved: " . $data['image']);
-    }
-
-    $paymentType->update($data);
-
-    Log::info("Updated Model:", $paymentType->toArray());
-    Log::info("---- UPDATE PAYMENT TYPE END ----");
-
-    return response()->json([
-        'success' => true,
-        'message' => 'Payment Type updated successfully',
-        'data' => new PaymentTypeResource($paymentType)
-    ], 200);
-}
-
-    // Delete a payment type
-    public function destroy($id)
     {
         $paymentType = PaymentType::findOrFail($id);
 
-        // Delete image if exists
+        $data = $request->validate([
+            'name' => 'sometimes|string|max:255',
+            'type' => 'sometimes|string|max:255',
+            'account_number' => 'sometimes|string|max:255',
+            'notes' => 'nullable|string',
+            'status' => 'sometimes|in:active,inactive',
+            'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+        ]);
+
+        // ✅ Handle image update
+        if ($request->hasFile('image')) {
+            if ($paymentType->image && File::exists(public_path($paymentType->image))) {
+                File::delete(public_path($paymentType->image));
+            }
+
+            $folder = public_path('payment_types');
+            if (!File::exists($folder)) {
+                File::makeDirectory($folder, 0777, true);
+            }
+
+            $image = $request->file('image');
+            $imageName = time() . '_' . $image->getClientOriginalName();
+            $image->move($folder, $imageName);
+            $data['image'] = 'payment_types/' . $imageName;
+        }
+
+        $paymentType->update($data);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Payment Type updated successfully',
+            'data' => new PaymentTypeResource($paymentType)
+        ], 200);
+    }
+
+    // ✅ Delete a payment type
+    public function destroy($id)
+    {
+        $paymentType = PaymentType::find($id);
+
+        if (!$paymentType) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Payment Type not found'
+            ], 404);
+        }
+
         if ($paymentType->image && File::exists(public_path($paymentType->image))) {
             File::delete(public_path($paymentType->image));
         }
@@ -138,6 +152,23 @@ class PaymentTypeController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Payment Type deleted successfully'
+        ], 200);
+    }
+
+    // ✅ Search payment types
+    public function search(Request $request)
+    {
+        $keyword = $request->query('keyword', '');
+
+        $paymentTypes = PaymentType::where('name', 'like', "%{$keyword}%")
+            ->orWhere('type', 'like', "%{$keyword}%")
+            ->orWhere('account_number', 'like', "%{$keyword}%")
+            ->latest()
+            ->get();
+
+        return response()->json([
+            'message' => 'Search results fetched successfully',
+            'data' => PaymentTypeResource::collection($paymentTypes),
         ]);
     }
 }

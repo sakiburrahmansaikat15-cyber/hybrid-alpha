@@ -12,50 +12,27 @@ use Illuminate\Support\Facades\Log;
 
 class CategoriesController extends Controller
 {
-    // ===========================
-    // GET ALL CATEGORIES
-    // ===========================
-    public function index(Request $request)
+ 
+     public function index(Request $request)
     {
-        try {
-            $query = Categories::query();
+            $limit = (int) $request->query('limit', 10);
+            $page = (int) $request->query('page', 1);
 
-            if ($request->has('search') && !empty($request->search)) {
-                $query->where('name', 'like', "%{$request->search}%");
-            }
-
-            $perPage = $request->get('limit', 10);
-            $page = $request->get('page', 1);
-
-            $categories = $query->latest()->paginate($perPage, ['*'], 'page', $page);
+            $categories = Categories::latest()->paginate($limit, ['*'], 'page', $page);
 
             return response()->json([
-                'success' => true,
-                'data' => CategoriesResource::collection($categories),
-                'pagination' => [
-                    'current_page' => $categories->currentPage(),
-                    'last_page' => $categories->lastPage(),
-                    'per_page' => $categories->perPage(),
-                    'total' => $categories->total(),
-                ]
-            ], 200);
-
-        } catch (\Exception $e) {
-            Log::error('Error fetching categories: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to fetch categories',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+                'message' => 'Categories fetched successfully',
+                'page' => $categories->currentPage(),
+                'perPage' => $categories->perPage(),
+                'totalItems' => $categories->total(),
+                'totalPages' => $categories->lastPage(),
+                'data' => CategoriesResource::collection($categories->items()),
+            ]);
     }
 
-    // ===========================
-    // CREATE CATEGORY
-    // ===========================
+
     public function store(Request $request)
     {
-        try {
             $validator = Validator::make($request->all(), [
                 'name' => 'required|string|max:255',
                 'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
@@ -93,23 +70,11 @@ class CategoriesController extends Controller
                 'message' => 'Category created successfully',
                 'data' => new CategoriesResource($category)
             ], 201);
-
-        } catch (\Exception $e) {
-            Log::error('Error creating category: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to create category',
-                'error' => $e->getMessage()
-            ], 500);
-        }
     }
 
-    // ===========================
-    // SHOW SINGLE CATEGORY
-    // ===========================
+   
     public function show($id)
     {
-        try {
             $category = Categories::find($id);
 
             if (!$category) {
@@ -123,20 +88,9 @@ class CategoriesController extends Controller
                 'success' => true,
                 'data' => new CategoriesResource($category)
             ], 200);
-
-        } catch (\Exception $e) {
-            Log::error('Error fetching category: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to fetch category',
-                'error' => $e->getMessage()
-            ], 500);
-        }
     }
 
-    // ===========================
-    // UPDATE CATEGORY
-    // ===========================
+    
     public function update(Request $request, $id)
     {
         $category = Categories::findOrFail($id);
@@ -144,7 +98,7 @@ class CategoriesController extends Controller
         $data = $request->validate([
             'name' => 'sometimes|string|max:255',
             'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
-           'status' => 'required|in:active,inactive',
+           'status' => 'sometimes|in:active,inactive',
         ]);
 
         if ($request->hasFile('image')) {
@@ -172,12 +126,9 @@ class CategoriesController extends Controller
         ], 200);
     }
 
-    // ===========================
-    // DELETE CATEGORY
-    // ===========================
+   
     public function destroy($id)
     {
-        try {
             $category = Categories::find($id);
 
             if (!$category) {
@@ -197,14 +148,18 @@ class CategoriesController extends Controller
                 'success' => true,
                 'message' => 'Category deleted successfully'
             ], 200);
+    }
 
-        } catch (\Exception $e) {
-            Log::error('Error deleting category: ' . $e->getMessage());
+    public function search(Request $request)
+    {
+       
+            $keyword = $request->query('keyword', '');
+
+            $categories = Categories::where('name', 'like', "%{$keyword}%")->latest()->get();
+
             return response()->json([
-                'success' => false,
-                'message' => 'Failed to delete category',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+                'message' => 'Search results fetched successfully',
+                'data' => CategoriesResource::collection($categories),
+            ]);
     }
 }

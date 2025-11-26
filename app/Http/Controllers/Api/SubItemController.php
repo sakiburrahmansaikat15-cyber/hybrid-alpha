@@ -7,110 +7,170 @@ use App\Http\Resources\SubItemsResource;
 use App\Models\SubItems;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
-
+use Illuminate\Support\Facades\Validator;
 
 class SubItemController extends Controller
 {
- public function index()
+    // ✅ List all sub-items with pagination
+    public function index(Request $request)
     {
-        $categories = SubItems::latest()->get();
-        return SubItemsResource::collection($categories);
+        $limit = (int) $request->query('limit', 10);
+        $page = (int) $request->query('page', 1);
+
+        $subItems = SubItems::latest()->paginate($limit, ['*'], 'page', $page);
+
+        return response()->json([
+            'message' => 'Sub-items fetched successfully',
+            'page' => $subItems->currentPage(),
+            'perPage' => $subItems->perPage(),
+            'totalItems' => $subItems->total(),
+            'totalPages' => $subItems->lastPage(),
+            'data' => SubItemsResource::collection($subItems->items()),
+        ]);
     }
 
-    // ✅ Store a new category
-     public function store(Request $request)
+    // ✅ Store a new sub-item
+    public function store(Request $request)
     {
-        $data = $request->validate([
+        $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
             'status' => 'required|in:active,inactive',
-            'sub_category_id' => 'nullable'
+            'sub_category_id' => 'nullable|exists:sub_categories,id',
         ]);
 
-        if ($request->hasFile('image')) {
-            $image = $request->file('image');
-            $folder = public_path('sub_item');
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
 
-            // Create folder if not exists
+        $data = $validator->validated();
+
+        if ($request->hasFile('image')) {
+            $folder = public_path('sub_item');
             if (!File::exists($folder)) {
-                File::makeDirectory($folder, 0777, true, true);
+                File::makeDirectory($folder, 0777, true);
             }
 
+            $image = $request->file('image');
             $imageName = time() . '_' . $image->getClientOriginalName();
             $image->move($folder, $imageName);
             $data['image'] = 'sub_item/' . $imageName;
         }
 
-        $category = SubItems::create($data);
+        $subItem = SubItems::create($data);
 
         return response()->json([
             'success' => true,
-            'message' => 'Sub_Item created successfully',
-            'data' => new SubItemsResource($category)
+            'message' => 'Sub-item created successfully',
+            'data' => new SubItemsResource($subItem)
         ], 201);
     }
 
-    // ✅ Show a single category
+    // ✅ Show a single sub-item
     public function show($id)
     {
-        $category = SubItems::findOrFail($id);
-        return new SubItemsResource($category);
-    }
+        $subItem = SubItems::find($id);
 
-    // ✅ Update category
-public function update(Request $request, $id)
-{
-    $category = SubItems::findOrFail($id);
-
-    $data = $request->validate([
-    'name' => 'nullable|string|max:255',
-    'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
-    'status' => 'required|in:active,inactive',
-    'sub_category_id' => 'nullable|exists:categories,id'
-]);
-
-
-    if ($request->hasFile('image')) {
-        if ($category->image && File::exists(public_path($category->image))) {
-            File::delete(public_path($category->image));
+        if (!$subItem) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Sub-item not found',
+            ], 404);
         }
-
-        $image = $request->file('image');
-        $folder = public_path('sub_item');
-        if (!File::exists($folder)) {
-            File::makeDirectory($folder, 0777, true, true);
-        }
-
-        $imageName = time() . '_' . $image->getClientOriginalName();
-        $image->move($folder, $imageName);
-        $data['image'] = 'sub_item/' . $imageName;
-    }
-
-
-    $category->update($data);
-
-    return response()->json([
-        'success' => true,
-        'message' => 'Sub_Item updated successfully',
-        'data' => new SubItemsResource($category)
-    ], 200);
-}
-
-    // ✅ Delete category
-    public function destroy($id)
-    {
-        $category = SubItems::findOrFail($id);
-
-        // Delete image if exists
-        if ($category->image && File::exists(public_path($category->image))) {
-            File::delete(public_path($category->image));
-        }
-
-        $category->delete();
 
         return response()->json([
             'success' => true,
-            'message' => 'Sub_Item deleted successfully'
+            'data' => new SubItemsResource($subItem),
+        ], 200);
+    }
+
+    // ✅ Update a sub-item
+    public function update(Request $request, $id)
+    {
+        $subItem = SubItems::find($id);
+
+        if (!$subItem) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Sub-item not found',
+            ], 404);
+        }
+
+        $data = $request->validate([
+            'name' => 'sometimes|string|max:255',
+            'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'status' => 'sometimes|in:active,inactive',
+            'sub_category_id' => 'nullable|exists:sub_categories,id',
+        ]);
+
+        if ($request->hasFile('image')) {
+            if ($subItem->image && File::exists(public_path($subItem->image))) {
+                File::delete(public_path($subItem->image));
+            }
+
+            $folder = public_path('sub_item');
+            if (!File::exists($folder)) {
+                File::makeDirectory($folder, 0777, true);
+            }
+
+            $image = $request->file('image');
+            $imageName = time() . '_' . $image->getClientOriginalName();
+            $image->move($folder, $imageName);
+            $data['image'] = 'sub_item/' . $imageName;
+        }
+
+        $subItem->update($data);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Sub-item updated successfully',
+            'data' => new SubItemsResource($subItem)
+        ], 200);
+    }
+
+    // ✅ Delete a sub-item
+    public function destroy($id)
+    {
+        $subItem = SubItems::find($id);
+
+        if (!$subItem) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Sub-item not found',
+            ], 404);
+        }
+
+        if ($subItem->image && File::exists(public_path($subItem->image))) {
+            File::delete(public_path($subItem->image));
+        }
+
+        $subItem->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Sub-item deleted successfully',
+        ], 200);
+    }
+
+    // ✅ Search sub-items
+    public function search(Request $request)
+    {
+        $keyword = $request->query('keyword', '');
+
+        $subItems = SubItems::where('name', 'like', "%{$keyword}%")
+            ->orWhereHas('subCategory', function ($query) use ($keyword) {
+                $query->where('name', 'like', "%{$keyword}%");
+            })
+            ->latest()
+            ->get();
+
+        return response()->json([
+            'message' => 'Search results fetched successfully',
+            'data' => SubItemsResource::collection($subItems),
         ]);
     }
 }
