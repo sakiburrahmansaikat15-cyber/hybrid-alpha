@@ -143,13 +143,6 @@ class StockController extends Controller
         $keyword = $request->query('keyword', '');
 
         $stocks = Stocks::where('sku', 'like', "%{$keyword}%")
-            ->orWhereHas('product', function ($query) use ($keyword) {
-                $query->where('name', 'like', "%{$keyword}%");
-            })
-            ->orWhereHas('vendor', function ($query) use ($keyword) {
-                $query->where('name', 'like', "%{$keyword}%");
-            })
-            ->latest()
             ->get();
 
         return response()->json([

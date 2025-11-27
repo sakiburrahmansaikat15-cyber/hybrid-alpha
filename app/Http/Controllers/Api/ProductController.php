@@ -178,9 +178,6 @@ class ProductController extends Controller
         $keyword = $request->query('keyword', '');
 
         $products = Prooducts::where('name', 'like', "%{$keyword}%")
-            ->orWhere('description', 'like', "%{$keyword}%")
-            ->orWhere('specification', 'like', "%{$keyword}%")
-            ->latest()
             ->get();
 
         return response()->json([

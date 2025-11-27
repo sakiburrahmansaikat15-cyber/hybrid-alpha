@@ -162,10 +162,6 @@ class SubItemController extends Controller
         $keyword = $request->query('keyword', '');
 
         $subItems = SubItems::where('name', 'like', "%{$keyword}%")
-            ->orWhereHas('subCategory', function ($query) use ($keyword) {
-                $query->where('name', 'like', "%{$keyword}%");
-            })
-            ->latest()
             ->get();
 
         return response()->json([

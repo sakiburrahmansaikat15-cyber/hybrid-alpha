@@ -164,10 +164,6 @@ class SubCategoryController extends Controller
         $keyword = $request->query('keyword', '');
 
         $categories = SubCategory::where('name', 'like', "%{$keyword}%")
-            ->orWhereHas('category', function ($query) use ($keyword) {
-                $query->where('name', 'like', "%{$keyword}%");
-            })
-            ->latest()
             ->get();
 
         return response()->json([

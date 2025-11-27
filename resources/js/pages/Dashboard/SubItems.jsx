@@ -1,741 +1,647 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus,
   Search,
   Edit,
   Trash2,
   X,
-  Image as ImageIcon,
   Check,
-  AlertCircle,
-  Filter,
   Eye,
   EyeOff,
-  ChevronDown,
-  ChevronUp,
-  Package
+  Image as ImageIcon,
+  Package,
+  Calendar,
+  Upload,
+  ChevronLeft,
+  ChevronRight,
+  Loader
 } from 'lucide-react';
+
+const API_URL = '/api/sub-items';
 
 const SubItemsManager = () => {
   const [subItems, setSubItems] = useState([]);
   const [subCategories, setSubCategories] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [operationLoading, setOperationLoading] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all');
-  const [sortBy, setSortBy] = useState('newest');
-  const [expandedItem, setExpandedItem] = useState(null);
   const [formData, setFormData] = useState({
     sub_category_id: '',
     name: '',
-    status: true,
+    status: 'active',
     image: null
   });
-  const [errors, setErrors] = useState({});
   const [imagePreview, setImagePreview] = useState(null);
+  const [errors, setErrors] = useState({});
   const [notification, setNotification] = useState({ show: false, message: '', type: '' });
 
-  // Get CSRF token for Laravel
-  const getCSRFToken = () => {
-    return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-  };
+  const [pagination, setPagination] = useState({
+    current_page: 1,
+    last_page: 1,
+    per_page: 10,
+    total: 0
+  });
 
-  // Configure axios defaults
-  useEffect(() => {
-    axios.defaults.headers.common['X-CSRF-TOKEN'] = getCSRFToken();
-    axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
-  }, []);
-
-  // Show notification
-  const showNotification = (message, type = 'success') => {
+  const showNotification = useCallback((message, type = 'success') => {
     setNotification({ show: true, message, type });
     setTimeout(() => setNotification({ show: false, message: '', type: '' }), 4000);
-  };
+  }, []);
 
-  // Fetch sub-items
-  const fetchSubItems = async () => {
+  const handleApiError = useCallback((error, defaultMessage) => {
+    if (error.response?.status === 422) {
+      const validationErrors = error.response.data.errors || {};
+      setErrors(validationErrors);
+      const firstError = Object.values(validationErrors)[0]?.[0];
+      showNotification(firstError || 'Validation error', 'error');
+    } else if (error.response?.data?.message) {
+      showNotification(error.response.data.message, 'error');
+      setErrors({ _general: error.response.data.message });
+    } else {
+      showNotification(defaultMessage || 'Something went wrong', 'error');
+    }
+  }, [showNotification]);
+
+  const fetchSubItems = useCallback(async (page = 1, limit = pagination.per_page) => {
     setLoading(true);
     try {
-      const response = await axios.get('/api/sub-items');
-      // Handle API response structure from your controller
-      const items = response.data.data || response.data || [];
-      setSubItems(Array.isArray(items) ? items : []);
+      const response = await axios.get(API_URL, { params: { page, limit } });
+      const res = response.data;
+      setSubItems(res.data || []);
+      setPagination({
+        current_page: res.page || 1,
+        last_page: res.totalPages || 1,
+        per_page: res.perPage || 10,
+        total: res.totalItems || 0
+      });
     } catch (error) {
-      console.error('Error fetching sub-items:', error);
-      showNotification('Error fetching sub-items', 'error');
+      handleApiError(error, 'Failed to fetch sub-items');
       setSubItems([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [handleApiError, pagination.per_page]);
 
-  // Fetch sub-categories for dropdown
+  const searchSubItems = useCallback(async (keyword) => {
+    if (!keyword.trim()) {
+      fetchSubItems(pagination.current_page, pagination.per_page);
+      return;
+    }
+    setLoading(true);
+    try {
+      const response = await axios.get(`${API_URL}/search`, { params: { keyword } });
+      setSubItems(response.data.data || []);
+      setPagination({
+        current_page: 1,
+        last_page: 1,
+        per_page: response.data.data?.length || 0,
+        total: response.data.data?.length || 0
+      });
+    } catch (error) {
+      handleApiError(error, 'Search failed');
+      setSubItems([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchSubItems]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => searchSubItems(searchTerm), 500);
+    return () => clearTimeout(timer);
+  }, [searchTerm, searchSubItems]);
+
   const fetchSubCategories = async () => {
     try {
       const response = await axios.get('/api/sub-categories');
-      const categories = response.data.data || response.data || [];
-      setSubCategories(Array.isArray(categories) ? categories : []);
+      setSubCategories(response.data.data || []);
     } catch (error) {
       console.error('Error fetching sub-categories:', error);
-      showNotification('Error fetching categories', 'error');
-      setSubCategories([]);
     }
   };
 
-  // Handle form input changes
-  const handleInputChange = (e) => {
-    const { name, value, type, checked, files } = e.target;
-
-    if (type === 'file') {
-      const file = files[0];
-      setFormData(prev => ({
-        ...prev,
-        image: file
-      }));
-
-      // Create image preview
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = (e) => setImagePreview(e.target.result);
-        reader.readAsDataURL(file);
-      } else {
-        setImagePreview(null);
-      }
-    } else if (type === 'checkbox') {
-      setFormData(prev => ({
-        ...prev,
-        [name]: checked
-      }));
-    } else {
-      setFormData(prev => ({
-        ...prev,
-        [name]: value
-      }));
-    }
-
-    // Clear error when user starts typing
-    if (errors[name]) {
-      setErrors(prev => ({
-        ...prev,
-        [name]: ''
-      }));
-    }
-  };
-
-  // Handle form submission
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setErrors({});
-
-    // Validation
-    const newErrors = {};
-    if (!formData.sub_category_id) newErrors.sub_category_id = 'Sub category is required';
-    if (!formData.name.trim()) newErrors.name = 'Name is required';
-
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      return;
-    }
-
-    try {
-      const submitData = new FormData();
-      submitData.append('sub_category_id', formData.sub_category_id);
-      submitData.append('name', formData.name);
-      submitData.append('status', formData.status ? '1' : '0');
-      if (formData.image) {
-        submitData.append('image', formData.image);
-      }
-
-      if (editingItem) {
-        // Use PUT method for update
-        await axios.put(`/api/sub-items/${editingItem.id}`, submitData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
-        showNotification('Sub-item updated successfully!', 'success');
-      } else {
-        await axios.post('/api/sub-items', submitData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
-        showNotification('Sub-item created successfully!', 'success');
-      }
-
-      resetForm();
-      fetchSubItems();
-      setShowModal(false);
-    } catch (error) {
-      console.error('Error saving sub-item:', error);
-      if (error.response?.data?.errors) {
-        setErrors(error.response.data.errors);
-      } else if (error.response?.data?.message) {
-        showNotification(error.response.data.message, 'error');
-      } else {
-        showNotification('Error saving sub-item. Please try again.', 'error');
-      }
-    }
-  };
-
-  // Edit sub-item
-  const handleEdit = (item) => {
-    setEditingItem(item);
-    setFormData({
-      sub_category_id: item.sub_category_id?.toString() || '',
-      name: item.name || '',
-      status: item.status !== undefined ? item.status : true,
-      image: null
-    });
-    // Fix image path - your controller stores images in public/sub_item/
-    setImagePreview(item.image ? `/${item.image}` : null);
-    setShowModal(true);
-  };
-
-  // Delete sub-item
-  const handleDelete = async (id) => {
-    if (!confirm('Are you sure you want to delete this sub-item? This action cannot be undone.')) return;
-
-    try {
-      await axios.delete(`/api/sub-items/${id}`);
-      showNotification('Sub-item deleted successfully!', 'success');
-      fetchSubItems();
-    } catch (error) {
-      console.error('Error deleting sub-item:', error);
-      showNotification('Error deleting sub-item', 'error');
-    }
-  };
-
-  // Toggle item status
-  const toggleStatus = async (item) => {
-    try {
-      const newStatus = !item.status;
-      const submitData = new FormData();
-      submitData.append('sub_category_id', item.sub_category_id);
-      submitData.append('name', item.name);
-      submitData.append('status', newStatus ? '1' : '0');
-      submitData.append('_method', 'PUT');
-
-      await axios.post(`/api/sub-items/${item.id}`, submitData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-
-      showNotification(`Sub-item ${newStatus ? 'activated' : 'deactivated'}!`, 'success');
-      fetchSubItems();
-    } catch (error) {
-      console.error('Error updating status:', error);
-      showNotification('Error updating status', 'error');
-    }
-  };
-
-  // Reset form
-  const resetForm = () => {
-    setFormData({
-      sub_category_id: '',
-      name: '',
-      status: true,
-      image: null
-    });
-    setEditingItem(null);
-    setImagePreview(null);
-    setErrors({});
-  };
-
-  // Filter and sort sub-items
-  const getFilteredAndSortedItems = () => {
-    const items = Array.isArray(subItems) ? subItems : [];
-
-    let filtered = items.filter(item => {
-      if (!item || typeof item !== 'object') return false;
-
-      const itemName = item.name || '';
-      const categoryName = item.sub_category?.name || '';
-
-      const matchesSearch = itemName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        categoryName.toLowerCase().includes(searchTerm.toLowerCase());
-
-      const matchesStatus = filterStatus === 'all' ||
-        (filterStatus === 'active' && item.status) ||
-        (filterStatus === 'inactive' && !item.status);
-
-      return matchesSearch && matchesStatus;
-    });
-
-    // Sort items
-    filtered.sort((a, b) => {
-      switch (sortBy) {
-        case 'name':
-          return (a.name || '').localeCompare(b.name || '');
-        case 'category':
-          return (a.sub_category?.name || '').localeCompare(b.sub_category?.name || '');
-        case 'newest':
-          return new Date(b.created_at || 0) - new Date(a.created_at || 0);
-        case 'oldest':
-          return new Date(a.created_at || 0) - new Date(b.created_at || 0);
-        default:
-          return 0;
-      }
-    });
-
-    return filtered;
-  };
-
-  // Initialize
   useEffect(() => {
-    fetchSubItems();
+    fetchSubItems(1, 10);
     fetchSubCategories();
   }, []);
 
-  const filteredSubItems = getFilteredAndSortedItems();
+  const handlePageChange = (newPage) => {
+    if (newPage < 1 || newPage > pagination.last_page || searchTerm) return;
+    fetchSubItems(newPage, pagination.per_page);
+  };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 text-gray-100 p-4 md:p-6">
-      {/* Notification */}
-      {notification.show && (
-        <div className={`fixed top-4 right-4 z-50 max-w-sm ${
-          notification.type === 'error' ? 'bg-red-500' : 'bg-green-500'
-        } text-white px-6 py-3 rounded-lg shadow-lg transform transition-transform duration-300 animate-in slide-in-from-right`}>
-          <div className="flex items-center gap-3">
-            <Check size={20} />
-            <span className="font-medium">{notification.message}</span>
+  const handleLimitChange = (newLimit) => {
+    const limit = parseInt(newLimit);
+    setPagination(prev => ({ ...prev, per_page: limit, current_page: 1 }));
+    fetchSubItems(1, limit);
+  };
+
+  const resetForm = () => {
+    setFormData({ sub_category_id: '', name: '', status: 'active', image: null });
+    setImagePreview(null);
+    setEditingItem(null);
+    setErrors({});
+  };
+
+  const openModal = (item = null) => {
+    if (item) {
+      setEditingItem(item);
+      setFormData({
+        sub_category_id: item.sub_category_id ? String(item.sub_category_id) : '',
+        name: item.name || '',
+        status: item.status === 'active' || item.status === true ? 'active' : 'inactive',
+        image: null
+      });
+      setImagePreview(item.image ? `/${item.image}` : null);
+    } else {
+      resetForm();
+    }
+    setShowModal(true);
+  };
+
+  const closeModal = () => {
+    setShowModal(false);
+    setTimeout(resetForm, 300);
+  };
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+    if (errors[name]) setErrors(prev => ({ ...prev, [name]: undefined }));
+  };
+
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (!validTypes.includes(file.type)) {
+      setErrors(prev => ({ ...prev, image: 'Only JPEG, PNG, WebP allowed' }));
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setErrors(prev => ({ ...prev, image: 'Image must be < 2MB' }));
+      return;
+    }
+
+    setFormData(prev => ({ ...prev, image: file }));
+    setImagePreview(URL.createObjectURL(file));
+    if (errors.image) setErrors(prev => ({ ...prev, image: undefined }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setOperationLoading('saving');
+    setErrors({});
+
+    try {
+      const submitData = new FormData();
+      const catId = formData.sub_category_id ? parseInt(formData.sub_category_id, 10) : null;
+      submitData.append('sub_category_id', catId ?? '');
+      submitData.append('name', formData.name.trim());
+      submitData.append('status', formData.status === 'active' ? 'active' : 'inactive');
+
+      if (formData.image instanceof File) {
+        submitData.append('image', formData.image);
+      }
+
+      let response;
+      if (editingItem) {
+        submitData.append('_method', 'POST');
+        response = await axios.post(`${API_URL}/${editingItem.id}`, submitData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+      } else {
+        response = await axios.post(API_URL, submitData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+      }
+
+      showNotification(editingItem ? 'Updated successfully!' : 'Created successfully!');
+      searchTerm ? searchSubItems(searchTerm) : fetchSubItems(pagination.current_page, pagination.per_page);
+      closeModal();
+    } catch (error) {
+      handleApiError(error, 'Failed to save sub-item');
+    } finally {
+      setOperationLoading(null);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!confirm('Delete this sub-item permanently?')) return;
+    setOperationLoading(`delete-${id}`);
+    try {
+      await axios.delete(`${API_URL}/${id}`);
+      showNotification('Sub-item deleted successfully');
+      if (subItems.length === 1 && pagination.current_page > 1) {
+        fetchSubItems(pagination.current_page - 1, pagination.per_page);
+      } else {
+        searchTerm ? searchSubItems(searchTerm) : fetchSubItems(pagination.current_page, pagination.per_page);
+      }
+    } catch (error) {
+      handleApiError(error, 'Delete failed');
+    } finally {
+      setOperationLoading(null);
+    }
+  };
+
+  const toggleStatus = async (item) => {
+    const newStatus = (item.status === 'active' || item.status === true) ? 'inactive' : 'active';
+    setOperationLoading(`status-${item.id}`);
+    try {
+      const form = new FormData();
+      form.append('status', newStatus);
+      form.append('name', item.name);
+      form.append('sub_category_id', item.sub_category_id || '');
+      form.append('_method', 'POST');
+
+      await axios.post(`${API_URL}/${item.id}`, form, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      showNotification(`Sub-item ${newStatus === 'active' ? 'activated' : 'deactivated'}`);
+      searchTerm ? searchSubItems(searchTerm) : fetchSubItems(pagination.current_page, pagination.per_page);
+    } catch (error) {
+      handleApiError(error, 'Failed to update status');
+    } finally {
+      setOperationLoading(null);
+    }
+  };
+
+  const getImageUrl = (path) => path ? `/${path}` : null;
+
+  // Format date beautifully
+  const formatDate = (dateString) => {
+    if (!dateString) return 'Unknown';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const stats = {
+    total: pagination.total,
+    active: subItems.filter(i => i.status === 'active' || i.status === true).length,
+    inactive: subItems.filter(i => i.status === 'inactive' || i.status === false).length
+  };
+
+  if (loading && subItems.length === 0) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 py-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="mb-8 flex justify-between">
+            <div className="h-10 bg-gray-800 rounded w-64 animate-pulse"></div>
+            <div className="h-12 bg-gray-800 rounded-xl w-40 animate-pulse"></div>
           </div>
-        </div>
-      )}
-
-      {/* Header */}
-      <div className="max-w-7xl mx-auto">
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8 gap-6">
-          <div className="flex-1">
-            <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
-              Sub Items Manager
-            </h1>
-            <p className="text-gray-400 mt-2 text-lg">
-              Manage your sub-items with ease and precision
-            </p>
-          </div>
-
-          <div className="flex flex-col sm:flex-row gap-4 w-full lg:w-auto">
-            <button
-              onClick={() => setShowModal(true)}
-              className="flex items-center justify-center gap-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-6 py-3 rounded-xl transition-all duration-200 font-semibold shadow-lg hover:shadow-blue-500/25 transform hover:-translate-y-0.5"
-            >
-              <Plus size={22} />
-              Add Sub Item
-            </button>
-          </div>
-        </div>
-
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div className="bg-gray-800/50 backdrop-blur-sm rounded-2xl p-6 border border-gray-700/50">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-400 text-sm font-medium">Total Items</p>
-                <p className="text-2xl font-bold text-white mt-1">{subItems.length}</p>
-              </div>
-              <div className="p-3 bg-blue-500/10 rounded-xl">
-                <Package size={24} className="text-blue-400" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-gray-800/50 backdrop-blur-sm rounded-2xl p-6 border border-gray-700/50">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-400 text-sm font-medium">Active Items</p>
-                <p className="text-2xl font-bold text-white mt-1">
-                  {subItems.filter(item => item?.status).length}
-                </p>
-              </div>
-              <div className="p-3 bg-green-500/10 rounded-xl">
-                <Check size={24} className="text-green-400" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-gray-800/50 backdrop-blur-sm rounded-2xl p-6 border border-gray-700/50">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-400 text-sm font-medium">Inactive Items</p>
-                <p className="text-2xl font-bold text-white mt-1">
-                  {subItems.filter(item => item && !item.status).length}
-                </p>
-              </div>
-              <div className="p-3 bg-red-500/10 rounded-xl">
-                <EyeOff size={24} className="text-red-400" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-gray-800/50 backdrop-blur-sm rounded-2xl p-6 border border-gray-700/50">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-400 text-sm font-medium">Categories</p>
-                <p className="text-2xl font-bold text-white mt-1">{subCategories.length}</p>
-              </div>
-              <div className="p-3 bg-purple-500/10 rounded-xl">
-                <Filter size={24} className="text-purple-400" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Controls Section */}
-        <div className="bg-gray-800/30 backdrop-blur-sm rounded-2xl p-6 mb-8 border border-gray-700/30">
-          <div className="flex flex-col lg:flex-row gap-6">
-            {/* Search */}
-            <div className="flex-1 relative">
-              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-              <input
-                type="text"
-                placeholder="Search by name or category..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent backdrop-blur-sm transition-all duration-200"
-              />
-            </div>
-
-            {/* Filters */}
-            <div className="flex flex-col sm:flex-row gap-4">
-              <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                className="px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 backdrop-blur-sm"
-              >
-                <option value="all">All Status</option>
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </select>
-
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 backdrop-blur-sm"
-              >
-                <option value="newest">Newest First</option>
-                <option value="oldest">Oldest First</option>
-                <option value="name">Name A-Z</option>
-                <option value="category">Category</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* Loading State */}
-        {loading && (
-          <div className="flex justify-center items-center py-20">
-            <div className="relative">
-              <div className="w-16 h-16 border-4 border-blue-500/20 rounded-full animate-spin"></div>
-              <div className="w-16 h-16 border-4 border-transparent border-t-blue-500 rounded-full animate-spin absolute top-0 left-0"></div>
-            </div>
-          </div>
-        )}
-
-        {/* Sub Items Grid */}
-        {!loading && (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6">
-            {filteredSubItems.map((item) => (
-              <div
-                key={item.id}
-                className="group bg-gray-800/30 backdrop-blur-sm rounded-2xl overflow-hidden border border-gray-700/30 hover:border-blue-500/50 transition-all duration-300 hover:shadow-2xl hover:shadow-blue-500/10"
-              >
-                {/* Image Section */}
-                <div className="relative h-48 bg-gradient-to-br from-gray-700 to-gray-800 overflow-hidden">
-                  {item.image ? (
-                    <img
-                      src={`/${item.image}`}
-                      alt={item.name || 'Sub item image'}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                      onError={(e) => {
-                        e.target.style.display = 'none';
-                      }}
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <ImageIcon className="text-gray-500 group-hover:text-gray-400 transition-colors" size={48} />
-                    </div>
-                  )}
-
-                  {/* Status Badge */}
-                  <div className="absolute top-4 right-4">
-                    <button
-                      onClick={() => toggleStatus(item)}
-                      className={`px-3 py-1 rounded-full text-xs font-semibold backdrop-blur-sm border transition-all duration-200 ${
-                        item.status
-                          ? 'bg-green-500/20 text-green-400 border-green-500/30 hover:bg-green-500/30'
-                          : 'bg-red-500/20 text-red-400 border-red-500/30 hover:bg-red-500/30'
-                      }`}
-                    >
-                      {item.status ? 'Active' : 'Inactive'}
-                    </button>
-                  </div>
-
-                  {/* Overlay Actions */}
-                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-3">
-                    <button
-                      onClick={() => handleEdit(item)}
-                      className="p-3 bg-blue-500 hover:bg-blue-600 text-white rounded-xl transition-all duration-200 transform translate-y-4 group-hover:translate-y-0"
-                      title="Edit"
-                    >
-                      <Edit size={18} />
-                    </button>
-                    <button
-                      onClick={() => setExpandedItem(expandedItem === item.id ? null : item.id)}
-                      className="p-3 bg-purple-500 hover:bg-purple-600 text-white rounded-xl transition-all duration-200 transform translate-y-4 group-hover:translate-y-0 delay-75"
-                      title="View Details"
-                    >
-                      {expandedItem === item.id ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                    </button>
-                    <button
-                      onClick={() => handleDelete(item.id)}
-                      className="p-3 bg-red-500 hover:bg-red-600 text-white rounded-xl transition-all duration-200 transform translate-y-4 group-hover:translate-y-0 delay-100"
-                      title="Delete"
-                    >
-                      <Trash2 size={18} />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Content Section */}
-                <div className="p-5">
-                  <h3 className="font-bold text-white text-lg mb-2 line-clamp-1">
-                    {item.name || 'Unnamed Item'}
-                  </h3>
-                  <p className="text-gray-400 text-sm mb-3 flex items-center gap-2">
-                    <span className="bg-gray-700/50 px-2 py-1 rounded-lg text-xs">
-                      {item.sub_category?.name || 'Uncategorized'}
-                    </span>
-                  </p>
-
-                  {/* Expanded Details */}
-                  {expandedItem === item.id && (
-                    <div className="mt-4 pt-4 border-t border-gray-700/50 animate-in slide-in-from-top duration-300">
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-gray-400">Created:</span>
-                          <span className="text-white">
-                            {item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Unknown'}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-400">Updated:</span>
-                          <span className="text-white">
-                            {item.updated_at ? new Date(item.updated_at).toLocaleDateString() : 'Unknown'}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-400">ID:</span>
-                          <span className="text-white font-mono">#{item.id}</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Quick Actions */}
-                  <div className="flex justify-between items-center mt-4">
-                    <span className="text-xs text-gray-500">
-                      {item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Unknown date'}
-                    </span>
-                    <div className="flex gap-2 opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                      <button
-                        onClick={() => toggleStatus(item)}
-                        className="p-2 bg-gray-700/50 hover:bg-gray-600/50 text-gray-300 rounded-lg transition-colors duration-200"
-                        title={item.status ? 'Deactivate' : 'Activate'}
-                      >
-                        {item.status ? <EyeOff size={14} /> : <Eye size={14} />}
-                      </button>
-                    </div>
-                  </div>
-                </div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="bg-gray-800/40 rounded-2xl p-6 animate-pulse">
+                <div className="h-12 bg-gray-700 rounded"></div>
               </div>
             ))}
           </div>
-        )}
-
-        {/* Empty State */}
-        {!loading && filteredSubItems.length === 0 && (
-          <div className="text-center py-16">
-            <div className="bg-gray-800/30 backdrop-blur-sm rounded-3xl p-12 max-w-2xl mx-auto border border-gray-700/30">
-              <div className="w-24 h-24 mx-auto mb-6 bg-gradient-to-br from-gray-700 to-gray-800 rounded-full flex items-center justify-center">
-                <AlertCircle className="text-gray-500" size={48} />
+          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+            {[...Array(8)].map((_, i) => (
+              <div key={i} className="bg-gray-800/30 rounded-2xl p-6 animate-pulse space-y-4">
+                <div className="h-48 bg-gray-700/50 rounded-lg"></div>
+                <div className="h-8 bg-gray-700 rounded"></div>
               </div>
-              <h3 className="text-2xl font-bold text-white mb-3">
-                {searchTerm || filterStatus !== 'all' ? 'No Items Found' : 'No Sub Items Yet'}
-              </h3>
-              <p className="text-gray-400 text-lg mb-8 max-w-md mx-auto">
-                {searchTerm || filterStatus !== 'all'
-                  ? 'Try adjusting your search or filter criteria to find what you\'re looking for.'
-                  : 'Get started by creating your first sub-item to organize your content efficiently.'}
-              </p>
-              {!searchTerm && filterStatus === 'all' && (
-                <button
-                  onClick={() => setShowModal(true)}
-                  className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-8 py-3 rounded-xl transition-all duration-200 font-semibold inline-flex items-center gap-3"
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {/* Notification */}
+      <AnimatePresence>
+        {notification.show && (
+          <motion.div
+            initial={{ opacity: 0, x: 300 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 300 }}
+            className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-xl shadow-2xl ${notification.type === 'error' ? 'bg-red-600' : 'bg-green-600'} text-white font-medium`}
+          >
+            {notification.message}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Main Content */}
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 text-gray-100 py-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* Header */}
+          <div className="mb-8 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+            <div>
+              <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+                Sub Items Manager
+              </h1>
+              <p className="text-gray-400 mt-2">Manage your sub-items with ease and precision</p>
+            </div>
+            <button
+              onClick={() => openModal()}
+              className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 px-6 py-3 rounded-xl font-bold flex items-center gap-3 shadow-lg"
+            >
+              <Plus size={22} /> Add Sub Item
+            </button>
+          </div>
+
+          {/* Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div className="bg-gray-800/50 backdrop-blur-sm rounded-2xl p-6 border border-gray-700/50">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-400 text-sm font-medium">Total Items</p>
+                  <p className="text-3xl font-bold mt-1">{stats.total}</p>
+                </div>
+                <div className="p-3 bg-blue-500/10 rounded-xl">
+                  <Package size={28} className="text-blue-400" />
+                </div>
+              </div>
+            </div>
+            <div className="bg-gray-800/50 backdrop-blur-sm rounded-2xl p-6 border border-gray-700/50">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-400 text-sm font-medium">Active</p>
+                  <p className="text-3xl font-bold mt-1">{stats.active}</p>
+                </div>
+                <div className="p-3 bg-green-500/10 rounded-xl">
+                  <Eye size={28} className="text-green-400" />
+                </div>
+              </div>
+            </div>
+            <div className="bg-gray-800/50 backdrop-blur-sm rounded-2xl p-6 border border-gray-700/50">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-400 text-sm font-medium">Inactive</p>
+                  <p className="text-3xl font-bold mt-1">{stats.inactive}</p>
+                </div>
+                <div className="p-3 bg-red-500/10 rounded-xl">
+                  <EyeOff size={28} className="text-red-400" />
+                </div>
+              </div>
+            </div>
+            <div className="bg-gray-800/50 backdrop-blur-sm rounded-2xl p-6 border border-gray-700/50">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-400 text-sm font-medium">Categories</p>
+                  <p className="text-3xl font-bold mt-1">{subCategories.length}</p>
+                </div>
+                <div className="p-3 bg-purple-500/10 rounded-xl">
+                  <Package size={28} className="text-purple-400" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Search + Filters */}
+          <div className="bg-gray-800/30 backdrop-blur-sm rounded-2xl p-6 mb-8 border border-gray-700/30">
+            <div className="flex flex-col lg:flex-row gap-6">
+              <div className="flex-1 relative">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                <input
+                  type="text"
+                  placeholder="Search by name or category..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-12 pr-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500/50 outline-none"
+                />
+              </div>
+              <div className="flex flex-col sm:flex-row gap-4">
+                <div className="flex items-center gap-2 bg-gray-700/50 border border-gray-600/50 rounded-xl px-4 py-3">
+                  <span className="text-sm text-gray-400">Show:</span>
+                  <select
+                    value={pagination.per_page}
+                    onChange={(e) => handleLimitChange(e.target.value)}
+                    className="bg-transparent border-0 text-white text-sm focus:ring-0 focus:outline-none"
+                  >
+                    <option value="5">5</option>
+                    <option value="10">10</option>
+                    <option value="25">25</option>
+                    <option value="50">50</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Sub Items Grid */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1, transition: { staggerChildren: 0.1 } }}
+            className="grid gap-6 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 mb-8"
+          >
+            {subItems.map(item => {
+              const categoryName = item.sub_category_id
+                ? subCategories.find(cat => cat.id === item.sub_category_id)?.name || 'Uncategorized'
+                : 'Uncategorized';
+
+              return (
+                <motion.div
+                  key={item.id}
+                  whileHover={{ y: -8, scale: 1.02 }}
+                  className="group bg-gray-800/30 backdrop-blur-sm rounded-2xl overflow-hidden border border-gray-700/30 hover:border-blue-500/50 transition-all"
                 >
-                  <Plus size={20} />
-                  Create Your First Sub Item
+                  <div className="relative h-48 bg-gradient-to-br from-gray-700 to-gray-800">
+                    {item.image ? (
+                      <img
+                        src={getImageUrl(item.image)}
+                        alt={item.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <ImageIcon size={48} className="text-gray-500" />
+                      </div>
+                    )}
+
+                    <div className="absolute top-4 right-4">
+                      <button
+                        onClick={() => toggleStatus(item)}
+                        disabled={operationLoading === `status-${item.id}`}
+                        className={`px-3 py-1 rounded-full text-xs font-bold backdrop-blur-sm border transition-all ${
+                          (item.status === 'active' || item.status === true)
+                            ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                            : 'bg-red-500/20 text-red-400 border-red-500/30'
+                        }`}
+                      >
+                        {operationLoading === `status-${item.id}` ? <Loader size={12} className="animate-spin" /> : null}
+                        {(item.status === 'active' || item.status === true) ? 'Active' : 'Inactive'}
+                      </button>
+                    </div>
+
+                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-3">
+                      <button onClick={() => openModal(item)} className="p-3 bg-blue-500 hover:bg-blue-600 rounded-xl"><Edit size={18} /></button>
+                      <button onClick={() => handleDelete(item.id)} className="p-3 bg-red-500 hover:bg-red-600 rounded-xl"><Trash2 size={18} /></button>
+                    </div>
+                  </div>
+
+                  <div className="p-5">
+                    <h3 className="font-bold text-lg mb-2 line-clamp-1">{item.name || 'Unnamed'}</h3>
+                    <p className="text-sm text-gray-400 mb-3">
+                      <span className="bg-gray-700/50 px-2 py-1 rounded-lg text-xs">
+                        {categoryName}
+                      </span>
+                    </p>
+
+                    {/* Created Date instead of ID */}
+                    <div className="flex justify-between items-center mt-4 pt-4 border-t border-gray-700/30">
+                      <div className="flex items-center gap-2 text-xs text-gray-400">
+                        <Calendar size={14} />
+                        <span>{formatDate(item.created_at)}</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => openModal(item)} className="p-2 bg-blue-500/20 hover:bg-blue-500/40 rounded-lg"><Edit size={14} /></button>
+                        <button onClick={() => handleDelete(item.id)} className="p-2 bg-red-500/20 hover:bg-red-500/40 rounded-lg"><Trash2 size={14} /></button>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </motion.div>
+
+          {/* Pagination */}
+          {!searchTerm && pagination.last_page > 1 && (
+            <div className="flex justify-between items-center py-6 border-t border-gray-700/30">
+              <div className="text-sm text-gray-400">
+                Showing {(pagination.current_page - 1) * pagination.per_page + 1} to {Math.min(pagination.current_page * pagination.per_page, pagination.total)} of {pagination.total}
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => handlePageChange(pagination.current_page - 1)} disabled={pagination.current_page === 1} className="px-4 py-2 rounded-xl border border-gray-600 disabled:opacity-50 flex items-center gap-2">
+                  Previous
+                </button>
+                {Array.from({ length: pagination.last_page }, (_, i) => i + 1)
+                  .filter(p => p === 1 || p === pagination.last_page || Math.abs(p - pagination.current_page) <= 2)
+                  .map((p, idx, arr) => (
+                    <React.Fragment key={p}>
+                      {idx > 0 && p - arr[idx - 1] > 1 && <span className="px-3">...</span>}
+                      <button onClick={() => handlePageChange(p)} className={`px-4 py-2 rounded-xl border ${pagination.current_page === p ? 'bg-blue-600 border-blue-500' : 'border-gray-600'}`}>
+                        {p}
+                      </button>
+                    </React.Fragment>
+                  ))}
+                <button onClick={() => handlePageChange(pagination.current_page + 1)} disabled={pagination.current_page === pagination.last_page} className="px-4 py-2 rounded-xl border border-gray-600 disabled:opacity-50 flex items-center gap-2">
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Empty State */}
+          {subItems.length === 0 && !loading && (
+            <div className="text-center py-20">
+              <Package size={64} className="mx-auto text-gray-600 mb-6" />
+              <h3 className="text-2xl font-bold mb-3">{searchTerm ? 'No sub-items found' : 'No sub-items yet'}</h3>
+              <p className="text-gray-400 mb-8">{searchTerm ? 'Try different keywords' : 'Create your first sub-item'}</p>
+              {!searchTerm && (
+                <button onClick={() => openModal()} className="bg-gradient-to-r from-blue-600 to-purple-600 px-8 py-3 rounded-xl font-bold">
+                  Create First Sub Item
                 </button>
               )}
             </div>
-          </div>
-        )}
-      </div>
-
-      {/* Create/Edit Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-300">
-          <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-3xl max-w-md w-full max-h-[90vh] overflow-y-auto border border-gray-700/50 shadow-2xl">
-            {/* Header */}
-            <div className="flex justify-between items-center p-6 border-b border-gray-700/50">
-              <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
-                {editingItem ? 'Edit Sub Item' : 'Create Sub Item'}
-              </h2>
-              <button
-                onClick={() => {
-                  setShowModal(false);
-                  resetForm();
-                }}
-                className="p-2 hover:bg-gray-700/50 rounded-xl transition-all duration-200 hover:rotate-90"
-              >
-                <X size={24} />
-              </button>
-            </div>
-
-            {/* Form */}
-            <form onSubmit={handleSubmit} className="p-6 space-y-6">
-              {/* Image Upload */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-300 mb-3">
-                  Item Image
-                </label>
-                <div className="flex flex-col items-center gap-4">
-                  <div className="w-32 h-32 bg-gray-700/50 rounded-2xl border-2 border-dashed border-gray-600/50 flex items-center justify-center overflow-hidden group hover:border-blue-500/50 transition-all duration-300">
-                    {imagePreview ? (
-                      <img
-                        src={imagePreview}
-                        alt="Preview"
-                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                      />
-                    ) : (
-                      <div className="text-center p-4">
-                        <ImageIcon className="mx-auto text-gray-500 mb-2" size={32} />
-                        <span className="text-xs text-gray-400">Upload Image</span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="w-full">
-                    <input
-                      type="file"
-                      name="image"
-                      accept="image/*"
-                      onChange={handleInputChange}
-                      className="block w-full text-sm text-gray-400 file:mr-4 file:py-3 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-gradient-to-r file:from-blue-600 file:to-purple-600 file:text-white hover:file:from-blue-700 hover:file:to-purple-700 transition-all duration-200"
-                    />
-                    <p className="text-xs text-gray-500 mt-2 text-center">
-                      JPG, PNG, WEBP • Max 2MB
-                    </p>
-                  </div>
-                </div>
-                {errors.image && (
-                  <p className="text-red-400 text-sm mt-2 flex items-center gap-2">
-                    <AlertCircle size={16} />
-                    {errors.image}
-                  </p>
-                )}
-              </div>
-
-              {/* Sub Category */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-300 mb-3">
-                  Sub Category *
-                </label>
-                <select
-                  name="sub_category_id"
-                  value={formData.sub_category_id}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent backdrop-blur-sm transition-all duration-200"
-                >
-                  <option value="">Select a category</option>
-                  {subCategories.map(cat => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </option>
-                  ))}
-                </select>
-                {errors.sub_category_id && (
-                  <p className="text-red-400 text-sm mt-2 flex items-center gap-2">
-                    <AlertCircle size={16} />
-                    {errors.sub_category_id}
-                  </p>
-                )}
-              </div>
-
-              {/* Name */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-300 mb-3">
-                  Item Name *
-                </label>
-                <input
-                  type="text"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent backdrop-blur-sm transition-all duration-200"
-                  placeholder="Enter sub item name"
-                />
-                {errors.name && (
-                  <p className="text-red-400 text-sm mt-2 flex items-center gap-2">
-                    <AlertCircle size={16} />
-                    {errors.name}
-                  </p>
-                )}
-              </div>
-
-              {/* Status Toggle */}
-              <div className="flex items-center justify-between p-4 bg-gray-700/30 rounded-xl border border-gray-600/30">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-300">
-                    Status
-                  </label>
-                  <p className="text-xs text-gray-400">
-                    {formData.status ? 'Item is active and visible' : 'Item is hidden and inactive'}
-                  </p>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    name="status"
-                    checked={formData.status}
-                    onChange={handleInputChange}
-                    className="sr-only peer"
-                  />
-                  <div className="w-14 h-8 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-6 peer-checked:after:border-white after:content-[''] after:absolute after:top-1 after:left-1 after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-green-500"></div>
-                </label>
-              </div>
-
-              {/* Submit Buttons */}
-              <div className="flex gap-4 pt-4">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowModal(false);
-                    resetForm();
-                  }}
-                  className="flex-1 px-6 py-3 bg-gray-700/50 hover:bg-gray-600/50 text-white rounded-xl transition-all duration-200 font-semibold border border-gray-600/50 hover:border-gray-500/50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl transition-all duration-200 font-semibold flex items-center justify-center gap-3 shadow-lg hover:shadow-blue-500/25"
-                >
-                  <Check size={20} />
-                  {editingItem ? 'Update' : 'Create'}
-                </button>
-              </div>
-            </form>
-          </div>
+          )}
         </div>
-      )}
-    </div>
+
+        {/* Modal */}
+        <AnimatePresence>
+          {showModal && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={closeModal}>
+              <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-3xl p-8 max-w-md w-full border border-gray-700/50 shadow-2xl" onClick={e => e.stopPropagation()}>
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+                    {editingItem ? 'Edit Sub Item' : 'Create Sub Item'}
+                  </h2>
+                  <button onClick={closeModal} className="p-2 hover:bg-gray-700 rounded-lg"><X size={24} /></button>
+                </div>
+
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  <div>
+                    <label className="block text-sm font-semibold mb-3">Sub Category *</label>
+                    <select
+                      name="sub_category_id"
+                      value={formData.sub_category_id}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-white"
+                    >
+                      <option value="">Select category (optional)</option>
+                      {subCategories.map(cat => (
+                        <option key={cat.id} value={cat.id}>{cat.name}</option>
+                      ))}
+                    </select>
+                    {errors.sub_category_id && <p className="text-red-400 text-sm mt-1">{errors.sub_category_id[0]}</p>}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold mb-3">Item Name *</label>
+                    <input
+                      type="text"
+                      name="name"
+                      value={formData.name}
+                      onChange={handleInputChange}
+                      required
+                      className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                      placeholder="Enter sub-item name"
+                    />
+                    {errors.name && <p className="text-red-400 text-sm mt-1">{errors.name[0]}</p>}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold mb-3">Item Image</label>
+                    <div className="border-2 border-dashed border-gray-600 rounded-xl p-6 text-center hover:border-blue-500 cursor-pointer">
+                      <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" id="subitem-img" />
+                      <label htmlFor="subitem-img" className="cursor-pointer">
+                        {imagePreview ? (
+                          <img src={imagePreview} alt="Preview" className="mx-auto h-32 object-cover rounded-lg" />
+                        ) : (
+                          <>
+                            <Upload size={32} className="mx-auto mb-2 text-gray-400" />
+                            <p className="text-sm text-gray-400">Click to upload (Max 2MB)</p>
+                          </>
+                        )}
+                      </label>
+                    </div>
+                    {errors.image && <p className="text-red-400 text-sm mt-2">{errors.image}</p>}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold mb-3">Status</label>
+                    <div className="grid grid-cols-2 gap-4">
+                      {['active', 'inactive'].map(st => (
+                        <label
+                          key={st}
+                          onClick={() => setFormData(prev => ({ ...prev, status: st }))}
+                          className={`p-4 border-2 rounded-xl text-center cursor-pointer transition ${formData.status === st ? (st === 'active' ? 'border-green-500 bg-green-500/10' : 'border-red-500 bg-red-500/10') : 'border-gray-600'}`}
+                        >
+                          {st === 'active' ? <Eye size={20} className="mx-auto mb-2" /> : <EyeOff size={20} className="mx-auto mb-2" />}
+                          <span className="capitalize font-medium">{st}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-3 pt-4">
+                    <button type="button" onClick={closeModal} className="px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-xl">Cancel</button>
+                    <button type="submit" disabled={operationLoading === 'saving'} className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl font-bold flex items-center gap-2 disabled:opacity-70">
+                      {operationLoading === 'saving' ? <Loader size={20} className="animate-spin" /> : <Check size={20} />}
+                      {editingItem ? 'Update' : 'Create'} Sub Item
+                    </button>
+                  </div>
+                </form>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </>
   );
 };
 

@@ -169,11 +169,7 @@ class SerialListController extends Controller
     {
         $keyword = $request->query('keyword', '');
 
-        $serials = SerialList::where('sku', 'like', "%{$keyword}%")
-            ->orWhere('barcode', 'like', "%{$keyword}%")
-            ->orWhere('color', 'like', "%{$keyword}%")
-            ->orWhere('notes', 'like', "%{$keyword}%")
-            ->latest()
+        $serials = SerialList::where('color', 'like', "%{$keyword}%")
             ->get();
 
         return response()->json([
