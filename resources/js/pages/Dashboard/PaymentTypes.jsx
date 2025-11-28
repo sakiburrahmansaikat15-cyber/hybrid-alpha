@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -24,9 +24,7 @@ const PaymentTypes = () => {
     current_page: 1,
     last_page: 1,
     per_page: 10,
-    total: 0,
-    from: 0,
-    to: 0
+    total: 0
   });
 
   const [formData, setFormData] = useState({
@@ -69,90 +67,59 @@ const PaymentTypes = () => {
     }
   }, [showNotification]);
 
-  // Normal paginated fetch
-  const fetchPaymentTypes = useCallback(async (page = 1, perPage = pagination.per_page) => {
+  // Fixed: Removed pagination.per_page from deps, pass explicitly
+  const fetchPaymentTypes = useCallback(async (page = 1, perPage = 10, keyword = '') => {
     setLoading(true);
     try {
-      const response = await axios.get(API_URL, {
-        params: { page, limit: perPage }
-      });
+      const params = { page, limit: perPage };
+      if (keyword.trim()) params.keyword = keyword.trim();
 
+      const response = await axios.get(API_URL, { params });
       const res = response.data;
-      setPaymentTypes(res.data || []);
+
+      setPaymentTypes(res.pagination?.data || []);
       setPagination({
-        current_page: res.page || 1,
-        last_page: res.totalPages || res.last_page || 1,
-        per_page: res.perPage || perPage,
-        total: res.totalItems || res.total || 0,
-        from: res.from || ((res.page - 1) * res.perPage) + 1 || 1,
-        to: res.to || Math.min(res.page * res.perPage, res.totalItems) || 0
+        current_page: res.pagination?.current_page || 1,
+        last_page: res.pagination?.total_pages || 1,
+        per_page: res.pagination?.per_page || perPage,
+        total: res.pagination?.total_items || 0
       });
     } catch (error) {
       handleApiError(error, 'Failed to fetch payment types');
       setPaymentTypes([]);
+      setPagination(prev => ({ ...prev, total: 0, last_page: 1 }));
     } finally {
       setLoading(false);
     }
   }, [handleApiError]);
 
-  // Search (non-paginated)
-  const searchPaymentTypes = useCallback(async (keyword) => {
-    if (!keyword.trim()) {
-      fetchPaymentTypes(pagination.current_page, pagination.per_page);
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const response = await axios.get(`${API_URL}/search`, {
-        params: { keyword }
-      });
-
-      const items = response.data.data || [];
-      setPaymentTypes(items);
-      setPagination({
-        current_page: 1,
-        last_page: 1,
-        per_page: items.length,
-        total: items.length,
-        from: 1,
-        to: items.length
-      });
-    } catch (error) {
-      handleApiError(error, 'Search failed');
-      setPaymentTypes([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [fetchPaymentTypes]);
-
-  // Debounced search
+  // Debounced search + reacts to per_page change
   useEffect(() => {
     const timer = setTimeout(() => {
-      searchPaymentTypes(searchTerm);
+      fetchPaymentTypes(1, pagination.per_page, searchTerm);
     }, 500);
-
     return () => clearTimeout(timer);
-  }, [searchTerm, searchPaymentTypes]);
+  }, [searchTerm, pagination.per_page, fetchPaymentTypes]);
 
   // Initial load
   useEffect(() => {
     fetchPaymentTypes(1, 10);
-  }, []);
+  }, [fetchPaymentTypes]);
 
-  // Handle page change (only when not searching)
   const handlePageChange = (newPage) => {
-    if (newPage < 1 || newPage > pagination.last_page || searchTerm) return;
-    fetchPaymentTypes(newPage, pagination.per_page);
+    if (newPage < 1 || newPage > pagination.last_page) return;
+    fetchPaymentTypes(newPage, pagination.per_page, searchTerm);
   };
 
-  // Handle per_page change
+  // Fixed: Now properly updates per_page and resets to page 1
   const handleLimitChange = (newLimit) => {
-    const limit = parseInt(newLimit);
-    setPagination(prev => ({ ...prev, per_page: limit, current_page: 1 }));
-    if (!searchTerm.trim()) {
-      fetchPaymentTypes(1, limit);
-    }
+    const limit = parseInt(newLimit, 10);
+    setPagination(prev => ({
+      ...prev,
+      per_page: limit,
+      current_page: 1
+    }));
+    fetchPaymentTypes(1, limit, searchTerm);
   };
 
   const resetForm = () => {
@@ -221,21 +188,23 @@ const PaymentTypes = () => {
     fd.append('name', formData.name.trim());
     fd.append('type', formData.type);
     fd.append('account_number', formData.account_number.trim());
-    fd.append('notes', formData.notes.trim());
+    if (formData.notes.trim()) fd.append('notes', formData.notes.trim());
     fd.append('status', formData.status);
     if (formData.image instanceof File) fd.append('image', formData.image);
 
     try {
-      let response;
       if (editingPaymentType) {
-        fd.append('_method', 'POST');
-        response = await axios.post(`${API_URL}/${editingPaymentType.id}`, fd);
+        await axios.post(`${API_URL}/${editingPaymentType.id}`, fd, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
       } else {
-        response = await axios.post(API_URL, fd);
+        await axios.post(API_URL, fd, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
       }
 
-      showNotification(response.data.message || `Payment type ${editingPaymentType ? 'updated' : 'created'} successfully!`);
-      searchTerm ? searchPaymentTypes(searchTerm) : fetchPaymentTypes(pagination.current_page, pagination.per_page);
+      showNotification(`Payment type ${editingPaymentType ? 'updated' : 'created'} successfully!`);
+      fetchPaymentTypes(pagination.current_page, pagination.per_page, searchTerm);
       closeModal();
     } catch (error) {
       handleApiError(error, 'Failed to save payment type');
@@ -249,13 +218,19 @@ const PaymentTypes = () => {
     setOperationLoading(`status-${pt.id}`);
 
     const fd = new FormData();
+    fd.append('name', pt.name);
+    fd.append('type', pt.type);
+    fd.append('account_number', pt.account_number);
+    if (pt.notes) fd.append('notes', pt.notes);
     fd.append('status', newStatus);
-    fd.append('_method', 'POST');
+    if (pt.image) fd.append('existing_image', pt.image);
 
     try {
-      await axios.post(`${API_URL}/${pt.id}`, fd);
+      await axios.post(`${API_URL}/${pt.id}`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
       showNotification(`Payment type ${newStatus === 'active' ? 'activated' : 'deactivated'}`);
-      searchTerm ? searchPaymentTypes(searchTerm) : fetchPaymentTypes(pagination.current_page, pagination.per_page);
+      fetchPaymentTypes(pagination.current_page, pagination.per_page, searchTerm);
     } catch (error) {
       handleApiError(error, 'Failed to update status');
     } finally {
@@ -270,10 +245,10 @@ const PaymentTypes = () => {
     try {
       await axios.delete(`${API_URL}/${id}`);
       showNotification('Payment type deleted successfully');
-      if (paymentTypes.length === 1 && pagination.current_page > 1 && !searchTerm) {
-        fetchPaymentTypes(pagination.current_page - 1, pagination.per_page);
+      if (paymentTypes.length === 1 && pagination.current_page > 1) {
+        fetchPaymentTypes(pagination.current_page - 1, pagination.per_page, searchTerm);
       } else {
-        searchTerm ? searchPaymentTypes(searchTerm) : fetchPaymentTypes(pagination.current_page, pagination.per_page);
+        fetchPaymentTypes(pagination.current_page, pagination.per_page, searchTerm);
       }
     } catch (error) {
       handleApiError(error, 'Delete failed');
@@ -283,11 +258,11 @@ const PaymentTypes = () => {
     }
   };
 
-  const stats = {
+  const stats = useMemo(() => ({
     total: pagination.total,
     active: paymentTypes.filter(pt => pt.status === 'active').length,
     inactive: paymentTypes.filter(pt => pt.status === 'inactive').length
-  };
+  }), [pagination.total, paymentTypes]);
 
   const formatDate = (date) => date ? new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
   const getImageUrl = (path) => path ? `http://localhost:8000/${path}` : null;
@@ -299,7 +274,7 @@ const PaymentTypes = () => {
     return () => document.removeEventListener('click', handler);
   }, []);
 
-  const filteredAndSorted = React.useMemo(() => {
+  const filteredAndSorted = useMemo(() => {
     let list = [...paymentTypes];
     if (filterStatus !== 'all') list = list.filter(pt => pt.status === filterStatus);
     list.sort((a, b) => {
@@ -394,7 +369,7 @@ const PaymentTypes = () => {
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
               <input
                 type="text"
-                placeholder="Search by name, account, type or notes..."
+                placeholder="Search by name, type, account number..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-12 pr-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
@@ -406,21 +381,30 @@ const PaymentTypes = () => {
                 <select
                   value={pagination.per_page}
                   onChange={(e) => handleLimitChange(e.target.value)}
-                  disabled={!!searchTerm}
-                  className="bg-transparent border-0 text-white text-sm focus:ring-0 disabled:opacity-50"
+                  className="bg-transparent border-0 text-white text-sm focus:ring-0 cursor-pointer"
                 >
                   <option value="5">5</option>
                   <option value="10">10</option>
                   <option value="25">25</option>
                   <option value="50">50</option>
+                  <option value="100">100</option>
                 </select>
+               
               </div>
-              <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50">
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+              >
                 <option value="all">All Status</option>
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
               </select>
-              <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50">
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+              >
                 <option value="newest">Newest First</option>
                 <option value="oldest">Oldest First</option>
                 <option value="name">Name A-Z</option>
@@ -529,11 +513,11 @@ const PaymentTypes = () => {
           })}
         </motion.div>
 
-        {/* Pagination - Only when NOT searching */}
-        {!searchTerm && pagination.last_page > 1 && (
+        {/* Pagination */}
+        {pagination.last_page > 1 && (
           <div className="flex flex-col sm:flex-row justify-between items-center py-6 border-t border-gray-700/30">
             <div className="text-sm text-gray-400 mb-4 sm:mb-0">
-              Showing {pagination.from} to {pagination.to} of {pagination.total} entries
+              Showing {((pagination.current_page - 1) * pagination.per_page) + 1} to {Math.min(pagination.current_page * pagination.per_page, pagination.total)} of {pagination.total} entries
             </div>
             <div className="flex gap-2">
               <button
@@ -614,7 +598,15 @@ const PaymentTypes = () => {
                 <form onSubmit={handleSubmit} className="space-y-6">
                   <div>
                     <label className="block text-sm font-semibold text-gray-300 mb-3">Name *</label>
-                    <input type="text" name="name" value={formData.name} onChange={handleInputChange} required className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50" placeholder="e.g., M-Pesa, Visa Card" />
+                    <input 
+                      type="text" 
+                      name="name" 
+                      value={formData.name} 
+                      onChange={handleInputChange} 
+                      required 
+                      className={`w-full px-4 py-3 bg-gray-700/50 border ${errors.name ? 'border-red-500' : 'border-gray-600/50'} rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50`} 
+                      placeholder="e.g., M-Pesa, Visa Card" 
+                    />
                     {errors.name && <p className="text-red-400 text-xs mt-1">{errors.name[0]}</p>}
                   </div>
 
@@ -631,13 +623,28 @@ const PaymentTypes = () => {
 
                   <div>
                     <label className="block text-sm font-semibold text-gray-300 mb-3">Account Number / ID *</label>
-                    <input type="text" name="account_number" value={formData.account_number} onChange={handleInputChange} required className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50" placeholder="e.g., 0712345678" />
+                    <input 
+                      type="text" 
+                      name="account_number" 
+                      value={formData.account_number} 
+                      onChange={handleInputChange} 
+                      required 
+                      className={`w-full px-4 py-3 bg-gray-700/50 border ${errors.account_number ? 'border-red-500' : 'border-gray-600/50'} rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50`} 
+                      placeholder="e.g., 0712345678" 
+                    />
                     {errors.account_number && <p className="text-red-400 text-xs mt-1">{errors.account_number[0]}</p>}
                   </div>
 
                   <div>
                     <label className="block text-sm font-semibold text-gray-300 mb-3">Notes (Optional)</label>
-                    <textarea name="notes" value={formData.notes} onChange={handleInputChange} rows={3} className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-xl text-white placeholder-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/50" placeholder="Any additional info..." />
+                    <textarea 
+                      name="notes" 
+                      value={formData.notes} 
+                      onChange={handleInputChange} 
+                      rows={3} 
+                      className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-xl text-white resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/50" 
+                      placeholder="Any additional info..." 
+                    />
                   </div>
 
                   <div>

@@ -115,6 +115,13 @@ export const menuData = {
           description: "View all your projects",
           icon: "Folder"
         },
+         {
+          id: 37,
+          title: "Serial-List",
+          path: "/serial-list",
+          description: "View all your projects",
+          icon: "Folder"
+        },
 
 
 

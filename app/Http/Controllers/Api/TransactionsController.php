@@ -11,22 +11,40 @@ use Illuminate\Support\Facades\Validator;
 class TransactionsController extends Controller
 {
     // ✅ List transactions with pagination
-    public function index(Request $request)
+      public function index(Request $request)
     {
+        $keyword = $request->query('keyword', '');
         $limit = (int) $request->query('limit', 10);
-        $page = (int) $request->query('page', 1);
 
-        $transactions = Transaction::latest()->paginate($limit, ['*'], 'page', $page);
+        $query = Transaction::with(['paymentType']);
 
+
+        // 🔍 Apply search if keyword provided
+        if ($keyword) {
+            $query->where(function ($q) use ($keyword) {
+                $q->where('type', 'like', "%{$keyword}%")
+                  ->orWhereHas('paymentType', function ($q) use ($keyword) {
+                      $q->where('name', 'like', "%{$keyword}%");
+                  });
+            });
+        }
+
+        // 📄 Paginate results
+        $transactions = $query->latest()->paginate($limit);
+
+        // ✅ Return response
         return response()->json([
             'message' => 'Transactions fetched successfully',
-            'page' => $transactions->currentPage(),
-            'perPage' => $transactions->perPage(),
-            'totalItems' => $transactions->total(),
-            'totalPages' => $transactions->lastPage(),
-            'data' => TransactionResource::collection($transactions->items()),
+            'pagination' => [
+                'current_page' => $transactions->currentPage(),
+                'per_page' => $transactions->perPage(),
+                'total_items' => $transactions->total(),
+                'total_pages' => $transactions->lastPage(),
+                 'data' => TransactionResource::collection($transactions),
+            ],
         ]);
     }
+
 
     // ✅ Store a new transaction
     public function store(Request $request)
@@ -60,7 +78,7 @@ class TransactionsController extends Controller
     // ✅ Show a single transaction
     public function show($id)
     {
-        $transaction = Transaction::find($id);
+        $transaction = Transaction::with(['paymentType'])->find($id);
 
         if (!$transaction) {
             return response()->json([
@@ -122,20 +140,5 @@ class TransactionsController extends Controller
             'success' => true,
             'message' => 'Transaction deleted successfully',
         ], 200);
-    }
-
-    // ✅ Search transactions (no pagination)
-    public function search(Request $request)
-    {
-        $keyword = $request->query('keyword', '');
-
-        $transactions = Transaction::where('type', 'like', "%{$keyword}%")
-            ->latest()
-            ->get();
-
-        return response()->json([
-            'message' => 'Search results fetched successfully',
-            'data' => TransactionResource::collection($transactions),
-        ]);
     }
 }

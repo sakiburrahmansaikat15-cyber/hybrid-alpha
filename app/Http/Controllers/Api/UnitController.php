@@ -11,20 +11,32 @@ use Illuminate\Support\Facades\Validator;
 class UnitController extends Controller
 {
     // ✅ List units with pagination
-    public function index(Request $request)
+        public function index(Request $request)
     {
+         $keyword = $request->query('keyword', '');
         $limit = (int) $request->query('limit', 10);
-        $page = (int) $request->query('page', 1);
+       
 
-        $units = Unit::latest()->paginate($limit, ['*'], 'page', $page);
+        $query = Unit::query();
 
+        // 🔍 Apply search if keyword provided
+      if ($keyword) {
+        $query->where('name', 'like', "%{$keyword}%"); 
+    }
+
+        // 📄 Paginate results
+        $serials = $query->latest()->paginate($limit);
+
+        
         return response()->json([
-            'message' => 'Units fetched successfully',
-            'page' => $units->currentPage(),
-            'perPage' => $units->perPage(),
-            'totalItems' => $units->total(),
-            'totalPages' => $units->lastPage(),
-            'data' => UnitResource::collection($units->items()),
+            'message' => 'Unit fetched successfully',
+            'pagination' => [
+                'current_page' => $serials->currentPage(),
+                'per_page' => $serials->perPage(),
+                'total_items' => $serials->total(),
+                'total_pages' => $serials->lastPage(),
+                'data' => UnitResource::collection($serials),
+            ],
         ]);
     }
 
@@ -111,18 +123,5 @@ class UnitController extends Controller
         ], 200);
     }
 
-    // ✅ Search units (no pagination)
-    public function search(Request $request)
-    {
-        $keyword = $request->query('keyword', '');
 
-        $units = Unit::where('name', 'like', "%{$keyword}%")
-            ->latest()
-            ->get();
-
-        return response()->json([
-            'message' => 'Search results fetched successfully',
-            'data' => UnitResource::collection($units),
-        ]);
-    }
 }

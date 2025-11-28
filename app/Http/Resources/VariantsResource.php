@@ -21,6 +21,7 @@ class VariantsResource extends JsonResource
             'value' => $this->value,
             'status' => $this->status,
             'product_id' => $this->product_id,
+            'product' => new ProductsResource($this->whenLoaded('product')),
             'created_at' => $this->created_at->toDateTimeString(),
             'updated_at' => $this->updated_at->toDateTimeString(),
         ];

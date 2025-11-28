@@ -30,7 +30,6 @@ import {
   Settings,
   DollarSign,
   Hash,
-  Barcode,
   ShoppingCart
 } from 'lucide-react';
 
@@ -102,12 +101,12 @@ const ProductCard = ({
         {/* Status Badge */}
         <div
           className={`absolute top-4 right-4 px-3 py-1.5 rounded-full text-xs font-bold shadow-2xl backdrop-blur-sm border transition-all duration-300 ${
-            product.status
+            product.status === 'active'
               ? "bg-green-500/20 text-green-300 border-green-500/40 hover:bg-green-500/30"
               : "bg-red-500/20 text-red-300 border-red-500/40 hover:bg-red-500/30"
           } transform hover:scale-105`}
         >
-          {product.status ? (
+          {product.status === 'active' ? (
             <div className="flex items-center gap-1.5">
               <CheckCircle className="w-3.5 h-3.5" />
               Active
@@ -138,7 +137,7 @@ const ProductCard = ({
             <div>
               <span className="text-gray-500 text-xs">Category</span>
               <div className="text-gray-300 font-medium">
-                {product.category?.name || 'No Category'}
+                {product.cat_id ? `Category ${product.cat_id}` : 'No Category'}
               </div>
             </div>
           </div>
@@ -149,36 +148,18 @@ const ProductCard = ({
             <div>
               <span className="text-gray-500 text-xs">Type</span>
               <div className="text-gray-300 font-medium">
-                {product.product_type?.type || product.product_type?.name || 'No Type'}
+                {product.product_type_id ? `Type ${product.product_type_id}` : 'No Type'}
               </div>
             </div>
           </div>
         </div>
 
-        {/* Price and Stock Info */}
-        <div className="grid grid-cols-3 gap-2 mb-4 p-3 bg-gray-800/50 rounded-xl border border-gray-700/50">
-          <div className="text-center">
-            <div className="text-green-400 text-sm font-bold flex items-center justify-center gap-1">
-              <DollarSign className="w-3 h-3" />
-              Price
-            </div>
-            <div className="text-gray-300 text-xs">
-              ${product.selling_price || 0}
-            </div>
+        {/* Description Preview */}
+        {product.description && (
+          <div className="mb-4 p-3 bg-gray-800/30 rounded-lg border border-gray-700/30">
+            <p className="text-gray-400 text-xs line-clamp-2">{product.description}</p>
           </div>
-          <div className="text-center">
-            <div className="text-blue-400 text-sm font-bold">Stock</div>
-            <div className="text-gray-300 text-xs">
-              {product.stock_quantity || 0}
-            </div>
-          </div>
-          <div className="text-center">
-            <div className="text-purple-400 text-sm font-bold">Unit</div>
-            <div className="text-gray-300 text-xs truncate">
-              {product.unit?.name || '-'}
-            </div>
-          </div>
-        </div>
+        )}
 
         {/* Actions */}
         <div className="flex justify-between items-center pt-4 border-t border-gray-700/50">
@@ -204,15 +185,15 @@ const ProductCard = ({
               onClick={() => onToggleStatus(product)}
               disabled={actionLoading}
               className={`p-2.5 rounded-xl transition-all duration-300 hover:scale-110 disabled:opacity-50 border backdrop-blur-sm ${
-                product.status
+                product.status === 'active'
                   ? "bg-red-500/10 text-red-300 hover:bg-red-500/20 border-red-500/30 hover:border-red-500/50"
                   : "bg-green-500/10 text-green-300 hover:bg-green-500/20 border-green-500/30 hover:border-green-500/50"
               }`}
-              title={product.status ? "Deactivate" : "Activate"}
+              title={product.status === 'active' ? "Deactivate" : "Activate"}
             >
               {actionLoading ? (
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
-              ) : product.status ? (
+              ) : product.status === 'active' ? (
                 <ShieldOff className="w-4 h-4" />
               ) : (
                 <Shield className="w-4 h-4" />
@@ -290,19 +271,14 @@ const Products = () => {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    specifications: '',
-    status: 1,
-    category_id: '',
+    specification: '',
+    status: 'active',
+    cat_id: '',
     brand_id: '',
-    sub_category_id: '',
+    sub_cat_id: '',
     sub_item_id: '',
     unit_id: '',
     product_type_id: '',
-    buying_price: '',
-    selling_price: '',
-    stock_quantity: '',
-    sku: '',
-    barcode: '',
     image: null
   });
   const [errors, setErrors] = useState({});
@@ -315,15 +291,46 @@ const Products = () => {
   const [actionLoading, setActionLoading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [pagination, setPagination] = useState({
+    page: 1,
+    perPage: 8,
+    totalItems: 0,
+    totalPages: 1
+  });
 
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
-  // Fetch all data
-  const fetchData = async () => {
+  // Fetch products with pagination
+  const fetchProducts = async (page = 1, limit = 8) => {
     setLoading(true);
     try {
+      const response = await axios.get(`/api/products?page=${page}&limit=${limit}`);
+      
+      if (response.data && response.data.data) {
+        setProducts(response.data.data);
+        setPagination({
+          page: response.data.page,
+          perPage: response.data.perPage,
+          totalItems: response.data.totalItems,
+          totalPages: response.data.totalPages
+        });
+      } else {
+        setProducts([]);
+      }
+      setApiError('');
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      setApiError('Failed to fetch products. Please check your connection.');
+      setProducts([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch all related data
+  const fetchRelatedData = async () => {
+    try {
       const [
-        productsRes,
         categoriesRes,
         brandsRes,
         subCategoriesRes,
@@ -331,54 +338,42 @@ const Products = () => {
         unitsRes,
         productTypesRes
       ] = await Promise.all([
-        axios.get('/api/products'),
-        axios.get('/api/categories'),
-        axios.get('/api/brands'),
-        axios.get('/api/sub-categories'),
-        axios.get('/api/sub-items'),
-        axios.get('/api/units'),
-        axios.get('/api/product-types')
+        axios.get('/api/categories').catch(() => ({ data: [] })),
+        axios.get('/api/brands').catch(() => ({ data: [] })),
+        axios.get('/api/sub-categories').catch(() => ({ data: [] })),
+        axios.get('/api/sub-items').catch(() => ({ data: [] })),
+        axios.get('/api/units').catch(() => ({ data: [] })),
+        axios.get('/api/product-type').catch(() => ({ data: [] }))
       ]);
 
-      setProducts(Array.isArray(productsRes.data) ? productsRes.data : []);
       setCategories(Array.isArray(categoriesRes.data) ? categoriesRes.data : categoriesRes.data?.data || []);
       setBrands(Array.isArray(brandsRes.data) ? brandsRes.data : brandsRes.data?.data || []);
       setSubCategories(Array.isArray(subCategoriesRes.data) ? subCategoriesRes.data : subCategoriesRes.data?.data || []);
       setSubItems(Array.isArray(subItemsRes.data) ? subItemsRes.data : subItemsRes.data?.data || []);
       setUnits(Array.isArray(unitsRes.data) ? unitsRes.data : unitsRes.data?.data || []);
-
-      // Handle product types with 'type' field instead of 'name'
-      const productTypesData = Array.isArray(productTypesRes.data) ? productTypesRes.data : productTypesRes.data?.data || [];
-      console.log('Product Types:', productTypesData); // Debug log
-      setProductTypes(productTypesData);
-
-      setApiError('');
+      setProductTypes(Array.isArray(productTypesRes.data) ? productTypesRes.data : productTypesRes.data?.data || []);
     } catch (error) {
-      console.error('Error fetching data:', error);
-      setApiError('Failed to fetch data. Please check your connection.');
-      setProducts([]);
-      setCategories([]);
-      setBrands([]);
-      setSubCategories([]);
-      setSubItems([]);
-      setUnits([]);
-      setProductTypes([]);
-    } finally {
-      setLoading(false);
+      console.error('Error fetching related data:', error);
     }
   };
 
   // Search products
   const searchProducts = async (query) => {
     if (!query.trim()) {
-      fetchData();
+      fetchProducts();
       return;
     }
 
     setLoading(true);
     try {
-      const response = await axios.get(`/api/products/search?search=${encodeURIComponent(query)}`);
-      setProducts(Array.isArray(response.data) ? response.data : []);
+      const response = await axios.get(`/api/products/search?keyword=${encodeURIComponent(query)}`);
+      setProducts(Array.isArray(response.data.data) ? response.data.data : []);
+      setPagination({
+        page: 1,
+        perPage: itemsPerPage,
+        totalItems: response.data.data?.length || 0,
+        totalPages: 1
+      });
       setApiError('');
     } catch (error) {
       console.error('Error searching products:', error);
@@ -389,19 +384,16 @@ const Products = () => {
   };
 
   useEffect(() => {
-    fetchData();
+    fetchProducts();
+    fetchRelatedData();
   }, []);
 
   useEffect(() => {
-    const delayDebounceFn = setTimeout(() => {
-      if (debouncedSearchTerm) {
-        searchProducts(debouncedSearchTerm);
-      } else {
-        fetchData();
-      }
-    }, 500);
-
-    return () => clearTimeout(delayDebounceFn);
+    if (debouncedSearchTerm) {
+      searchProducts(debouncedSearchTerm);
+    } else {
+      fetchProducts();
+    }
   }, [debouncedSearchTerm]);
 
   // Show notification
@@ -458,7 +450,7 @@ const Products = () => {
     } else {
       setFormData(prev => ({
         ...prev,
-        [name]: type === 'checkbox' ? (value === '1' ? 0 : 1) : value
+        [name]: value
       }));
     }
 
@@ -504,17 +496,6 @@ const Products = () => {
       newErrors.name = 'Product name is required';
     }
 
-    // Validate numeric fields
-    if (formData.buying_price && isNaN(formData.buying_price)) {
-      newErrors.buying_price = 'Buying price must be a valid number';
-    }
-    if (formData.selling_price && isNaN(formData.selling_price)) {
-      newErrors.selling_price = 'Selling price must be a valid number';
-    }
-    if (formData.stock_quantity && (isNaN(formData.stock_quantity) || formData.stock_quantity < 0)) {
-      newErrors.stock_quantity = 'Stock quantity must be a valid non-negative number';
-    }
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -531,30 +512,21 @@ const Products = () => {
     try {
       const submitData = new FormData();
 
-      // Append all form data
+      // Append all form data according to API structure
       submitData.append('name', formData.name);
       submitData.append('status', formData.status);
 
       // Append optional fields only if they have values
       if (formData.description) submitData.append('description', formData.description);
-      if (formData.specifications) submitData.append('specifications', formData.specifications);
+      if (formData.specification) submitData.append('specification', formData.specification);
 
-      // Append numeric fields with proper handling
-      submitData.append('buying_price', formData.buying_price || '0');
-      submitData.append('selling_price', formData.selling_price || '0');
-      submitData.append('stock_quantity', formData.stock_quantity || '0');
-
-      // Append optional identification fields
-      if (formData.sku) submitData.append('sku', formData.sku);
-      if (formData.barcode) submitData.append('barcode', formData.barcode);
-
-      // Handle foreign keys - send empty string for null values
-      submitData.append('category_id', formData.category_id || '');
-      submitData.append('brand_id', formData.brand_id || '');
-      submitData.append('sub_category_id', formData.sub_category_id || '');
-      submitData.append('sub_item_id', formData.sub_item_id || '');
-      submitData.append('unit_id', formData.unit_id || '');
-      submitData.append('product_type_id', formData.product_type_id || '');
+      // Append foreign keys - send empty string for null values
+      if (formData.cat_id) submitData.append('cat_id', formData.cat_id);
+      if (formData.brand_id) submitData.append('brand_id', formData.brand_id);
+      if (formData.sub_cat_id) submitData.append('sub_cat_id', formData.sub_cat_id);
+      if (formData.sub_item_id) submitData.append('sub_item_id', formData.sub_item_id);
+      if (formData.unit_id) submitData.append('unit_id', formData.unit_id);
+      if (formData.product_type_id) submitData.append('product_type_id', formData.product_type_id);
 
       if (formData.image) {
         submitData.append('image', formData.image);
@@ -563,8 +535,8 @@ const Products = () => {
       let response;
 
       if (selectedProduct) {
-        // For update
-        response = await axios.put(`/api/products/${selectedProduct.id}`, submitData, {
+        // For update - using POST as per your API route
+        response = await axios.post(`/api/products/${selectedProduct.id}`, submitData, {
           headers: { 'Content-Type': 'multipart/form-data' }
         });
       } else {
@@ -576,7 +548,7 @@ const Products = () => {
 
       setShowModal(false);
       resetForm();
-      fetchData();
+      fetchProducts();
       showNotification(`Product ${selectedProduct ? 'updated' : 'created'} successfully!`);
 
     } catch (error) {
@@ -616,7 +588,7 @@ const Products = () => {
 
       setShowDeleteModal(false);
       setSelectedProduct(null);
-      fetchData();
+      fetchProducts();
       showNotification('Product deleted successfully!');
 
     } catch (error) {
@@ -636,22 +608,21 @@ const Products = () => {
   const toggleStatus = async (product) => {
     setActionLoading(true);
     try {
-      const newStatus = !product.status;
-      const response = await axios.put(
+      const newStatus = product.status === 'active' ? 'inactive' : 'active';
+      const response = await axios.post(
         `/api/products/${product.id}`,
         {
           name: product.name,
           status: newStatus,
-          buying_price: product.buying_price,
-          selling_price: product.selling_price,
-          stock_quantity: product.stock_quantity,
+          description: product.description,
+          specification: product.specification,
         },
         { headers: { "Content-Type": "application/json" } }
       );
 
       if (response.data) {
-        showNotification(`Product ${newStatus ? "activated" : "deactivated"}!`);
-        await fetchData();
+        showNotification(`Product ${newStatus === 'active' ? "activated" : "deactivated"}!`);
+        await fetchProducts();
       } else {
         throw new Error("Status update failed");
       }
@@ -669,19 +640,14 @@ const Products = () => {
     setFormData({
       name: product.name,
       description: product.description || '',
-      specifications: product.specifications || '',
+      specification: product.specification || '',
       status: product.status,
-      category_id: product.category_id ? product.category_id.toString() : '',
+      cat_id: product.cat_id ? product.cat_id.toString() : '',
       brand_id: product.brand_id ? product.brand_id.toString() : '',
-      sub_category_id: product.sub_category_id ? product.sub_category_id.toString() : '',
+      sub_cat_id: product.sub_cat_id ? product.sub_cat_id.toString() : '',
       sub_item_id: product.sub_item_id ? product.sub_item_id.toString() : '',
       unit_id: product.unit_id ? product.unit_id.toString() : '',
       product_type_id: product.product_type_id ? product.product_type_id.toString() : '',
-      buying_price: product.buying_price || '',
-      selling_price: product.selling_price || '',
-      stock_quantity: product.stock_quantity || '',
-      sku: product.sku || '',
-      barcode: product.barcode || '',
       image: null
     });
     setImagePreview(product.image ? {
@@ -706,19 +672,14 @@ const Products = () => {
     setFormData({
       name: '',
       description: '',
-      specifications: '',
-      status: 1,
-      category_id: '',
+      specification: '',
+      status: 'active',
+      cat_id: '',
       brand_id: '',
-      sub_category_id: '',
+      sub_cat_id: '',
       sub_item_id: '',
       unit_id: '',
       product_type_id: '',
-      buying_price: '',
-      selling_price: '',
-      stock_quantity: '',
-      sku: '',
-      barcode: '',
       image: null
     });
     setSelectedProduct(null);
@@ -729,31 +690,27 @@ const Products = () => {
 
   // Filter products
   const filteredProducts = products.filter(product => {
-    if (filterStatus !== 'all' && product.status !== (filterStatus === 'active' ? 1 : 0)) return false;
-    if (filterCategory !== 'all' && product.category_id?.toString() !== filterCategory) return false;
+    if (filterStatus !== 'all' && product.status !== filterStatus) return false;
+    if (filterCategory !== 'all' && product.cat_id?.toString() !== filterCategory) return false;
     return true;
   });
 
   // Pagination
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentProducts = filteredProducts.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
-
-  const paginate = (pageNumber) => setCurrentPage(pageNumber);
+  const paginate = (pageNumber) => {
+    setCurrentPage(pageNumber);
+    fetchProducts(pageNumber, itemsPerPage);
+  };
 
   // Stats calculation
   const stats = {
-    total: products.length,
-    active: products.filter(p => p.status).length,
-    inactive: products.filter(p => !p.status).length,
+    total: pagination.totalItems,
+    active: products.filter(p => p.status === 'active').length,
+    inactive: products.filter(p => p.status === 'inactive').length,
     withImages: products.filter(p => p.image).length,
-    totalStock: products.reduce((sum, product) => sum + (product.stock_quantity || 0), 0),
-    totalValue: products.reduce((sum, product) => sum + ((product.selling_price || 0) * (product.stock_quantity || 0)), 0)
   };
 
   // Safe rendering functions
-  const renderSelectOptions = (items, placeholder = "Select an option", nameField = "name") => {
+  const renderSelectOptions = (items, placeholder = "Select an option") => {
     if (!Array.isArray(items) || items.length === 0) {
       return <option value="">No {placeholder.toLowerCase()} available</option>;
     }
@@ -762,21 +719,24 @@ const Products = () => {
       <option key="placeholder" value="">{placeholder}</option>,
       ...items.map((item) => (
         <option key={item.id} value={item.id}>
-          {item[nameField] || item.name || item.type} {/* Handle both 'name' and 'type' */}
+          {item.name || item.type || `ID: ${item.id}`}
         </option>
       ))
     ];
   };
 
-  const getRelationName = (product, relation) => {
-    if (!product[relation]) return 'Not Set';
+  const getRelationName = (product, relationField) => {
+    const fieldMap = {
+      cat_id: 'Category',
+      brand_id: 'Brand',
+      product_type_id: 'Product Type',
+      unit_id: 'Unit'
+    };
 
-    // Special handling for product_type which uses 'type' instead of 'name'
-    if (relation === 'productType') {
-      return product[relation].type || product[relation].name || 'Not Set';
-    }
-
-    return product[relation]?.name || 'Not Set';
+    const value = product[relationField];
+    if (!value) return 'Not Set';
+    
+    return `${fieldMap[relationField] || relationField} ${value}`;
   };
 
   const removeImage = () => {
@@ -805,7 +765,7 @@ const Products = () => {
             </p>
           </div>
           <button
-            onClick={fetchData}
+            onClick={() => fetchProducts()}
             disabled={loading}
             className="px-5 py-3 bg-gray-800/80 hover:bg-gray-700/80 disabled:bg-gray-800 text-white rounded-xl font-medium flex items-center space-x-2 transition-all hover:scale-105 border border-gray-700 hover:border-gray-600 backdrop-blur-sm shadow-lg"
           >
@@ -873,18 +833,18 @@ const Products = () => {
             <div className="p-2 bg-purple-500/10 rounded-lg border border-purple-500/20 group-hover:bg-purple-500/20 transition-colors">
               <ShoppingCart className="w-5 h-5" />
             </div>
-            {stats.totalStock}
+            {stats.withImages}
           </div>
-          <div className="text-gray-400 text-sm font-medium">Total Stock</div>
+          <div className="text-gray-400 text-sm font-medium">With Images</div>
         </div>
         <div className="bg-gradient-to-br from-gray-800/60 to-gray-900/60 backdrop-blur-sm rounded-2xl p-6 border border-gray-700/50 hover:border-gray-600/50 transition-all duration-300 hover:scale-105 shadow-xl group">
           <div className="text-2xl font-bold text-yellow-400 flex items-center gap-3 mb-2">
             <div className="p-2 bg-yellow-500/10 rounded-lg border border-yellow-500/20 group-hover:bg-yellow-500/20 transition-colors">
-              <DollarSign className="w-5 h-5" />
+              <Package className="w-5 h-5" />
             </div>
-            ${stats.totalValue.toFixed(2)}
+            {stats.inactive}
           </div>
-          <div className="text-gray-400 text-sm font-medium">Inventory Value</div>
+          <div className="text-gray-400 text-sm font-medium">Inactive Products</div>
         </div>
       </div>
 
@@ -951,7 +911,7 @@ const Products = () => {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
           <div className="text-gray-400 text-sm font-medium flex items-center gap-2">
             <BarChart3 className="w-4 h-4" />
-            Showing {filteredProducts.length} of {products.length} products
+            Showing {filteredProducts.length} of {stats.total} products
             {debouncedSearchTerm && (
               <span className="text-blue-400 ml-3 flex items-center gap-1 bg-blue-500/10 px-3 py-1 rounded-full border border-blue-500/20">
                 <Search className="w-3 h-3" />
@@ -1009,7 +969,7 @@ const Products = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-            {currentProducts.map((product) => (
+            {filteredProducts.map((product) => (
               <ProductCard
                 key={product.id}
                 product={product}
@@ -1027,18 +987,18 @@ const Products = () => {
         )}
 
         {/* Pagination */}
-        {filteredProducts.length > 0 && (
+        {pagination.totalPages > 1 && (
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-8 pt-6 border-t border-gray-700/50">
             <div className="text-sm text-gray-400">
-              Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, filteredProducts.length)} of {filteredProducts.length} results
+              Showing {((pagination.page - 1) * pagination.perPage) + 1} to {Math.min(pagination.page * pagination.perPage, pagination.totalItems)} of {pagination.totalItems} results
             </div>
             <div className="flex gap-1 sm:gap-2 flex-wrap justify-center">
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+              {Array.from({ length: pagination.totalPages }, (_, i) => i + 1).map((page) => (
                 <button
                   key={page}
                   onClick={() => paginate(page)}
                   className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 hover:scale-105 ${
-                    currentPage === page
+                    pagination.page === page
                       ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg'
                       : 'bg-gray-700 text-gray-300 hover:bg-gray-600 border border-gray-600'
                   }`}
@@ -1113,6 +1073,7 @@ const Products = () => {
                         onChange={handleInputChange}
                         className="hidden"
                         id="image-upload"
+                        name="image"
                       />
                       <div className="flex flex-col items-center space-y-4">
                         <div className="p-4 bg-gray-700/50 rounded-2xl border border-gray-600/50">
@@ -1189,14 +1150,14 @@ const Products = () => {
                       />
                     </div>
 
-                    {/* Specifications */}
+                    {/* Specification */}
                     <div>
                       <label className="block text-sm font-medium text-gray-300 mb-2">
-                        Specifications
+                        Specification
                       </label>
                       <textarea
-                        name="specifications"
-                        value={formData.specifications}
+                        name="specification"
+                        value={formData.specification}
                         onChange={handleInputChange}
                         rows="3"
                         className="w-full px-4 py-3 bg-gray-800/80 border border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400 text-sm backdrop-blur-sm"
@@ -1206,114 +1167,9 @@ const Products = () => {
                   </div>
                 </div>
 
-                {/* Right Column - Pricing & Relationships */}
+                {/* Right Column - Relationships */}
                 <div className="space-y-6">
                   <h3 className="text-lg font-medium text-white flex items-center gap-2">
-                    <DollarSign className="w-5 h-5" />
-                    Pricing & Inventory
-                  </h3>
-
-                  {/* Buying Price */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
-                      <DollarSign className="w-4 h-4" />
-                      Buying Price
-                    </label>
-                    <input
-                      type="number"
-                      name="buying_price"
-                      value={formData.buying_price}
-                      onChange={handleInputChange}
-                      step="0.01"
-                      min="0"
-                      className={`w-full px-4 py-3 bg-gray-800/80 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400 text-sm backdrop-blur-sm ${
-                        errors.buying_price ? 'border-red-500 ring-2 ring-red-500/20' : 'border-gray-700'
-                      }`}
-                      placeholder="0.00"
-                    />
-                    {errors.buying_price && (
-                      <p className="mt-2 text-sm text-red-400">{errors.buying_price}</p>
-                    )}
-                  </div>
-
-                  {/* Selling Price */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
-                      <DollarSign className="w-4 h-4" />
-                      Selling Price
-                    </label>
-                    <input
-                      type="number"
-                      name="selling_price"
-                      value={formData.selling_price}
-                      onChange={handleInputChange}
-                      step="0.01"
-                      min="0"
-                      className={`w-full px-4 py-3 bg-gray-800/80 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400 text-sm backdrop-blur-sm ${
-                        errors.selling_price ? 'border-red-500 ring-2 ring-red-500/20' : 'border-gray-700'
-                      }`}
-                      placeholder="0.00"
-                    />
-                    {errors.selling_price && (
-                      <p className="mt-2 text-sm text-red-400">{errors.selling_price}</p>
-                    )}
-                  </div>
-
-                  {/* Stock Quantity */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
-                      <ShoppingCart className="w-4 h-4" />
-                      Stock Quantity
-                    </label>
-                    <input
-                      type="number"
-                      name="stock_quantity"
-                      value={formData.stock_quantity}
-                      onChange={handleInputChange}
-                      min="0"
-                      className={`w-full px-4 py-3 bg-gray-800/80 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400 text-sm backdrop-blur-sm ${
-                        errors.stock_quantity ? 'border-red-500 ring-2 ring-red-500/20' : 'border-gray-700'
-                      }`}
-                      placeholder="0"
-                    />
-                    {errors.stock_quantity && (
-                      <p className="mt-2 text-sm text-red-400">{errors.stock_quantity}</p>
-                    )}
-                  </div>
-
-                  {/* SKU & Barcode */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
-                        <Hash className="w-4 h-4" />
-                        SKU
-                      </label>
-                      <input
-                        type="text"
-                        name="sku"
-                        value={formData.sku}
-                        onChange={handleInputChange}
-                        className="w-full px-4 py-3 bg-gray-800/80 border border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400 text-sm backdrop-blur-sm"
-                        placeholder="SKU"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
-                        <Barcode className="w-4 h-4" />
-                        Barcode
-                      </label>
-                      <input
-                        type="text"
-                        name="barcode"
-                        value={formData.barcode}
-                        onChange={handleInputChange}
-                        className="w-full px-4 py-3 bg-gray-800/80 border border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400 text-sm backdrop-blur-sm"
-                        placeholder="Barcode"
-                      />
-                    </div>
-                  </div>
-
-                  <h3 className="text-lg font-medium text-white flex items-center gap-2 pt-4">
                     <Tag className="w-5 h-5" />
                     Product Relationships
                   </h3>
@@ -1325,8 +1181,8 @@ const Products = () => {
                       Category
                     </label>
                     <select
-                      name="category_id"
-                      value={formData.category_id}
+                      name="cat_id"
+                      value={formData.cat_id}
                       onChange={handleInputChange}
                       className="w-full px-4 py-3 bg-gray-800/80 border border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white text-sm backdrop-blur-sm"
                     >
@@ -1350,7 +1206,7 @@ const Products = () => {
                     </select>
                   </div>
 
-                  {/* Product Type - FIXED for 'type' field */}
+                  {/* Product Type */}
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
                       <Type className="w-4 h-4" />
@@ -1362,7 +1218,7 @@ const Products = () => {
                       onChange={handleInputChange}
                       className="w-full px-4 py-3 bg-gray-800/80 border border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white text-sm backdrop-blur-sm"
                     >
-                      {renderSelectOptions(productTypes, "Select Product Type", "type")}
+                      {renderSelectOptions(productTypes, "Select Product Type")}
                     </select>
                     {productTypes.length === 0 && (
                       <p className="mt-2 text-sm text-yellow-400">
@@ -1387,30 +1243,60 @@ const Products = () => {
                     </select>
                   </div>
 
+                  {/* Sub Category */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
+                      <Folder className="w-4 h-4" />
+                      Sub Category
+                    </label>
+                    <select
+                      name="sub_cat_id"
+                      value={formData.sub_cat_id}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-3 bg-gray-800/80 border border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white text-sm backdrop-blur-sm"
+                    >
+                      {renderSelectOptions(subCategories, "Select Sub Category")}
+                    </select>
+                  </div>
+
+                  {/* Sub Item */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
+                      <Box className="w-4 h-4" />
+                      Sub Item
+                    </label>
+                    <select
+                      name="sub_item_id"
+                      value={formData.sub_item_id}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-3 bg-gray-800/80 border border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white text-sm backdrop-blur-sm"
+                    >
+                      {renderSelectOptions(subItems, "Select Sub Item")}
+                    </select>
+                  </div>
+
                   {/* Status */}
                   <div className="flex items-center justify-between p-4 bg-gray-800/60 rounded-xl border border-gray-700/50 backdrop-blur-sm">
                     <div className="flex items-center space-x-3">
-                      <div className={`w-3 h-3 rounded-full ${formData.status ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+                      <div className={`w-3 h-3 rounded-full ${formData.status === 'active' ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
                       <div>
                         <label htmlFor="status" className="text-sm font-medium text-gray-300 cursor-pointer">
                           Product Status
                         </label>
                         <p className="text-xs text-gray-500">
-                          {formData.status ? "Product is visible and active" : "Product is hidden and inactive"}
+                          {formData.status === 'active' ? "Product is visible and active" : "Product is hidden and inactive"}
                         </p>
                       </div>
                     </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        name="status"
-                        id="status"
-                        checked={formData.status === 1}
-                        onChange={handleInputChange}
-                        className="sr-only peer"
-                      />
-                      <div className="w-12 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600 shadow-inner"></div>
-                    </label>
+                    <select
+                      name="status"
+                      value={formData.status}
+                      onChange={handleInputChange}
+                      className="px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="active">Active</option>
+                      <option value="inactive">Inactive</option>
+                    </select>
                   </div>
                 </div>
               </div>
@@ -1489,11 +1375,11 @@ const Products = () => {
                     <div>
                       <h3 className="text-2xl font-bold text-white mb-2">{selectedProduct.name}</h3>
                       <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-bold backdrop-blur-sm border ${
-                        selectedProduct.status
+                        selectedProduct.status === 'active'
                           ? 'bg-green-500/20 text-green-300 border-green-500/40'
                           : 'bg-red-500/20 text-red-300 border-red-500/40'
                       }`}>
-                        {selectedProduct.status ? (
+                        {selectedProduct.status === 'active' ? (
                           <div className="flex items-center gap-1.5">
                             <CheckCircle className="w-4 h-4" />
                             Active
@@ -1508,22 +1394,6 @@ const Products = () => {
                     </div>
                   </div>
 
-                  {/* Pricing Information */}
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700/50">
-                      <div className="text-sm text-gray-400 mb-1">Buying Price</div>
-                      <div className="text-lg font-bold text-green-400">${selectedProduct.buying_price || 0}</div>
-                    </div>
-                    <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700/50">
-                      <div className="text-sm text-gray-400 mb-1">Selling Price</div>
-                      <div className="text-lg font-bold text-blue-400">${selectedProduct.selling_price || 0}</div>
-                    </div>
-                    <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700/50">
-                      <div className="text-sm text-gray-400 mb-1">Stock</div>
-                      <div className="text-lg font-bold text-purple-400">{selectedProduct.stock_quantity || 0}</div>
-                    </div>
-                  </div>
-
                   {selectedProduct.description && (
                     <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700/50">
                       <h4 className="text-sm font-semibold text-gray-300 mb-2 flex items-center gap-2">
@@ -1534,40 +1404,40 @@ const Products = () => {
                     </div>
                   )}
 
-                  {selectedProduct.specifications && (
+                  {selectedProduct.specification && (
                     <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700/50">
                       <h4 className="text-sm font-semibold text-gray-300 mb-2 flex items-center gap-2">
                         <Hash className="w-4 h-4" />
-                        Specifications
+                        Specification
                       </h4>
-                      <p className="text-gray-400 text-sm whitespace-pre-wrap leading-relaxed">{selectedProduct.specifications}</p>
+                      <p className="text-gray-400 text-sm whitespace-pre-wrap leading-relaxed">{selectedProduct.specification}</p>
                     </div>
                   )}
 
                   <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 pt-6 border-t border-gray-700/50">
                     <div className="bg-gray-800/30 rounded-xl p-4 border border-gray-700/50">
                       <p className="text-xs text-gray-400 mb-1">Category</p>
-                      <p className="text-sm font-medium text-white">{getRelationName(selectedProduct, 'category')}</p>
+                      <p className="text-sm font-medium text-white">{getRelationName(selectedProduct, 'cat_id')}</p>
                     </div>
                     <div className="bg-gray-800/30 rounded-xl p-4 border border-gray-700/50">
                       <p className="text-xs text-gray-400 mb-1">Brand</p>
-                      <p className="text-sm font-medium text-white">{getRelationName(selectedProduct, 'brand')}</p>
+                      <p className="text-sm font-medium text-white">{getRelationName(selectedProduct, 'brand_id')}</p>
                     </div>
                     <div className="bg-gray-800/30 rounded-xl p-4 border border-gray-700/50">
                       <p className="text-xs text-gray-400 mb-1">Product Type</p>
-                      <p className="text-sm font-medium text-white">{getRelationName(selectedProduct, 'productType')}</p>
-                    </div>
-                    <div className="bg-gray-800/30 rounded-xl p-4 border border-gray-700/50">
-                      <p className="text-xs text-gray-400 mb-1">SKU</p>
-                      <p className="text-sm font-medium text-white">{selectedProduct.sku || 'Not Set'}</p>
-                    </div>
-                    <div className="bg-gray-800/30 rounded-xl p-4 border border-gray-700/50">
-                      <p className="text-xs text-gray-400 mb-1">Barcode</p>
-                      <p className="text-sm font-medium text-white">{selectedProduct.barcode || 'Not Set'}</p>
+                      <p className="text-sm font-medium text-white">{getRelationName(selectedProduct, 'product_type_id')}</p>
                     </div>
                     <div className="bg-gray-800/30 rounded-xl p-4 border border-gray-700/50">
                       <p className="text-xs text-gray-400 mb-1">Unit</p>
-                      <p className="text-sm font-medium text-white">{getRelationName(selectedProduct, 'unit')}</p>
+                      <p className="text-sm font-medium text-white">{getRelationName(selectedProduct, 'unit_id')}</p>
+                    </div>
+                    <div className="bg-gray-800/30 rounded-xl p-4 border border-gray-700/50">
+                      <p className="text-xs text-gray-400 mb-1">Sub Category</p>
+                      <p className="text-sm font-medium text-white">{getRelationName(selectedProduct, 'sub_cat_id')}</p>
+                    </div>
+                    <div className="bg-gray-800/30 rounded-xl p-4 border border-gray-700/50">
+                      <p className="text-xs text-gray-400 mb-1">Sub Item</p>
+                      <p className="text-sm font-medium text-white">{getRelationName(selectedProduct, 'sub_item_id')}</p>
                     </div>
                   </div>
                 </div>

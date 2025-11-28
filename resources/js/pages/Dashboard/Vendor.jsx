@@ -1,13 +1,13 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus, Search, Edit, Trash2, X, Check,
   Store, Mail, Phone, MapPin, Upload, Shield,
-  ChevronLeft, ChevronRight, Loader
+  ChevronLeft, ChevronRight, Loader, AlertCircle
 } from 'lucide-react';
 
-const API_URL = '/api/vendors';
+const API_URL = 'http://localhost:8000/api/vendors';
 const APP_URL = import.meta.env.VITE_APP_URL?.replace(/\/$/, '') || 'http://localhost:8000';
 
 const VendorManagement = () => {
@@ -45,6 +45,7 @@ const VendorManagement = () => {
   }, []);
 
   const handleApiError = useCallback((error, defaultMessage) => {
+    console.error('API Error:', error);
     if (error.response?.status === 422) {
       const validationErrors = error.response.data.errors || {};
       setErrors(validationErrors);
@@ -58,58 +59,39 @@ const VendorManagement = () => {
     }
   }, [showNotification]);
 
-  // Fetch vendors with pagination
-  const fetchVendors = useCallback(async (page = 1, limit = pagination.per_page) => {
+  // Fixed: fetch with keyword + limit + page, no stale closure
+  const fetchVendors = useCallback(async (page = 1, perPage = 10, keyword = '') => {
     setLoading(true);
     try {
-      const res = await axios.get(API_URL, { params: { page, limit } });
+      const params = { page, limit: perPage };
+      if (keyword.trim()) params.keyword = keyword.trim();
+
+      const res = await axios.get(API_URL, { params });
       const data = res.data;
-      setVendors(data.data || []);
+
+      setVendors(data.pagination?.data || []);
       setPagination({
-        current_page: data.page || 1,
-        last_page: data.totalPages || 1,
-        per_page: data.perPage || 10,
-        total: data.totalItems || 0
+        current_page: data.pagination?.current_page || 1,
+        last_page: data.pagination?.total_pages || 1,
+        per_page: data.pagination?.per_page || perPage,
+        total: data.pagination?.total_items || 0
       });
+      setErrors({});
     } catch (err) {
       handleApiError(err, 'Failed to fetch vendors');
       setVendors([]);
     } finally {
       setLoading(false);
     }
-  }, [handleApiError, pagination.per_page]);
+  }, [handleApiError]);
 
-  // Search vendors using /search endpoint (non-paginated)
-  const searchVendors = useCallback(async (keyword) => {
-    if (!keyword.trim()) {
-      fetchVendors(pagination.current_page, pagination.per_page);
-      return;
-    }
-    setLoading(true);
-    try {
-      const res = await axios.get(`${API_URL}/search`, { params: { keyword } });
-      setVendors(res.data.data || []);
-      setPagination({
-        current_page: 1,
-        last_page: 1,
-        per_page: res.data.data?.length || 0,
-        total: res.data.data?.length || 0
-      });
-    } catch (err) {
-      handleApiError(err, 'Search failed');
-      setVendors([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [fetchVendors, pagination.per_page]);
-
-  // Debounced search
+  // Debounced search + reacts to per_page change
   useEffect(() => {
     const timer = setTimeout(() => {
-      searchVendors(searchTerm);
+      fetchVendors(1, pagination.per_page, searchTerm);
     }, 500);
     return () => clearTimeout(timer);
-  }, [searchTerm, searchVendors]);
+  }, [searchTerm, pagination.per_page, fetchVendors]);
 
   // Initial load
   useEffect(() => {
@@ -117,14 +99,14 @@ const VendorManagement = () => {
   }, []);
 
   const handlePageChange = (newPage) => {
-    if (newPage < 1 || newPage > pagination.last_page || searchTerm) return;
-    fetchVendors(newPage, pagination.per_page);
+    if (newPage < 1 || newPage > pagination.last_page) return;
+    fetchVendors(newPage, pagination.per_page, searchTerm);
   };
 
   const handleLimitChange = (newLimit) => {
-    const limit = parseInt(newLimit);
+    const limit = parseInt(newLimit, 10);
     setPagination(prev => ({ ...prev, per_page: limit, current_page: 1 }));
-    fetchVendors(1, limit);
+    fetchVendors(1, limit, searchTerm);
   };
 
   const resetForm = () => {
@@ -145,7 +127,7 @@ const VendorManagement = () => {
         email: vendor.email || '',
         contact: vendor.contact || '',
         address: vendor.address || '',
-        status: vendor.status === true || vendor.status === 'active' || vendor.status === 1 ? 'active' : 'inactive',
+        status: vendor.status === 'active' ? 'active' : 'inactive',
         image: null
       });
       setImagePreview(vendor.image ? `${APP_URL}/${vendor.image}` : null);
@@ -190,7 +172,7 @@ const VendorManagement = () => {
     data.append('email', formData.email.trim());
     data.append('contact', formData.contact.trim());
     data.append('address', formData.address.trim());
-    data.append('status', formData.status === 'active' ? 'active' : 'inactive');
+    data.append('status', formData.status);
     if (formData.image) data.append('image', formData.image);
 
     try {
@@ -206,7 +188,7 @@ const VendorManagement = () => {
         showNotification('Vendor created successfully!');
       }
 
-      searchTerm ? searchVendors(searchTerm) : fetchVendors(pagination.current_page, pagination.per_page);
+      fetchVendors(pagination.current_page, pagination.per_page, searchTerm);
       closeModal();
     } catch (err) {
       handleApiError(err, 'Failed to save vendor');
@@ -217,10 +199,11 @@ const VendorManagement = () => {
 
   const toggleStatus = async (vendor) => {
     setOperationLoading(`status-${vendor.id}`);
-    const newStatus = vendor.status === true || vendor.status === 'active' || vendor.status === 1 ? 'inactive' : 'active';
+    const newStatus = vendor.status === 'active' ? 'inactive' : 'active';
 
     const data = new FormData();
     data.append('status', newStatus);
+    // Required fields must be sent even on status toggle
     data.append('name', vendor.name);
     data.append('shop_name', vendor.shop_name);
     data.append('email', vendor.email);
@@ -232,7 +215,7 @@ const VendorManagement = () => {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       showNotification(`Vendor ${newStatus === 'active' ? 'activated' : 'deactivated'}`);
-      searchTerm ? searchVendors(searchTerm) : fetchVendors(pagination.current_page, pagination.per_page);
+      fetchVendors(pagination.current_page, pagination.per_page, searchTerm);
     } catch (err) {
       handleApiError(err, 'Failed to update status');
     } finally {
@@ -246,9 +229,9 @@ const VendorManagement = () => {
       await axios.delete(`${API_URL}/${id}`);
       showNotification('Vendor deleted successfully');
       if (vendors.length === 1 && pagination.current_page > 1) {
-        fetchVendors(pagination.current_page - 1, pagination.per_page);
+        fetchVendors(pagination.current_page - 1, pagination.per_page, searchTerm);
       } else {
-        searchTerm ? searchVendors(searchTerm) : fetchVendors(pagination.current_page, pagination.per_page);
+        fetchVendors(pagination.current_page, pagination.per_page, searchTerm);
       }
     } catch (err) {
       handleApiError(err, 'Delete failed');
@@ -258,16 +241,19 @@ const VendorManagement = () => {
     }
   };
 
-  const stats = {
+  const stats = useMemo(() => ({
     total: pagination.total,
-    active: vendors.filter(v => v.status === true || v.status === 'active' || v.status === 1).length,
-    inactive: vendors.filter(v => v.status === false || v.status === 'inactive' || v.status === 0).length
-  };
+    active: vendors.filter(v => v.status === 'active').length,
+    inactive: vendors.filter(v => v.status === 'inactive').length
+  }), [pagination.total, vendors]);
 
   if (loading && vendors.length === 0) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center">
-        <div className="text-2xl text-gray-400">Loading vendors...</div>
+        <div className="text-2xl text-gray-400 flex items-center gap-4">
+          <Loader className="animate-spin" size={32} />
+          Loading vendors...
+        </div>
       </div>
     );
   }
@@ -284,7 +270,7 @@ const VendorManagement = () => {
               notification.type === 'error' ? 'bg-red-600' : 'bg-green-600'
             }`}
           >
-            {notification.type === 'error' ? <X size={22} /> : <Check size={22} />}
+            {notification.type === 'error' ? <AlertCircle size={22} /> : <Check size={22} />}
             {notification.message}
           </motion.div>
         )}
@@ -345,7 +331,7 @@ const VendorManagement = () => {
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
               <input
                 type="text"
-                placeholder="Search vendors..."
+                placeholder="Search vendors by name or shop..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-12 pr-4 py-3 bg-gray-800/50 border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-500"
@@ -411,13 +397,13 @@ const VendorManagement = () => {
                           onClick={() => toggleStatus(vendor)}
                           disabled={operationLoading === `status-${vendor.id}`}
                           className={`px-4 py-2 rounded-full text-xs font-bold flex items-center gap-2 ${
-                            (vendor.status === true || vendor.status === 'active' || vendor.status === 1)
+                            vendor.status === 'active'
                               ? 'bg-green-500/20 text-green-400 border border-green-500/40'
                               : 'bg-red-500/20 text-red-400 border border-red-500/40'
                           }`}
                         >
                           {operationLoading === `status-${vendor.id}` && <Loader size={14} className="animate-spin" />}
-                          {(vendor.status === true || vendor.status === 'active' || vendor.status === 1) ? 'Active' : 'Inactive'}
+                          {vendor.status === 'active' ? 'Active' : 'Inactive'}
                         </button>
                       </td>
                       <td className="px-6 py-4 text-right">
@@ -439,7 +425,7 @@ const VendorManagement = () => {
             </div>
 
             {/* Pagination */}
-            {!searchTerm && pagination.last_page > 1 && (
+            {pagination.last_page > 1 && (
               <div className="flex justify-between items-center px-6 py-4 border-t border-gray-700/30">
                 <div className="text-sm text-gray-400">
                   Showing {(pagination.current_page - 1) * pagination.per_page + 1} to{' '}

@@ -11,21 +11,32 @@ use Illuminate\Support\Facades\Validator;
 
 class SubCategoryController extends Controller
 {
-    // ✅ List all sub-categories with pagination
-    public function index(Request $request)
+      public function index(Request $request)
     {
+         $keyword = $request->query('keyword', '');
         $limit = (int) $request->query('limit', 10);
-        $page = (int) $request->query('page', 1);
+       
 
-        $categories = SubCategory::latest()->paginate($limit, ['*'], 'page', $page);
+        $query = SubCategory::with(['category']);
 
+        // 🔍 Apply search if keyword provided
+      if ($keyword) {
+        $query->where('name', 'like', "%{$keyword}%"); 
+    }
+
+        // 📄 Paginate results
+        $serials = $query->latest()->paginate($limit);
+
+        
         return response()->json([
-            'message' => 'Sub-categories fetched successfully',
-            'page' => $categories->currentPage(),
-            'perPage' => $categories->perPage(),
-            'totalItems' => $categories->total(),
-            'totalPages' => $categories->lastPage(),
-            'data' => SubCategoryResource::collection($categories->items()),
+            'message' => 'SubCategory fetched successfully',
+            'pagination' => [
+                'current_page' => $serials->currentPage(),
+                'per_page' => $serials->perPage(),
+                'total_items' => $serials->total(),
+                'total_pages' => $serials->lastPage(),
+                'data' => SubCategoryResource::collection($serials),
+            ],
         ]);
     }
 
@@ -74,7 +85,7 @@ class SubCategoryController extends Controller
     // ✅ Show a single sub-category
     public function show($id)
     {
-        $category = SubCategory::find($id);
+        $category = SubCategory::with(['category'])->find($id);
 
         if (!$category) {
             return response()->json([
@@ -158,17 +169,4 @@ class SubCategoryController extends Controller
         ], 200);
     }
 
-    // ✅ Search sub-categories
-    public function search(Request $request)
-    {
-        $keyword = $request->query('keyword', '');
-
-        $categories = SubCategory::where('name', 'like', "%{$keyword}%")
-            ->get();
-
-        return response()->json([
-            'message' => 'Search results fetched successfully',
-            'data' => SubCategoryResource::collection($categories),
-        ]);
-    }
 }

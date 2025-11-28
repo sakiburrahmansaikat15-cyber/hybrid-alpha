@@ -8,26 +8,38 @@ use App\Models\Categories;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Facades\Log;
+
 
 class CategoriesController extends Controller
 {
  
-     public function index(Request $request)
+      public function index(Request $request)
     {
-            $limit = (int) $request->query('limit', 10);
-            $page = (int) $request->query('page', 1);
+         $keyword = $request->query('keyword', '');
+        $limit = (int) $request->query('limit', 10);
+       
 
-            $categories = Categories::latest()->paginate($limit, ['*'], 'page', $page);
+        $query = Categories::query();
 
-            return response()->json([
-                'message' => 'Categories fetched successfully',
-                'page' => $categories->currentPage(),
-                'perPage' => $categories->perPage(),
-                'totalItems' => $categories->total(),
-                'totalPages' => $categories->lastPage(),
-                'data' => CategoriesResource::collection($categories->items()),
-            ]);
+        // 🔍 Apply search if keyword provided
+      if ($keyword) {
+        $query->where('name', 'like', "%{$keyword}%"); 
+    }
+
+        // 📄 Paginate results
+        $serials = $query->latest()->paginate($limit);
+
+        
+        return response()->json([
+            'message' => 'Categories fetched successfully',
+            'pagination' => [
+                'current_page' => $serials->currentPage(),
+                'per_page' => $serials->perPage(),
+                'total_items' => $serials->total(),
+                'total_pages' => $serials->lastPage(),
+                'data' => CategoriesResource::collection($serials),
+            ],
+        ]);
     }
 
 
@@ -148,18 +160,5 @@ class CategoriesController extends Controller
                 'success' => true,
                 'message' => 'Category deleted successfully'
             ], 200);
-    }
-
-    public function search(Request $request)
-    {
-       
-            $keyword = $request->query('keyword', '');
-
-            $categories = Categories::where('name', 'like', "%{$keyword}%")->latest()->get();
-
-            return response()->json([
-                'message' => 'Search results fetched successfully',
-                'data' => CategoriesResource::collection($categories),
-            ]);
     }
 }

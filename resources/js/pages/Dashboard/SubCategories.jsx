@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 
 const API_URL = '/api/sub-categories';
+const CATEGORIES_API = '/api/categories';
 
 const SubCategories = () => {
   const [subCategories, setSubCategories] = useState([]);
@@ -45,9 +46,9 @@ const SubCategories = () => {
 
   const [pagination, setPagination] = useState({
     current_page: 1,
-    last_page: 1,
     per_page: 10,
-    total: 0
+    total_items: 0,
+    total_pages: 1
   });
 
   const showNotification = useCallback((message, type = 'success') => {
@@ -63,27 +64,27 @@ const SubCategories = () => {
       showNotification(firstError || 'Validation error', 'error');
     } else if (error.response?.data?.message) {
       showNotification(error.response.data.message, 'error');
-      setErrors({ _general: error.response.data.message });
     } else {
       showNotification(defaultMessage || 'Something went wrong', 'error');
     }
   }, [showNotification]);
 
-  // Fetch sub-categories
-  const fetchSubCategories = useCallback(async (page = 1, perPage = pagination.per_page) => {
+  // Fetch sub-categories with pagination & search
+  const fetchSubCategories = useCallback(async (page = 1, limit = 10, keyword = '') => {
     setLoading(true);
     try {
-      const response = await axios.get(API_URL, {
-        params: { page, limit: perPage }
-      });
+      const params = { page, limit };
+      if (keyword.trim()) params.keyword = keyword.trim();
 
-      const res = response.data;
-      setSubCategories(res.data || []);
+      const response = await axios.get(API_URL, { params });
+      const paginated = response.data.pagination;
+
+      setSubCategories(paginated.data || []);
       setPagination({
-        current_page: res.page || res.current_page || 1,
-        last_page: res.totalPages || res.last_page || 1,
-        per_page: res.perPage || res.per_page || perPage,
-        total: res.totalItems || res.total || 0
+        current_page: paginated.current_page,
+        per_page: paginated.per_page,
+        total_items: paginated.total_items,
+        total_pages: paginated.total_pages
       });
     } catch (error) {
       handleApiError(error, 'Failed to fetch sub-categories');
@@ -91,55 +92,20 @@ const SubCategories = () => {
     } finally {
       setLoading(false);
     }
-  }, [handleApiError, pagination.per_page]);
+  }, [handleApiError]);
 
   // Fetch parent categories
-  const fetchCategories = useCallback(async () => {
+  const fetchCategories = async () => {
     try {
-      const response = await axios.get('/api/categories');
+      const response = await axios.get(CATEGORIES_API);
       const data = response.data;
-      setCategories(Array.isArray(data) ? data : data.data || []);
+      const list = Array.isArray(data) ? data : (data.data || data.pagination?.data || []);
+      setCategories(list);
     } catch (error) {
       console.error('Failed to fetch categories:', error);
+      setCategories([]);
     }
-  }, []);
-
-  // Search sub-categories
-  const searchSubCategories = useCallback(async (keyword) => {
-    if (!keyword.trim()) {
-      fetchSubCategories(pagination.current_page, pagination.per_page);
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const response = await axios.get(`${API_URL}/search`, {
-        params: { keyword }
-      });
-
-      const items = response.data.data || [];
-      setSubCategories(items);
-      setPagination({
-        current_page: 1,
-        last_page: 1,
-        per_page: items.length,
-        total: items.length
-      });
-    } catch (error) {
-      handleApiError(error, 'Search failed');
-      setSubCategories([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [fetchSubCategories, handleApiError, pagination.current_page, pagination.per_page]);
-
-  // Debounced search
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      searchSubCategories(searchTerm);
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [searchTerm, searchSubCategories]);
+  };
 
   // Initial load
   useEffect(() => {
@@ -147,16 +113,24 @@ const SubCategories = () => {
     fetchCategories();
   }, []);
 
-  // Pagination
+  // Search with debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchSubCategories(1, pagination.per_page, searchTerm);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchTerm, pagination.per_page, fetchSubCategories]);
+
+  // Pagination handlers
   const handlePageChange = (newPage) => {
-    if (newPage < 1 || newPage > pagination.last_page || searchTerm) return;
-    fetchSubCategories(newPage, pagination.per_page);
+    if (newPage < 1 || newPage > pagination.total_pages || newPage === pagination.current_page) return;
+    fetchSubCategories(newPage, pagination.per_page, searchTerm);
   };
 
   const handleLimitChange = (newLimit) => {
     const limit = parseInt(newLimit);
     setPagination(prev => ({ ...prev, per_page: limit, current_page: 1 }));
-    fetchSubCategories(1, limit);
+    fetchSubCategories(1, limit, searchTerm);
   };
 
   // Form handlers
@@ -171,7 +145,7 @@ const SubCategories = () => {
     if (subCat) {
       setEditingSubCategory(subCat);
       setFormData({
-        category_id: subCat.category_id?.toString() || '',
+        category_id: subCat.category_id || '',
         name: subCat.name || '',
         status: subCat.status || 'active',
         image: null
@@ -191,7 +165,9 @@ const SubCategories = () => {
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-    if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: undefined }));
+    }
   };
 
   const handleImageChange = (e) => {
@@ -200,17 +176,19 @@ const SubCategories = () => {
 
     const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
     if (!validTypes.includes(file.type)) {
-      setErrors(prev => ({ ...prev, image: 'Only JPEG, PNG, WebP allowed' }));
+      setErrors(prev => ({ ...prev, image: ['Only JPEG, PNG, WebP allowed'] }));
       return;
     }
     if (file.size > 2 * 1024 * 1024) {
-      setErrors(prev => ({ ...prev, image: 'Image must be < 2MB' }));
+      setErrors(prev => ({ ...prev, image: ['Image must be less than 2MB'] }));
       return;
     }
 
     setFormData(prev => ({ ...prev, image: file }));
     setImagePreview(URL.createObjectURL(file));
-    if (errors.image) setErrors(prev => ({ ...prev, image: '' }));
+    if (errors.image) {
+      setErrors(prev => ({ ...prev, image: undefined }));
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -218,29 +196,25 @@ const SubCategories = () => {
     setOperationLoading('saving');
     setErrors({});
 
-    try {
-      const submitData = new FormData();
-      submitData.append('category_id', formData.category_id);
-      submitData.append('name', formData.name.trim());
-      submitData.append('status', formData.status);
-      if (formData.image instanceof File) {
-        submitData.append('image', formData.image);
-      }
+    const submitData = new FormData();
+    submitData.append('category_id', formData.category_id || '');
+    submitData.append('name', formData.name.trim());
+    submitData.append('status', formData.status);
+    if (formData.image instanceof File) {
+      submitData.append('image', formData.image);
+    }
 
+    try {
       let response;
       if (editingSubCategory) {
         submitData.append('_method', 'POST');
-        response = await axios.post(`${API_URL}/${editingSubCategory.id}`, submitData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
+        response = await axios.post(`${API_URL}/${editingSubCategory.id}`, submitData);
       } else {
-        response = await axios.post(API_URL, submitData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
+        response = await axios.post(API_URL, submitData);
       }
 
-      showNotification(response.data.message || `Sub-category ${editingSubCategory ? 'updated' : 'created'} successfully!`);
-      searchTerm ? searchSubCategories(searchTerm) : fetchSubCategories(pagination.current_page, pagination.per_page);
+      showNotification(editingSubCategory ? 'Sub-category updated successfully!' : 'Sub-category created successfully!');
+      fetchSubCategories(pagination.current_page, pagination.per_page, searchTerm);
       closeModal();
     } catch (error) {
       handleApiError(error, 'Failed to save sub-category');
@@ -250,18 +224,18 @@ const SubCategories = () => {
   };
 
   const handleDelete = async (id) => {
-    if (!confirm('Delete this sub-category permanently?')) return;
+    if (!window.confirm('Delete this sub-category permanently?')) return;
     setOperationLoading(`delete-${id}`);
     try {
       await axios.delete(`${API_URL}/${id}`);
       showNotification('Sub-category deleted successfully');
       if (subCategories.length === 1 && pagination.current_page > 1) {
-        fetchSubCategories(pagination.current_page - 1, pagination.per_page);
+        fetchSubCategories(pagination.current_page - 1, pagination.per_page, searchTerm);
       } else {
-        searchTerm ? searchSubCategories(searchTerm) : fetchSubCategories(pagination.current_page, pagination.per_page);
+        fetchSubCategories(pagination.current_page, pagination.per_page, searchTerm);
       }
     } catch (error) {
-      handleApiError(error, 'Delete failed');
+      handleApiError(error, 'Failed to delete sub-category');
     } finally {
       setOperationLoading(null);
       setActionMenu(null);
@@ -275,15 +249,12 @@ const SubCategories = () => {
       const form = new FormData();
       form.append('status', newStatus);
       form.append('name', subCat.name);
-      form.append('category_id', subCat.category_id);
+      form.append('category_id', subCat.category_id || '');
       form.append('_method', 'POST');
 
-      await axios.post(`${API_URL}/${subCat.id}`, form, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-
+      await axios.post(`${API_URL}/${subCat.id}`, form);
       showNotification(`Sub-category ${newStatus === 'active' ? 'activated' : 'deactivated'}`);
-      searchTerm ? searchSubCategories(searchTerm) : fetchSubCategories(pagination.current_page, pagination.per_page);
+      fetchSubCategories(pagination.current_page, pagination.per_page, searchTerm);
     } catch (error) {
       handleApiError(error, 'Failed to update status');
     } finally {
@@ -293,7 +264,7 @@ const SubCategories = () => {
   };
 
   const stats = {
-    total: pagination.total,
+    total: pagination.total_items,
     active: subCategories.filter(b => b.status === 'active').length,
     inactive: subCategories.filter(b => b.status === 'inactive').length
   };
@@ -398,7 +369,7 @@ const SubCategories = () => {
                 placeholder="Search sub-categories by name..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-teal-500/50 outline-none"
+                className="w-full pl-12 pr-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-teal-500/50 outline-none text-white placeholder-gray-400"
               />
             </div>
             <div className="flex flex-col sm:flex-row gap-4">
@@ -408,7 +379,6 @@ const SubCategories = () => {
                   value={pagination.per_page}
                   onChange={(e) => handleLimitChange(e.target.value)}
                   className="bg-transparent border-0 text-white text-sm focus:ring-0 focus:outline-none"
-                  disabled={!!searchTerm}
                 >
                   <option value="5">5</option>
                   <option value="10">10</option>
@@ -430,7 +400,7 @@ const SubCategories = () => {
             <motion.div
               key={subCat.id}
               whileHover={{ y: -8, scale: 1.02 }}
-              className="group bg-gray-800/30 backdrop-blur-sm rounded-2xl border border-gray-700/30 hover:border-teal-500/50 transition-all overflow-hidden"
+              className="group bg-gray-800/30 backdrop-blur-sm rounded-2xl border border-gray-700/30 hover:border-teal-500/50 transition-all overflow-hidden relative"
             >
               <div className="p-6">
                 <div className="flex justify-between items-start mb-4">
@@ -477,7 +447,7 @@ const SubCategories = () => {
                   <span className="text-xs text-gray-500">Updated: {formatDate(subCat.updated_at)}</span>
                   <div className="flex gap-2">
                     <button onClick={() => openModal(subCat)} className="p-2 bg-blue-500/20 hover:bg-blue-500/40 rounded-lg"><Edit size={14} /></button>
-                    <button onClick={() => handleDelete(subCat.id)} className="p-2 bg-red-500/20 hover:bg-red-500/40 rounded-lg"><Trash2 size={14} /></button>
+                    <button onClick={() => handleDelete(subCat.id)} disabled={operationLoading === `delete-${subCat.id}`} className="p-2 bg-red-500/20 hover:bg-red-500/40 rounded-lg"><Trash2 size={14} /></button>
                   </div>
                 </div>
               </div>
@@ -491,11 +461,11 @@ const SubCategories = () => {
                     className="absolute right-4 top-20 bg-gray-800 border border-gray-600 rounded-xl shadow-xl py-2 z-10 min-w-[160px]"
                   >
                     <button onClick={() => { openModal(subCat); setActionMenu(null); }} className="w-full text-left px-4 py-2 hover:bg-gray-700 flex items-center gap-3 text-sm"><Edit size={16} /> Edit</button>
-                    <button onClick={() => toggleStatus(subCat)} className="w-full text-left px-4 py-2 hover:bg-gray-700 flex items-center gap-3 text-sm">
+                    <button onClick={() => { toggleStatus(subCat); setActionMenu(null); }} className="w-full text-left px-4 py-2 hover:bg-gray-700 flex items-center gap-3 text-sm">
                       {subCat.status === 'active' ? <EyeOff size={16} /> : <Eye size={16} />}
                       {subCat.status === 'active' ? 'Deactivate' : 'Activate'}
                     </button>
-                    <button onClick={() => handleDelete(subCat.id)} className="w-full text-left px-4 py-2 hover:bg-red-500/20 text-red-400 flex items-center gap-3 text-sm"><Trash2 size={16} /> Delete</button>
+                    <button onClick={() => { handleDelete(subCat.id); setActionMenu(null); }} className="w-full text-left px-4 py-2 hover:bg-red-500/20 text-red-400 flex items-center gap-3 text-sm"><Trash2 size={16} /> Delete</button>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -504,17 +474,17 @@ const SubCategories = () => {
         </motion.div>
 
         {/* Pagination */}
-        {!searchTerm && pagination.last_page > 1 && (
+        {pagination.total_pages > 1 && (
           <div className="flex justify-between items-center py-6 border-t border-gray-700/30">
             <div className="text-sm text-gray-400">
-              Showing {(pagination.current_page - 1) * pagination.per_page + 1} to {Math.min(pagination.current_page * pagination.per_page, pagination.total)} of {pagination.total}
+              Showing {((pagination.current_page - 1) * pagination.per_page) + 1} to {Math.min(pagination.current_page * pagination.per_page, pagination.total_items)} of {pagination.total_items}
             </div>
             <div className="flex gap-2">
               <button onClick={() => handlePageChange(pagination.current_page - 1)} disabled={pagination.current_page === 1} className="px-4 py-2 rounded-xl border border-gray-600 disabled:opacity-50 flex items-center gap-2">
                 <ChevronLeft size={16} /> Previous
               </button>
-              {Array.from({ length: pagination.last_page }, (_, i) => i + 1)
-                .filter(p => p === 1 || p === pagination.last_page || Math.abs(p - pagination.current_page) <= 2)
+              {Array.from({ length: pagination.total_pages }, (_, i) => i + 1)
+                .filter(p => p === 1 || p === pagination.total_pages || Math.abs(p - pagination.current_page) <= 2)
                 .map((p, idx, arr) => (
                   <React.Fragment key={p}>
                     {idx > 0 && p - arr[idx - 1] > 1 && <span className="px-3">...</span>}
@@ -523,7 +493,7 @@ const SubCategories = () => {
                     </button>
                   </React.Fragment>
                 ))}
-              <button onClick={() => handlePageChange(pagination.current_page + 1)} disabled={pagination.current_page === pagination.last_page} className="px-4 py-2 rounded-xl border border-gray-600 disabled:opacity-50 flex items-center gap-2">
+              <button onClick={() => handlePageChange(pagination.current_page + 1)} disabled={pagination.current_page === pagination.total_pages} className="px-4 py-2 rounded-xl border border-gray-600 disabled:opacity-50 flex items-center gap-2">
                 Next <ChevronRight size={16} />
               </button>
             </div>
@@ -559,15 +529,14 @@ const SubCategories = () => {
 
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div>
-                  <label className="block text-sm font-semibold mb-2">Parent Category *</label>
+                  <label className="block text-sm font-semibold mb-2">Parent Category</label>
                   <select
                     name="category_id"
                     value={formData.category_id}
                     onChange={handleInputChange}
-                    required
-                    className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-teal-500/50 outline-none"
+                    className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-teal-500/50 outline-none text-white"
                   >
-                    <option value="">Select parent category</option>
+                    <option value="">Select parent category (optional)</option>
                     {categories.map(cat => (
                       <option key={cat.id} value={cat.id}>{cat.name}</option>
                     ))}
@@ -583,7 +552,7 @@ const SubCategories = () => {
                     value={formData.name}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-teal-500/50 outline-none"
+                    className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-teal-500/50 outline-none text-white"
                     placeholder="e.g., Smartphones, Laptops"
                   />
                   {errors.name && <p className="text-red-400 text-sm mt-1">{errors.name[0]}</p>}
@@ -591,9 +560,9 @@ const SubCategories = () => {
 
                 <div>
                   <label className="block text-sm font-semibold mb-3">Sub-Category Image</label>
-                  <div className="border-2 border-dashed border-gray-600 rounded-xl p-6 text-center hover:border-teal-500 cursor-pointer">
-                    <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" id="img-upload" />
-                    <label htmlFor="img-upload" className="cursor-pointer">
+                  <div className="border-2 border-dashed border-gray-600 rounded-xl p-6 text-center hover:border-teal-500 cursor-pointer transition">
+                    <input type="file" accept="image/jpeg,image/jpg,image/png,image/webp" onChange={handleImageChange} className="hidden" id="img-upload" />
+                    <label htmlFor="img-upload" className="cursor-pointer block">
                       <Upload size={32} className="mx-auto mb-2 text-gray-400" />
                       <p className="text-sm text-gray-400">Click to upload (Max 2MB)</p>
                     </label>
@@ -606,7 +575,7 @@ const SubCategories = () => {
                       </button>
                     </div>
                   )}
-                  {errors.image && <p className="text-red-400 text-sm mt-2">{errors.image}</p>}
+                  {errors.image && <p className="text-red-400 text-sm mt-2">{errors.image[0] || errors.image}</p>}
                 </div>
 
                 <div>
@@ -614,7 +583,7 @@ const SubCategories = () => {
                   <div className="grid grid-cols-2 gap-4">
                     {['active', 'inactive'].map(st => (
                       <label key={st} onClick={() => setFormData(prev => ({ ...prev, status: st }))} className={`p-4 border-2 rounded-xl text-center cursor-pointer transition ${formData.status === st ? (st === 'active' ? 'border-green-500 bg-green-500/10' : 'border-red-500 bg-red-500/10') : 'border-gray-600'}`}>
-                        {st === 'active' ? <Eye size={20} className="mx-auto mb-2" /> : <EyeOff size={20} className="mx-auto mb-2" />}
+                        {st === 'active' ? <Eye size={20} className="mx-auto mb-2 text-green-400" /> : <EyeOff size={20} className="mx-auto mb-2 text-red-400" />}
                         <span className="capitalize font-medium">{st}</span>
                       </label>
                     ))}

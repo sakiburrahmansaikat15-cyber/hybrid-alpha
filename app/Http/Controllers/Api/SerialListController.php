@@ -12,20 +12,33 @@ use Illuminate\Support\Facades\Validator;
 class SerialListController extends Controller
 {
     // ✅ List all serials with pagination
-    public function index(Request $request)
+      public function index(Request $request)
     {
+         $keyword = $request->query('keyword', '');
         $limit = (int) $request->query('limit', 10);
-        $page = (int) $request->query('page', 1);
+       
 
-        $serials = SerialList::latest()->paginate($limit, ['*'], 'page', $page);
+        // 🧭 Base query
+        $query = SerialList::query();
 
+        // 🔍 Apply search if keyword provided
+      if ($keyword) {
+        $query->where('color', 'like', "%{$keyword}%"); 
+    }
+
+        // 📄 Paginate results
+        $serials = $query->latest()->paginate($limit);
+
+        // ✅ Return response
         return response()->json([
             'message' => 'Serials fetched successfully',
-            'page' => $serials->currentPage(),
-            'perPage' => $serials->perPage(),
-            'totalItems' => $serials->total(),
-            'totalPages' => $serials->lastPage(),
-            'data' => SerialListResource::collection($serials->items()),
+            'pagination' => [
+                'current_page' => $serials->currentPage(),
+                'per_page' => $serials->perPage(),
+                'total_items' => $serials->total(),
+                'total_pages' => $serials->lastPage(),
+                'data' => SerialListResource::collection($serials),
+            ],
         ]);
     }
 
@@ -162,19 +175,5 @@ class SerialListController extends Controller
             'success' => true,
             'message' => 'Serial deleted successfully'
         ], 200);
-    }
-
-    // ✅ Search serials
-    public function search(Request $request)
-    {
-        $keyword = $request->query('keyword', '');
-
-        $serials = SerialList::where('color', 'like', "%{$keyword}%")
-            ->get();
-
-        return response()->json([
-            'message' => 'Search results fetched successfully',
-            'data' => SerialListResource::collection($serials),
-        ]);
     }
 }

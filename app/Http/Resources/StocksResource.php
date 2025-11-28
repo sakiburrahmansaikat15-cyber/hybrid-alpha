@@ -22,6 +22,8 @@ class StocksResource extends JsonResource
             'comission' => $this->comission,
             'status' => $this->status,
             'sku' => $this->sku,
+            'product' => new ProductsResource($this->whenLoaded('product')),
+            'vendor' => new VendorResource($this->whenLoaded('vendor')),
             'created_at' => $this->created_at?->toDateTimeString(),
             'updated_at' => $this->updated_at?->toDateTimeString(),
         ];

@@ -10,21 +10,37 @@ use Illuminate\Support\Facades\Validator;
 
 class VariantController extends Controller
 {
-    // ✅ List variants with pagination
+    // ✅ List variants with search + pagination
     public function index(Request $request)
     {
+        $keyword = $request->query('keyword', '');
         $limit = (int) $request->query('limit', 10);
-        $page = (int) $request->query('page', 1);
 
-        $variants = variants::latest()->paginate($limit, ['*'], 'page', $page);
+        $query = variants::with('product');
 
+       
+        if (!empty($keyword)) {
+            $query->where(function ($q) use ($keyword) {
+                $q->where('name', 'like', "%{$keyword}%")
+                  ->orWhereHas('product', function ($q) use ($keyword) {
+                      $q->where('name', 'like', "%{$keyword}%");
+                  });
+            });
+        }
+
+        // 📄 Paginate results
+        $variants = $query->latest()->paginate($limit);
+
+        // ✅ Response
         return response()->json([
             'message' => 'Variants fetched successfully',
-            'page' => $variants->currentPage(),
-            'perPage' => $variants->perPage(),
-            'totalItems' => $variants->total(),
-            'totalPages' => $variants->lastPage(),
-            'data' => VariantsResource::collection($variants->items()),
+            'pagination' => [
+                'current_page' => $variants->currentPage(),
+                'per_page' => $variants->perPage(),
+                'total_items' => $variants->total(),
+                'total_pages' => $variants->lastPage(),
+                 'data' => VariantsResource::collection($variants),
+            ],
         ]);
     }
 
@@ -43,42 +59,48 @@ class VariantController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Validation failed',
-                'errors' => $validator->errors()
+                'errors' => $validator->errors(),
             ], 422);
         }
 
-        $data = $validator->validated();
-        $variant = variants::create($data);
+        $variant = variants::create($validator->validated());
 
         return response()->json([
             'success' => true,
             'message' => 'Variant created successfully',
-            'data' => new VariantsResource($variant)
+            'data' => new VariantsResource($variant),
         ], 201);
     }
 
     // ✅ Show a single variant
     public function show($id)
     {
-        $variant = variants::find($id);
+        $variant = variants::with('product')->find($id);
 
         if (!$variant) {
             return response()->json([
                 'success' => false,
-                'message' => 'Variant not found'
+                'message' => 'Variant not found',
             ], 404);
         }
 
         return response()->json([
             'success' => true,
-            'data' => new VariantsResource($variant)
+            'data' => new VariantsResource($variant),
         ], 200);
     }
 
     // ✅ Update a variant
     public function update(Request $request, $id)
     {
-        $variant = variants::findOrFail($id);
+        $variant = variants::find($id);
+
+        if (!$variant) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Variant not found',
+            ], 404);
+        }
 
         $data = $request->validate([
             'name' => 'sometimes|string|max:255',
@@ -93,7 +115,7 @@ class VariantController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Variant updated successfully',
-            'data' => new VariantsResource($variant)
+            'data' => new VariantsResource($variant),
         ], 200);
     }
 
@@ -105,7 +127,7 @@ class VariantController extends Controller
         if (!$variant) {
             return response()->json([
                 'success' => false,
-                'message' => 'Variant not found'
+                'message' => 'Variant not found',
             ], 404);
         }
 
@@ -113,22 +135,7 @@ class VariantController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Variant deleted successfully'
+            'message' => 'Variant deleted successfully',
         ], 200);
-    }
-
-    // ✅ Search variants (no pagination)
-    public function search(Request $request)
-    {
-        $keyword = $request->query('keyword', '');
-
-        $variants = variants::where('name', 'like', "%{$keyword}%")
-            ->latest()
-            ->get();
-
-        return response()->json([
-            'message' => 'Search results fetched successfully',
-            'data' => VariantsResource::collection($variants),
-        ]);
     }
 }

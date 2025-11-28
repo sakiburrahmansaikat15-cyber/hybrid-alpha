@@ -62,20 +62,21 @@ const ProductTypesManager = () => {
     }
   }, [showNotification]);
 
-  const fetchProductTypes = useCallback(async (page = 1, limit = pagination.per_page) => {
+  const fetchProductTypes = useCallback(async (page = 1, limit = pagination.per_page, keyword = '') => {
     setLoading(true);
     try {
-      const response = await axios.get(API_URL, {
-        params: { page, limit }
-      });
+      const params = { page, limit };
+      if (keyword.trim()) params.keyword = keyword.trim();
 
+      const response = await axios.get(API_URL, { params });
       const res = response.data;
-      setProductTypes(res.data || []);
+
+      setProductTypes(res.pagination?.data || []);
       setPagination({
-        current_page: res.page || 1,
-        last_page: res.totalPages || 1,
-        per_page: res.perPage || limit,
-        total: res.totalItems || 0
+        current_page: res.pagination?.current_page || 1,
+        last_page: res.pagination?.total_pages || 1,
+        per_page: res.pagination?.per_page || limit,
+        total: res.pagination?.total_items || 0
       });
     } catch (error) {
       handleApiError(error, 'Failed to fetch product types');
@@ -85,55 +86,27 @@ const ProductTypesManager = () => {
     }
   }, [handleApiError, pagination.per_page]);
 
-  const searchProductTypes = useCallback(async (keyword) => {
-    if (!keyword.trim()) {
-      fetchProductTypes(pagination.current_page);
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const response = await axios.get(`${API_URL}/search`, {
-        params: { keyword }
-      });
-
-      const res = response.data;
-      setProductTypes(res.data || []);
-      setPagination({
-        current_page: 1,
-        last_page: 1,
-        per_page: res.data?.length || 0,
-        total: res.data?.length || 0
-      });
-    } catch (error) {
-      handleApiError(error, 'Search failed');
-      setProductTypes([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [fetchProductTypes]);
-
   useEffect(() => {
     const timer = setTimeout(() => {
-      searchProductTypes(searchTerm);
+      fetchProductTypes(1, pagination.per_page, searchTerm);
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [searchTerm, searchProductTypes]);
+  }, [searchTerm, pagination.per_page, fetchProductTypes]);
 
   useEffect(() => {
     fetchProductTypes(1, 10);
   }, []);
 
   const handlePageChange = (newPage) => {
-    if (newPage < 1 || newPage > pagination.last_page || searchTerm) return;
-    fetchProductTypes(newPage);
+    if (newPage < 1 || newPage > pagination.last_page) return;
+    fetchProductTypes(newPage, pagination.per_page, searchTerm);
   };
 
   const handleLimitChange = (newLimit) => {
     const limit = parseInt(newLimit);
     setPagination(prev => ({ ...prev, per_page: limit, current_page: 1 }));
-    fetchProductTypes(1, limit);
+    fetchProductTypes(1, limit, searchTerm);
   };
 
   const resetForm = () => {
@@ -147,7 +120,7 @@ const ProductTypesManager = () => {
       setEditingType(type);
       setFormData({
         name: type.name || '',
-        status: type.status === 'active' || type.status === true ? 'active' : 'inactive'
+        status: type.status === 'active' ? 'active' : 'inactive'
       });
     } else {
       resetForm();
@@ -170,26 +143,31 @@ const ProductTypesManager = () => {
     setFormData(prev => ({ ...prev, status }));
   };
 
+  // FIXED: Update now works perfectly using POST + _method=PUT
   const handleSubmit = async (e) => {
     e.preventDefault();
     setOperationLoading('saving');
     setErrors({});
 
-    const submitData = new FormData();
-    submitData.append('name', formData.name.trim());
-    submitData.append('status', formData.status);
+    const payload = {
+      name: formData.name.trim(),
+      status: formData.status
+    };
 
     try {
-      let response;
       if (editingType) {
-        submitData.append('_method', 'POST');
-        response = await axios.post(`${API_URL}/${editingType.id}`, submitData);
+        // Laravel accepts POST with _method=PUT for update
+        await axios.post(`${API_URL}/${editingType.id}`, {
+          ...payload,
+          _method: 'POST'
+        });
+        showNotification('Product type updated successfully!');
       } else {
-        response = await axios.post(API_URL, submitData);
+        await axios.post(API_URL, payload);
+        showNotification('Product type created successfully!');
       }
 
-      showNotification(editingType ? 'Product type updated!' : 'Product type created!');
-      searchTerm ? searchProductTypes(searchTerm) : fetchProductTypes(pagination.current_page);
+      fetchProductTypes(pagination.current_page, pagination.per_page, searchTerm);
       closeModal();
     } catch (error) {
       handleApiError(error, 'Failed to save product type');
@@ -199,16 +177,16 @@ const ProductTypesManager = () => {
   };
 
   const handleDelete = async (id) => {
-    if (!confirm('Delete this product type permanently?')) return;
+    if (!window.confirm('Delete this product type permanently?')) return;
 
     setOperationLoading(`delete-${id}`);
     try {
       await axios.delete(`${API_URL}/${id}`);
       showNotification('Product type deleted successfully');
       if (productTypes.length === 1 && pagination.current_page > 1) {
-        fetchProductTypes(pagination.current_page - 1);
+        fetchProductTypes(pagination.current_page - 1, pagination.per_page, searchTerm);
       } else {
-        searchTerm ? searchProductTypes(searchTerm) : fetchProductTypes(pagination.current_page);
+        fetchProductTypes(pagination.current_page, pagination.per_page, searchTerm);
       }
     } catch (error) {
       handleApiError(error, 'Delete failed');
@@ -221,15 +199,14 @@ const ProductTypesManager = () => {
     const newStatus = type.status === 'active' ? 'inactive' : 'active';
     setOperationLoading(`status-${type.id}`);
 
-    const form = new FormData();
-    form.append('name', type.name);
-    form.append('status', newStatus);
-    form.append('_method', 'POST');
-
     try {
-      await axios.post(`${API_URL}/${type.id}`, form);
+      await axios.post(`${API_URL}/${type.id}`, {
+        name: type.name,
+        status: newStatus,
+        _method: 'POST'
+      });
       showNotification(`Product type ${newStatus === 'active' ? 'activated' : 'deactivated'}`);
-      searchTerm ? searchProductTypes(searchTerm) : fetchProductTypes(pagination.current_page);
+      fetchProductTypes(pagination.current_page, pagination.per_page, searchTerm);
     } catch (error) {
       handleApiError(error, 'Failed to update status');
     } finally {
@@ -300,7 +277,7 @@ const ProductTypesManager = () => {
             } text-white px-6 py-3 rounded-xl shadow-2xl backdrop-blur-sm`}
           >
             <div className="flex items-center gap-3">
-              <Check size={20} />
+              {notification.type === 'error' ? <AlertCircle size={20} /> : <Check size={20} />}
               <span className="font-medium">{notification.message}</span>
             </div>
           </motion.div>
@@ -416,10 +393,7 @@ const ProductTypesManager = () => {
 
                   <div className="relative">
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        // Simple toggle menu
-                      }}
+                      onClick={(e) => e.stopPropagation()}
                       className="p-2 hover:bg-gray-700/50 rounded-lg transition-colors duration-200 opacity-0 group-hover:opacity-100"
                     >
                       <MoreVertical size={18} />
@@ -482,7 +456,7 @@ const ProductTypesManager = () => {
           ))}
         </motion.div>
 
-        {!searchTerm && pagination.last_page > 1 && (
+        {pagination.last_page > 1 && (
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4 py-6 border-t border-gray-700/30">
             <div className="text-sm text-gray-400">
               Showing {((pagination.current_page - 1) * pagination.per_page) + 1} to {Math.min(pagination.current_page * pagination.per_page, pagination.total)} of {pagination.total} entries
@@ -597,6 +571,7 @@ const ProductTypesManager = () => {
                       Cancel
                     </button>
                     <button type="submit"
+                      disabled={operationLoading === 'saving'}
                       className="bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-700 hover:to-cyan-700 text-white px-6 py-3 rounded-xl font-semibold flex items-center gap-2">
                       {operationLoading === 'saving' ? <Loader size={20} className="animate-spin" /> : <Check size={20} />}
                       {editingType ? 'Update Type' : 'Create Type'}

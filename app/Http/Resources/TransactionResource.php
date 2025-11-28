@@ -21,6 +21,7 @@ class TransactionResource extends JsonResource
             'type' => $this->type,
             'amount' => $this->amount,
             'status' => $this->status,
+            'paymentType' => new PaymentTypeResource($this->whenLoaded('paymentType')),
             'created_at' => $this->created_at?->toDateTimeString(),
             'updated_at' => $this->updated_at?->toDateTimeString(),
         ];

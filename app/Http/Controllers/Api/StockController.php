@@ -11,22 +11,34 @@ use Illuminate\Support\Facades\Validator;
 class StockController extends Controller
 {
     // ✅ List all stocks with pagination
-    public function index(Request $request)
+     public function index(Request $request)
     {
+        $keyword = $request->query('keyword', '');
         $limit = (int) $request->query('limit', 10);
         $page = (int) $request->query('page', 1);
 
-        $stocks = Stocks::latest()->paginate($limit, ['*'], 'page', $page);
+        $query = Stocks::with(['product', 'vendor']);
+
+        // 🔍 Apply search if keyword provided
+          if ($keyword) {
+        $query->where('sku', 'like', "%{$keyword}%")
+            ->orWhereHas('product', fn($q) => $q->where('name', 'like', "%{$keyword}%"))
+            ->orWhereHas('vendor', fn($q) => $q->where('name', 'like', "%{$keyword}%"));
+    }
+
+        // 📄 Paginate and order
+        $stocks = $query->latest()->paginate($limit, ['*'], 'page', $page);
 
         return response()->json([
             'message' => 'Stocks fetched successfully',
-            'page' => $stocks->currentPage(),
-            'perPage' => $stocks->perPage(),
-            'totalItems' => $stocks->total(),
-            'totalPages' => $stocks->lastPage(),
+            'current_page' => $stocks->currentPage(),
+            'per_page' => $stocks->perPage(),
+            'total_items' => $stocks->total(),
+            'total_pages' => $stocks->lastPage(),
             'data' => StocksResource::collection($stocks->items()),
         ]);
     }
+    
 
     // ✅ Store a new stock
     public function store(Request $request)
@@ -67,7 +79,7 @@ class StockController extends Controller
     // ✅ Show a single stock
     public function show($id)
     {
-        $stock = Stocks::find($id);
+        $stock = Stocks::with(['product', 'vendor'])->find($id);
 
         if (!$stock) {
             return response()->json([
@@ -135,19 +147,5 @@ class StockController extends Controller
             'success' => true,
             'message' => 'Stock deleted successfully'
         ], 200);
-    }
-
-    // ✅ Search stocks
-    public function search(Request $request)
-    {
-        $keyword = $request->query('keyword', '');
-
-        $stocks = Stocks::where('sku', 'like', "%{$keyword}%")
-            ->get();
-
-        return response()->json([
-            'message' => 'Search results fetched successfully',
-            'data' => StocksResource::collection($stocks),
-        ]);
     }
 }

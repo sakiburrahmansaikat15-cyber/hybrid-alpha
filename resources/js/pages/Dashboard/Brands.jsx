@@ -47,7 +47,7 @@ const Brands = () => {
     current_page: 1,
     last_page: 1,
     per_page: 10,
-    total: 0
+    total_items: 0
   });
 
   const showNotification = useCallback((message, type = 'success') => {
@@ -70,85 +70,69 @@ const Brands = () => {
     }
   }, [showNotification]);
 
-  // Fetch brands with server-side pagination
-  const fetchBrands = useCallback(async (page = 1, perPage = pagination.per_page) => {
+  // Fetch brands with server-side search & pagination
+  const fetchBrands = useCallback(async (page = 1, perPage = 10, keyword = '') => {
     setLoading(true);
     try {
-      const response = await axios.get(API_URL, {
-        params: { page, limit: perPage }
-      });
+      const params = { page, limit: perPage };
+      if (keyword.trim()) params.keyword = keyword.trim();
 
+      const response = await axios.get(API_URL, { params });
       const res = response.data;
 
-      setBrands(res.data || []);
+      // Extract data from BrandResource collection
+      const brandData = res.pagination?.data || [];
+      const formattedBrands = brandData.map(item => ({
+        id: item.id,
+        name: item.name,
+        image: item.image,
+        status: item.status,
+        created_at: item.created_at,
+        updated_at: item.updated_at
+      }));
+
+      setBrands(formattedBrands);
       setPagination({
-        current_page: res.page || 1,
-        last_page: res.totalPages || 1,
-        per_page: res.perPage || 10,
-        total: res.totalItems || 0
+        current_page: res.pagination.current_page || 1,
+        last_page: res.pagination.total_pages || 1,
+        per_page: res.pagination.per_page || 10,
+        total_items: res.pagination.total_items || 0
       });
 
     } catch (error) {
       handleApiError(error, 'Failed to fetch brands');
       setBrands([]);
+      setPagination({ current_page: 1, last_page: 1, per_page: 10, total_items: 0 });
     } finally {
       setLoading(false);
     }
   }, [handleApiError]);
 
-  // Search brands (uses separate non-paginated endpoint)
-  const searchBrands = useCallback(async (keyword) => {
-    if (!keyword.trim()) {
-      fetchBrands(pagination.current_page, pagination.per_page);
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const response = await axios.get(`${API_URL}/search`, {
-        params: { keyword }
-      });
-
-      setBrands(response.data.data || []);
-      setPagination({
-        current_page: 1,
-        last_page: 1,
-        per_page: response.data.data?.length || 0,
-        total: response.data.data?.length || 0
-      });
-    } catch (error) {
-      handleApiError(error, 'Search failed');
-      setBrands([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [fetchBrands]);
-
-  // Debounced search
+  // Debounced search + refetch on search change
   useEffect(() => {
     const timer = setTimeout(() => {
-      searchBrands(searchTerm);
+      fetchBrands(1, pagination.per_page, searchTerm);
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [searchTerm, searchBrands]);
+  }, [searchTerm, pagination.per_page, fetchBrands]);
 
   // Initial load
   useEffect(() => {
     fetchBrands(1, 10);
-  }, [fetchBrands]);
+  }, []);
 
   // Handle page change
   const handlePageChange = (newPage) => {
-    if (newPage < 1 || newPage > pagination.last_page || searchTerm) return;
-    fetchBrands(newPage, pagination.per_page);
+    if (newPage < 1 || newPage > pagination.last_page) return;
+    fetchBrands(newPage, pagination.per_page, searchTerm);
   };
 
-  // Handle limit change
+  // Handle per page change
   const handleLimitChange = (newLimit) => {
     const limit = parseInt(newLimit);
-    setPagination(prev => ({ ...prev, per_page: limit, current_page: 1 }));
-    fetchBrands(1, limit);
+    setPagination(prev => ({ ...prev, per_page: limit }));
+    fetchBrands(1, limit, searchTerm);
   };
 
   // Form handlers
@@ -229,7 +213,7 @@ const Brands = () => {
       }
 
       showNotification(response.data.message || `Brand ${editingBrand ? 'updated' : 'created'} successfully!`);
-      searchTerm ? searchBrands(searchTerm) : fetchBrands(pagination.current_page, pagination.per_page);
+      fetchBrands(pagination.current_page, pagination.per_page, searchTerm);
       closeModal();
     } catch (error) {
       handleApiError(error, 'Failed to save brand');
@@ -239,16 +223,18 @@ const Brands = () => {
   };
 
   const handleDelete = async (id) => {
-    if (!confirm('Delete this brand permanently?')) return;
+    if (!window.confirm('Delete this brand permanently?')) return;
     setOperationLoading(`delete-${id}`);
     try {
       await axios.delete(`${API_URL}/${id}`);
       showNotification('Brand deleted successfully');
-      if (brands.length === 1 && pagination.current_page > 1) {
-        fetchBrands(pagination.current_page - 1, pagination.per_page);
-      } else {
-        searchTerm ? searchBrands(searchTerm) : fetchBrands(pagination.current_page, pagination.per_page);
-      }
+      
+      // Adjust page if last item on page was deleted
+      const remainingItems = pagination.total_items - 1;
+      const maxPage = Math.ceil(remainingItems / pagination.per_page);
+      const targetPage = pagination.current_page > maxPage ? maxPage : pagination.current_page;
+      
+      fetchBrands(targetPage || 1, pagination.per_page, searchTerm);
     } catch (error) {
       handleApiError(error, 'Delete failed');
     } finally {
@@ -263,14 +249,14 @@ const Brands = () => {
     try {
       const form = new FormData();
       form.append('status', newStatus);
-      form.append('name', brand.name);
+      form.append('name', brand.name); // Required field on update
 
       await axios.post(`${API_URL}/${brand.id}`, form, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
 
       showNotification(`Brand ${newStatus === 'active' ? 'activated' : 'deactivated'}`);
-      searchTerm ? searchBrands(searchTerm) : fetchBrands(pagination.current_page, pagination.per_page);
+      fetchBrands(pagination.current_page, pagination.per_page, searchTerm);
     } catch (error) {
       handleApiError(error, 'Failed to update status');
     } finally {
@@ -280,7 +266,7 @@ const Brands = () => {
   };
 
   const stats = {
-    total: pagination.total,
+    total: pagination.total_items,
     active: brands.filter(b => b.status === 'active').length,
     inactive: brands.filter(b => b.status === 'inactive').length
   };
@@ -514,11 +500,11 @@ const Brands = () => {
             ))}
         </motion.div>
 
-        {/* Pagination - Only show when not searching */}
-        {!searchTerm && pagination.last_page > 1 && (
+        {/* Pagination */}
+        {pagination.last_page > 1 && (
           <div className="flex justify-between items-center py-6 border-t border-gray-700/30">
             <div className="text-sm text-gray-400">
-              Showing {(pagination.current_page - 1) * pagination.per_page + 1} to {Math.min(pagination.current_page * pagination.per_page, pagination.total)} of {pagination.total}
+              Showing {(pagination.current_page - 1) * pagination.per_page + 1} to {Math.min(pagination.current_page * pagination.per_page, pagination.total_items)} of {pagination.total_items}
             </div>
             <div className="flex gap-2">
               <button onClick={() => handlePageChange(pagination.current_page - 1)} disabled={pagination.current_page === 1} className="px-4 py-2 rounded-xl border border-gray-600 disabled:opacity-50 flex items-center gap-2">
@@ -580,7 +566,7 @@ const Brands = () => {
                     className={`w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none ${errors.name ? 'border-red-500' : ''}`}
                     placeholder="e.g., Apple, Samsung"
                   />
-                  {errors.name && <p className="text-red-400 text-sm mt-1">{errors.name}</p>}
+                  {errors.name && <p className="text-red-400 text-sm mt-1">{Array.isArray(errors.name) ? errors.name[0] : errors.name}</p>}
                 </div>
 
                 <div>
@@ -600,7 +586,7 @@ const Brands = () => {
                       </button>
                     </div>
                   )}
-                  {errors.image && <p className="text-red-400 text-sm mt-2">{errors.image}</p>}
+                  {errors.image && <p className="text-red-400 text-sm mt-2">{Array.isArray(errors.image) ? errors.image[0] : errors.image}</p>}
                 </div>
 
                 <div>

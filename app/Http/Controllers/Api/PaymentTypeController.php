@@ -12,20 +12,34 @@ use Illuminate\Support\Facades\Validator;
 class PaymentTypeController extends Controller
 {
     // ✅ List all payment types with pagination
-    public function index(Request $request)
+      public function index(Request $request)
     {
+         $keyword = $request->query('keyword', '');
         $limit = (int) $request->query('limit', 10);
-        $page = (int) $request->query('page', 1);
+       
 
-        $paymentTypes = PaymentType::latest()->paginate($limit, ['*'], 'page', $page);
+        $query = PaymentType::query();
 
+        // 🔍 Apply search if keyword provided
+   if ($keyword) {
+    $query->where(function ($q) use ($keyword) {
+        $q->where('name', 'like', "%{$keyword}%")
+          ->orWhere('type', 'like', "%{$keyword}%");
+    });
+}
+
+        $serials = $query->latest()->paginate($limit);
+
+        
         return response()->json([
-            'message' => 'Payment Types fetched successfully',
-            'page' => $paymentTypes->currentPage(),
-            'perPage' => $paymentTypes->perPage(),
-            'totalItems' => $paymentTypes->total(),
-            'totalPages' => $paymentTypes->lastPage(),
-            'data' => PaymentTypeResource::collection($paymentTypes->items()),
+            'message' => 'PaymentType fetched successfully',
+            'pagination' => [
+                'current_page' => $serials->currentPage(),
+                'per_page' => $serials->perPage(),
+                'total_items' => $serials->total(),
+                'total_pages' => $serials->lastPage(),
+                'data' => PaymentTypeResource::collection($serials),
+            ],
         ]);
     }
 
@@ -153,22 +167,5 @@ class PaymentTypeController extends Controller
             'success' => true,
             'message' => 'Payment Type deleted successfully'
         ], 200);
-    }
-
-    // ✅ Search payment types
-    public function search(Request $request)
-    {
-        $keyword = $request->query('keyword', '');
-
-        $paymentTypes = PaymentType::where('name', 'like', "%{$keyword}%")
-            ->orWhere('type', 'like', "%{$keyword}%")
-            ->orWhere('account_number', 'like', "%{$keyword}%")
-            ->latest()
-            ->get();
-
-        return response()->json([
-            'message' => 'Search results fetched successfully',
-            'data' => PaymentTypeResource::collection($paymentTypes),
-        ]);
     }
 }

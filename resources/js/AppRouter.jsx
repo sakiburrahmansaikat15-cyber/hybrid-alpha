@@ -17,6 +17,7 @@ import Products from "./pages/Dashboard/Products";
 import Variants from "./pages/Dashboard/Variants";
 import Stocks from "./pages/Dashboard/Stocks";
 import Transactions from "./pages/Dashboard/Transactions";
+import SerialList from "./pages/Dashboard/SerialList";
 const AppRouter = () => {
     return (
         <div>
@@ -38,8 +39,7 @@ const AppRouter = () => {
                     <Route path="/Variants" element={<Variants/>} />
                     <Route path="/Stocks" element={<Stocks/>} />
                     <Route path="/Transactions" element={<Transactions/>} />
-
-
+                   <Route path="/serial-list" element={<SerialList/>} />
                 </Route>
             </Routes>
         </div>
