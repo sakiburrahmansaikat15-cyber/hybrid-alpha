@@ -14,8 +14,6 @@ import {
   Package,
   Calendar,
   Upload,
-  ChevronLeft,
-  ChevronRight,
   Loader
 } from 'lucide-react';
 
@@ -65,53 +63,43 @@ const SubItemsManager = () => {
     }
   }, [showNotification]);
 
-  const fetchSubItems = useCallback(async (page = 1, limit = pagination.per_page) => {
+  // Fetch sub-items with pagination and optional search
+  const fetchSubItems = useCallback(async (page = 1, limit = 10, keyword = '') => {
     setLoading(true);
     try {
-      const response = await axios.get(API_URL, { params: { page, limit } });
+      const params = { page, limit };
+      if (keyword.trim()) params.keyword = keyword.trim();
+
+      const response = await axios.get(API_URL, { params });
       const res = response.data;
-      setSubItems(res.data || []);
+
+      // API returns: pagination.data as array of SubItemsResource
+      const items = res.pagination?.data || [];
+      setSubItems(items);
+
       setPagination({
-        current_page: res.page || 1,
-        last_page: res.totalPages || 1,
-        per_page: res.perPage || 10,
-        total: res.totalItems || 0
+        current_page: res.pagination.current_page || 1,
+        last_page: res.pagination.total_pages || 1,
+        per_page: res.pagination.per_page || limit,
+        total: res.pagination.total_items || 0
       });
     } catch (error) {
       handleApiError(error, 'Failed to fetch sub-items');
       setSubItems([]);
+      setPagination({ current_page: 1, last_page: 1, per_page: 10, total: 0 });
     } finally {
       setLoading(false);
     }
-  }, [handleApiError, pagination.per_page]);
+  }, [handleApiError]);
 
-  const searchSubItems = useCallback(async (keyword) => {
-    if (!keyword.trim()) {
-      fetchSubItems(pagination.current_page, pagination.per_page);
-      return;
-    }
-    setLoading(true);
-    try {
-      const response = await axios.get(`${API_URL}/search`, { params: { keyword } });
-      setSubItems(response.data.data || []);
-      setPagination({
-        current_page: 1,
-        last_page: 1,
-        per_page: response.data.data?.length || 0,
-        total: response.data.data?.length || 0
-      });
-    } catch (error) {
-      handleApiError(error, 'Search failed');
-      setSubItems([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [fetchSubItems]);
-
+  // Debounced search
   useEffect(() => {
-    const timer = setTimeout(() => searchSubItems(searchTerm), 500);
+    const timer = setTimeout(() => {
+      fetchSubItems(1, pagination.per_page, searchTerm);
+    }, 500);
+
     return () => clearTimeout(timer);
-  }, [searchTerm, searchSubItems]);
+  }, [searchTerm, pagination.per_page, fetchSubItems]);
 
   const fetchSubCategories = async () => {
     try {
@@ -128,14 +116,14 @@ const SubItemsManager = () => {
   }, []);
 
   const handlePageChange = (newPage) => {
-    if (newPage < 1 || newPage > pagination.last_page || searchTerm) return;
-    fetchSubItems(newPage, pagination.per_page);
+    if (newPage < 1 || newPage > pagination.last_page) return;
+    fetchSubItems(newPage, pagination.per_page, searchTerm);
   };
 
   const handleLimitChange = (newLimit) => {
     const limit = parseInt(newLimit);
     setPagination(prev => ({ ...prev, per_page: limit, current_page: 1 }));
-    fetchSubItems(1, limit);
+    fetchSubItems(1, limit, searchTerm);
   };
 
   const resetForm = () => {
@@ -151,7 +139,7 @@ const SubItemsManager = () => {
       setFormData({
         sub_category_id: item.sub_category_id ? String(item.sub_category_id) : '',
         name: item.name || '',
-        status: item.status === 'active' || item.status === true ? 'active' : 'inactive',
+        status: item.status === 'active' ? 'active' : 'inactive',
         image: null
       });
       setImagePreview(item.image ? `/${item.image}` : null);
@@ -198,10 +186,11 @@ const SubItemsManager = () => {
 
     try {
       const submitData = new FormData();
-      const catId = formData.sub_category_id ? parseInt(formData.sub_category_id, 10) : null;
-      submitData.append('sub_category_id', catId ?? '');
       submitData.append('name', formData.name.trim());
-      submitData.append('status', formData.status === 'active' ? 'active' : 'inactive');
+      submitData.append('status', formData.status);
+
+      const catId = formData.sub_category_id ? parseInt(formData.sub_category_id, 10) : null;
+      if (catId) submitData.append('sub_category_id', catId);
 
       if (formData.image instanceof File) {
         submitData.append('image', formData.image);
@@ -209,6 +198,7 @@ const SubItemsManager = () => {
 
       let response;
       if (editingItem) {
+        // Laravel uses POST + _method=PUT for updates when using FormData
         submitData.append('_method', 'POST');
         response = await axios.post(`${API_URL}/${editingItem.id}`, submitData, {
           headers: { 'Content-Type': 'multipart/form-data' }
@@ -219,42 +209,46 @@ const SubItemsManager = () => {
         });
       }
 
-      showNotification(editingItem ? 'Updated successfully!' : 'Created successfully!');
-      searchTerm ? searchSubItems(searchTerm) : fetchSubItems(pagination.current_page, pagination.per_page);
+      showNotification(editingItem ? 'Sub-item updated successfully!' : 'Sub-item created successfully!');
+      fetchSubItems(pagination.current_page, pagination.per_page, searchTerm);
       closeModal();
     } catch (error) {
-      handleApiError(error, 'Failed to save sub-item');
+      handleApiError(error, editingItem ? 'Failed to update sub-item' : 'Failed to create sub-item');
     } finally {
       setOperationLoading(null);
     }
   };
 
   const handleDelete = async (id) => {
-    if (!confirm('Delete this sub-item permanently?')) return;
+    if (!window.confirm('Delete this sub-item permanently?')) return;
+
     setOperationLoading(`delete-${id}`);
     try {
       await axios.delete(`${API_URL}/${id}`);
       showNotification('Sub-item deleted successfully');
+
+      // If last item on page was deleted, go to previous page
       if (subItems.length === 1 && pagination.current_page > 1) {
-        fetchSubItems(pagination.current_page - 1, pagination.per_page);
+        fetchSubItems(pagination.current_page - 1, pagination.per_page, searchTerm);
       } else {
-        searchTerm ? searchSubItems(searchTerm) : fetchSubItems(pagination.current_page, pagination.per_page);
+        fetchSubItems(pagination.current_page, pagination.per_page, searchTerm);
       }
     } catch (error) {
-      handleApiError(error, 'Delete failed');
+      handleApiError(error, 'Failed to delete sub-item');
     } finally {
       setOperationLoading(null);
     }
   };
 
   const toggleStatus = async (item) => {
-    const newStatus = (item.status === 'active' || item.status === true) ? 'inactive' : 'active';
+    const newStatus = item.status === 'active' ? 'inactive' : 'active';
     setOperationLoading(`status-${item.id}`);
+
     try {
       const form = new FormData();
       form.append('status', newStatus);
       form.append('name', item.name);
-      form.append('sub_category_id', item.sub_category_id || '');
+      if (item.sub_category_id) form.append('sub_category_id', item.sub_category_id);
       form.append('_method', 'POST');
 
       await axios.post(`${API_URL}/${item.id}`, form, {
@@ -262,7 +256,7 @@ const SubItemsManager = () => {
       });
 
       showNotification(`Sub-item ${newStatus === 'active' ? 'activated' : 'deactivated'}`);
-      searchTerm ? searchSubItems(searchTerm) : fetchSubItems(pagination.current_page, pagination.per_page);
+      fetchSubItems(pagination.current_page, pagination.per_page, searchTerm);
     } catch (error) {
       handleApiError(error, 'Failed to update status');
     } finally {
@@ -272,7 +266,6 @@ const SubItemsManager = () => {
 
   const getImageUrl = (path) => path ? `/${path}` : null;
 
-  // Format date beautifully
   const formatDate = (dateString) => {
     if (!dateString) return 'Unknown';
     const date = new Date(dateString);
@@ -287,8 +280,8 @@ const SubItemsManager = () => {
 
   const stats = {
     total: pagination.total,
-    active: subItems.filter(i => i.status === 'active' || i.status === true).length,
-    inactive: subItems.filter(i => i.status === 'inactive' || i.status === false).length
+    active: subItems.filter(i => i.status === 'active').length,
+    inactive: subItems.filter(i => i.status === 'inactive').length
   };
 
   if (loading && subItems.length === 0) {
@@ -409,7 +402,7 @@ const SubItemsManager = () => {
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
                 <input
                   type="text"
-                  placeholder="Search by name or category..."
+                  placeholder="Search by name..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full pl-12 pr-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500/50 outline-none"
@@ -468,13 +461,13 @@ const SubItemsManager = () => {
                         onClick={() => toggleStatus(item)}
                         disabled={operationLoading === `status-${item.id}`}
                         className={`px-3 py-1 rounded-full text-xs font-bold backdrop-blur-sm border transition-all ${
-                          (item.status === 'active' || item.status === true)
+                          item.status === 'active'
                             ? 'bg-green-500/20 text-green-400 border-green-500/30'
                             : 'bg-red-500/20 text-red-400 border-red-500/30'
                         }`}
                       >
                         {operationLoading === `status-${item.id}` ? <Loader size={12} className="animate-spin" /> : null}
-                        {(item.status === 'active' || item.status === true) ? 'Active' : 'Inactive'}
+                        {item.status === 'active' ? 'Active' : 'Inactive'}
                       </button>
                     </div>
 
@@ -492,7 +485,6 @@ const SubItemsManager = () => {
                       </span>
                     </p>
 
-                    {/* Created Date instead of ID */}
                     <div className="flex justify-between items-center mt-4 pt-4 border-t border-gray-700/30">
                       <div className="flex items-center gap-2 text-xs text-gray-400">
                         <Calendar size={14} />
@@ -510,26 +502,56 @@ const SubItemsManager = () => {
           </motion.div>
 
           {/* Pagination */}
-          {!searchTerm && pagination.last_page > 1 && (
+          {pagination.last_page > 1 && (
             <div className="flex justify-between items-center py-6 border-t border-gray-700/30">
               <div className="text-sm text-gray-400">
-                Showing {(pagination.current_page - 1) * pagination.per_page + 1} to {Math.min(pagination.current_page * pagination.per_page, pagination.total)} of {pagination.total}
+                Showing {(pagination.current_page - 1) * pagination.per_page + 1} to{' '}
+                {Math.min(pagination.current_page * pagination.per_page, pagination.total)} of {pagination.total}
               </div>
               <div className="flex gap-2">
-                <button onClick={() => handlePageChange(pagination.current_page - 1)} disabled={pagination.current_page === 1} className="px-4 py-2 rounded-xl border border-gray-600 disabled:opacity-50 flex items-center gap-2">
+                <button
+                  onClick={() => handlePageChange(pagination.current_page - 1)}
+                  disabled={pagination.current_page === 1}
+                  className="px-4 py-2 rounded-xl border border-gray-600 disabled:opacity-50 flex items-center gap-2"
+                >
                   Previous
                 </button>
-                {Array.from({ length: pagination.last_page }, (_, i) => i + 1)
-                  .filter(p => p === 1 || p === pagination.last_page || Math.abs(p - pagination.current_page) <= 2)
-                  .map((p, idx, arr) => (
-                    <React.Fragment key={p}>
-                      {idx > 0 && p - arr[idx - 1] > 1 && <span className="px-3">...</span>}
-                      <button onClick={() => handlePageChange(p)} className={`px-4 py-2 rounded-xl border ${pagination.current_page === p ? 'bg-blue-600 border-blue-500' : 'border-gray-600'}`}>
-                        {p}
+
+                {Array.from({ length: Math.min(7, pagination.last_page) }, (_, i) => {
+                  let page;
+                  if (pagination.last_page <= 7) {
+                    page = i + 1;
+                  } else if (pagination.current_page <= 4) {
+                    page = i + 1;
+                  } else if (pagination.current_page > pagination.last_page - 4) {
+                    page = pagination.last_page - 6 + i;
+                  } else {
+                    page = pagination.current_page - 3 + i;
+                  }
+                  if (page < 1 || page > pagination.last_page) return null;
+
+                  const showDotsBefore = page > 1 && page > pagination.current_page + 3;
+                  const showDotsAfter = page < pagination.last_page && page < pagination.current_page - 3;
+
+                  return (
+                    <React.Fragment key={page}>
+                      {showDotsBefore && <span className="px-3">...</span>}
+                      <button
+                        onClick={() => handlePageChange(page)}
+                        className={`px-4 py-2 rounded-xl border ${pagination.current_page === page ? 'bg-blue-600 border-blue-500' : 'border-gray-600'}`}
+                      >
+                        {page}
                       </button>
+                      {showDotsAfter && <span className="px-3">...</span>}
                     </React.Fragment>
-                  ))}
-                <button onClick={() => handlePageChange(pagination.current_page + 1)} disabled={pagination.current_page === pagination.last_page} className="px-4 py-2 rounded-xl border border-gray-600 disabled:opacity-50 flex items-center gap-2">
+                  );
+                })}
+
+                <button
+                  onClick={() => handlePageChange(pagination.current_page + 1)}
+                  disabled={pagination.current_page === pagination.last_page}
+                  className="px-4 py-2 rounded-xl border border-gray-600 disabled:opacity-50 flex items-center gap-2"
+                >
                   Next
                 </button>
               </div>
@@ -554,8 +576,20 @@ const SubItemsManager = () => {
         {/* Modal */}
         <AnimatePresence>
           {showModal && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={closeModal}>
-              <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-3xl p-8 max-w-md w-full border border-gray-700/50 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+              onClick={closeModal}
+            >
+              <motion.div
+                initial={{ scale: 0.9 }}
+                animate={{ scale: 1 }}
+                exit={{ scale: 0.9 }}
+                className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-3xl p-8 max-w-md w-full border border-gray-700/50 shadow-2xl"
+                onClick={e => e.stopPropagation()}
+              >
                 <div className="flex justify-between items-center mb-6">
                   <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
                     {editingItem ? 'Edit Sub Item' : 'Create Sub Item'}
@@ -565,7 +599,7 @@ const SubItemsManager = () => {
 
                 <form onSubmit={handleSubmit} className="space-y-6">
                   <div>
-                    <label className="block text-sm font-semibold mb-3">Sub Category *</label>
+                    <label className="block text-sm font-semibold mb-3">Sub Category</label>
                     <select
                       name="sub_category_id"
                       value={formData.sub_category_id}
@@ -577,7 +611,6 @@ const SubItemsManager = () => {
                         <option key={cat.id} value={cat.id}>{cat.name}</option>
                       ))}
                     </select>
-                    {errors.sub_category_id && <p className="text-red-400 text-sm mt-1">{errors.sub_category_id[0]}</p>}
                   </div>
 
                   <div>
@@ -630,7 +663,11 @@ const SubItemsManager = () => {
 
                   <div className="flex justify-end gap-3 pt-4">
                     <button type="button" onClick={closeModal} className="px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-xl">Cancel</button>
-                    <button type="submit" disabled={operationLoading === 'saving'} className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl font-bold flex items-center gap-2 disabled:opacity-70">
+                    <button
+                      type="submit"
+                      disabled={operationLoading === 'saving'}
+                      className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl font-bold flex items-center gap-2 disabled:opacity-70"
+                    >
                       {operationLoading === 'saving' ? <Loader size={20} className="animate-spin" /> : <Check size={20} />}
                       {editingItem ? 'Update' : 'Create'} Sub Item
                     </button>

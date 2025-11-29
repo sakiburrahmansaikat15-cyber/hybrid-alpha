@@ -69,7 +69,6 @@ Route::prefix('sub-categories')->group(function () {
 
 
 Route::prefix('sub-items')->group(function () {
-    Route::get('/search', [SubItemController::class, 'search']);
     Route::get('/', [SubItemController::class, 'index']);
     Route::post('/', [SubItemController::class, 'store']);
     Route::get('/{id}', [SubItemController::class, 'show']);

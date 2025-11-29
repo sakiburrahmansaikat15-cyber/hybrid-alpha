@@ -20,6 +20,7 @@ class SubItemsResource extends JsonResource
             'image' => $this->image,
             'status' => $this->status,
             "sub_category_id"=>$this->sub_category_id,
+            'subcategory' => new ProductsResource($this->whenLoaded('subcategory')),
             'created_at' => $this->created_at->toDateTimeString(),
             'updated_at' => $this->updated_at->toDateTimeString(),
         ];

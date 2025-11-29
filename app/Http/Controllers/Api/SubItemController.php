@@ -12,20 +12,32 @@ use Illuminate\Support\Facades\Validator;
 class SubItemController extends Controller
 {
     // ✅ List all sub-items with pagination
-    public function index(Request $request)
+     public function index(Request $request)
     {
+         $keyword = $request->query('keyword', '');
         $limit = (int) $request->query('limit', 10);
-        $page = (int) $request->query('page', 1);
+       
 
-        $subItems = SubItems::latest()->paginate($limit, ['*'], 'page', $page);
+        $query = SubItems::with(['subcategory']);
 
+       
+      if ($keyword) {
+        $query->where('name', 'like', "%{$keyword}%"); 
+    }
+
+        // 📄 Paginate results
+        $item = $query->latest()->paginate($limit);
+
+        
         return response()->json([
-            'message' => 'Sub-items fetched successfully',
-            'page' => $subItems->currentPage(),
-            'perPage' => $subItems->perPage(),
-            'totalItems' => $subItems->total(),
-            'totalPages' => $subItems->lastPage(),
-            'data' => SubItemsResource::collection($subItems->items()),
+            'message' => 'SubItems fetched successfully',
+            'pagination' => [
+                'current_page' => $item->currentPage(),
+                'per_page' => $item->perPage(),
+                'total_items' => $item->total(),
+                'total_pages' => $item->lastPage(),
+                'data' => SubItemsResource::collection($item),
+            ],
         ]);
     }
 
@@ -73,7 +85,7 @@ class SubItemController extends Controller
     // ✅ Show a single sub-item
     public function show($id)
     {
-        $subItem = SubItems::find($id);
+        $subItem = SubItems::with(['subcategory'])->find($id);
 
         if (!$subItem) {
             return response()->json([
@@ -154,19 +166,5 @@ class SubItemController extends Controller
             'success' => true,
             'message' => 'Sub-item deleted successfully',
         ], 200);
-    }
-
-    // ✅ Search sub-items
-    public function search(Request $request)
-    {
-        $keyword = $request->query('keyword', '');
-
-        $subItems = SubItems::where('name', 'like', "%{$keyword}%")
-            ->get();
-
-        return response()->json([
-            'message' => 'Search results fetched successfully',
-            'data' => SubItemsResource::collection($subItems),
-        ]);
     }
 }
