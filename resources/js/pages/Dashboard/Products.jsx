@@ -350,7 +350,7 @@ const Products = () => {
         axios.get('/api/sub-categories').catch(() => ({ data: [] })),
         axios.get('/api/sub-items').catch(() => ({ data: [] })),
         axios.get('/api/units').catch(() => ({ data: [] })),
-        axios.get('/api/product-types').catch(() => ({ data: [] }))
+        axios.get('/api/product-type').catch(() => ({ data: [] }))
       ]);
 
       setCategories(Array.isArray(categoriesRes.data) ? categoriesRes.data : categoriesRes.data?.data || []);
