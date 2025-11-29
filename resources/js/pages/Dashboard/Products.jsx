@@ -137,7 +137,7 @@ const ProductCard = ({
             <div>
               <span className="text-gray-500 text-xs">Category</span>
               <div className="text-gray-300 font-medium">
-                {product.cat_id ? `Category ${product.cat_id}` : 'No Category'}
+                {product.category?.name || 'No Category'}
               </div>
             </div>
           </div>
@@ -148,7 +148,7 @@ const ProductCard = ({
             <div>
               <span className="text-gray-500 text-xs">Type</span>
               <div className="text-gray-300 font-medium">
-                {product.product_type_id ? `Type ${product.product_type_id}` : 'No Type'}
+                {product.product_type?.name || 'No Type'}
               </div>
             </div>
           </div>
@@ -282,8 +282,6 @@ const Products = () => {
     image: null
   });
   const [errors, setErrors] = useState({});
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(8);
   const [imagePreview, setImagePreview] = useState(null);
   const [apiError, setApiError] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -292,27 +290,36 @@ const Products = () => {
   const [dragOver, setDragOver] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [pagination, setPagination] = useState({
-    page: 1,
-    perPage: 8,
-    totalItems: 0,
-    totalPages: 1
+    current_page: 1,
+    per_page: 8,
+    total_items: 0,
+    total_pages: 1
   });
 
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
-  // Fetch products with pagination
-  const fetchProducts = async (page = 1, limit = 8) => {
+  // Fetch products with pagination and search
+  const fetchProducts = async (page = 1, limit = 8, keyword = '') => {
     setLoading(true);
     try {
-      const response = await axios.get(`/api/products?page=${page}&limit=${limit}`);
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: limit.toString()
+      });
+      
+      if (keyword) {
+        params.append('keyword', keyword);
+      }
+
+      const response = await axios.get(`/api/products?${params}`);
       
       if (response.data && response.data.data) {
         setProducts(response.data.data);
         setPagination({
-          page: response.data.page,
-          perPage: response.data.perPage,
-          totalItems: response.data.totalItems,
-          totalPages: response.data.totalPages
+          current_page: response.data.current_page,
+          per_page: response.data.per_page,
+          total_items: response.data.total_items,
+          total_pages: response.data.total_pages
         });
       } else {
         setProducts([]);
@@ -343,7 +350,7 @@ const Products = () => {
         axios.get('/api/sub-categories').catch(() => ({ data: [] })),
         axios.get('/api/sub-items').catch(() => ({ data: [] })),
         axios.get('/api/units').catch(() => ({ data: [] })),
-        axios.get('/api/product-type').catch(() => ({ data: [] }))
+        axios.get('/api/product-types').catch(() => ({ data: [] }))
       ]);
 
       setCategories(Array.isArray(categoriesRes.data) ? categoriesRes.data : categoriesRes.data?.data || []);
@@ -357,43 +364,13 @@ const Products = () => {
     }
   };
 
-  // Search products
-  const searchProducts = async (query) => {
-    if (!query.trim()) {
-      fetchProducts();
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const response = await axios.get(`/api/products/search?keyword=${encodeURIComponent(query)}`);
-      setProducts(Array.isArray(response.data.data) ? response.data.data : []);
-      setPagination({
-        page: 1,
-        perPage: itemsPerPage,
-        totalItems: response.data.data?.length || 0,
-        totalPages: 1
-      });
-      setApiError('');
-    } catch (error) {
-      console.error('Error searching products:', error);
-      setApiError('Error searching products');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
     fetchProducts();
     fetchRelatedData();
   }, []);
 
   useEffect(() => {
-    if (debouncedSearchTerm) {
-      searchProducts(debouncedSearchTerm);
-    } else {
-      fetchProducts();
-    }
+    fetchProducts(1, pagination.per_page, debouncedSearchTerm);
   }, [debouncedSearchTerm]);
 
   // Show notification
@@ -521,12 +498,12 @@ const Products = () => {
       if (formData.specification) submitData.append('specification', formData.specification);
 
       // Append foreign keys - send empty string for null values
-      if (formData.cat_id) submitData.append('cat_id', formData.cat_id);
-      if (formData.brand_id) submitData.append('brand_id', formData.brand_id);
-      if (formData.sub_cat_id) submitData.append('sub_cat_id', formData.sub_cat_id);
-      if (formData.sub_item_id) submitData.append('sub_item_id', formData.sub_item_id);
-      if (formData.unit_id) submitData.append('unit_id', formData.unit_id);
-      if (formData.product_type_id) submitData.append('product_type_id', formData.product_type_id);
+      submitData.append('cat_id', formData.cat_id || '');
+      submitData.append('brand_id', formData.brand_id || '');
+      submitData.append('sub_cat_id', formData.sub_cat_id || '');
+      submitData.append('sub_item_id', formData.sub_item_id || '');
+      submitData.append('unit_id', formData.unit_id || '');
+      submitData.append('product_type_id', formData.product_type_id || '');
 
       if (formData.image) {
         submitData.append('image', formData.image);
@@ -548,7 +525,7 @@ const Products = () => {
 
       setShowModal(false);
       resetForm();
-      fetchProducts();
+      fetchProducts(pagination.current_page, pagination.per_page, searchTerm);
       showNotification(`Product ${selectedProduct ? 'updated' : 'created'} successfully!`);
 
     } catch (error) {
@@ -588,7 +565,7 @@ const Products = () => {
 
       setShowDeleteModal(false);
       setSelectedProduct(null);
-      fetchProducts();
+      fetchProducts(pagination.current_page, pagination.per_page, searchTerm);
       showNotification('Product deleted successfully!');
 
     } catch (error) {
@@ -609,20 +586,28 @@ const Products = () => {
     setActionLoading(true);
     try {
       const newStatus = product.status === 'active' ? 'inactive' : 'active';
+      
+      const submitData = new FormData();
+      submitData.append('name', product.name);
+      submitData.append('status', newStatus);
+      if (product.description) submitData.append('description', product.description);
+      if (product.specification) submitData.append('specification', product.specification);
+      submitData.append('cat_id', product.cat_id || '');
+      submitData.append('brand_id', product.brand_id || '');
+      submitData.append('sub_cat_id', product.sub_cat_id || '');
+      submitData.append('sub_item_id', product.sub_item_id || '');
+      submitData.append('unit_id', product.unit_id || '');
+      submitData.append('product_type_id', product.product_type_id || '');
+
       const response = await axios.post(
         `/api/products/${product.id}`,
-        {
-          name: product.name,
-          status: newStatus,
-          description: product.description,
-          specification: product.specification,
-        },
-        { headers: { "Content-Type": "application/json" } }
+        submitData,
+        { headers: { 'Content-Type': 'multipart/form-data' } }
       );
 
       if (response.data) {
         showNotification(`Product ${newStatus === 'active' ? "activated" : "deactivated"}!`);
-        await fetchProducts();
+        await fetchProducts(pagination.current_page, pagination.per_page, searchTerm);
       } else {
         throw new Error("Status update failed");
       }
@@ -688,7 +673,7 @@ const Products = () => {
     setApiError('');
   };
 
-  // Filter products
+  // Filter products (client-side filtering for status/category)
   const filteredProducts = products.filter(product => {
     if (filterStatus !== 'all' && product.status !== filterStatus) return false;
     if (filterCategory !== 'all' && product.cat_id?.toString() !== filterCategory) return false;
@@ -697,13 +682,12 @@ const Products = () => {
 
   // Pagination
   const paginate = (pageNumber) => {
-    setCurrentPage(pageNumber);
-    fetchProducts(pageNumber, itemsPerPage);
+    fetchProducts(pageNumber, pagination.per_page, searchTerm);
   };
 
   // Stats calculation
   const stats = {
-    total: pagination.totalItems,
+    total: pagination.total_items,
     active: products.filter(p => p.status === 'active').length,
     inactive: products.filter(p => p.status === 'inactive').length,
     withImages: products.filter(p => p.image).length,
@@ -726,17 +710,19 @@ const Products = () => {
   };
 
   const getRelationName = (product, relationField) => {
-    const fieldMap = {
-      cat_id: 'Category',
-      brand_id: 'Brand',
-      product_type_id: 'Product Type',
-      unit_id: 'Unit'
+    const relationMap = {
+      cat_id: product.category,
+      brand_id: product.brand,
+      product_type_id: product.product_type,
+      unit_id: product.unit,
+      sub_cat_id: product.sub_category,
+      sub_item_id: product.sub_item
     };
 
-    const value = product[relationField];
-    if (!value) return 'Not Set';
+    const relation = relationMap[relationField];
+    if (!relation) return 'Not Set';
     
-    return `${fieldMap[relationField] || relationField} ${value}`;
+    return relation.name || `ID: ${product[relationField]}`;
   };
 
   const removeImage = () => {
@@ -765,7 +751,7 @@ const Products = () => {
             </p>
           </div>
           <button
-            onClick={() => fetchProducts()}
+            onClick={() => fetchProducts(pagination.current_page, pagination.per_page, searchTerm)}
             disabled={loading}
             className="px-5 py-3 bg-gray-800/80 hover:bg-gray-700/80 disabled:bg-gray-800 text-white rounded-xl font-medium flex items-center space-x-2 transition-all hover:scale-105 border border-gray-700 hover:border-gray-600 backdrop-blur-sm shadow-lg"
           >
@@ -987,18 +973,18 @@ const Products = () => {
         )}
 
         {/* Pagination */}
-        {pagination.totalPages > 1 && (
+        {pagination.total_pages > 1 && (
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-8 pt-6 border-t border-gray-700/50">
             <div className="text-sm text-gray-400">
-              Showing {((pagination.page - 1) * pagination.perPage) + 1} to {Math.min(pagination.page * pagination.perPage, pagination.totalItems)} of {pagination.totalItems} results
+              Showing {((pagination.current_page - 1) * pagination.per_page) + 1} to {Math.min(pagination.current_page * pagination.per_page, pagination.total_items)} of {pagination.total_items} results
             </div>
             <div className="flex gap-1 sm:gap-2 flex-wrap justify-center">
-              {Array.from({ length: pagination.totalPages }, (_, i) => i + 1).map((page) => (
+              {Array.from({ length: pagination.total_pages }, (_, i) => i + 1).map((page) => (
                 <button
                   key={page}
                   onClick={() => paginate(page)}
                   className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 hover:scale-105 ${
-                    pagination.page === page
+                    pagination.current_page === page
                       ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg'
                       : 'bg-gray-700 text-gray-300 hover:bg-gray-600 border border-gray-600'
                   }`}

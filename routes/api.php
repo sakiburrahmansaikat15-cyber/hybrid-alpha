@@ -100,7 +100,6 @@ Route::prefix('product-type')->group(function () {
 
 
 Route::prefix('products')->group(function () {
-    Route::get('/search', [ProductController::class, 'search']);
     Route::get('/', [ProductController::class, 'index']);
     Route::post('/', [ProductController::class, 'store']);
     Route::get('/{id}', [ProductController::class, 'show']);

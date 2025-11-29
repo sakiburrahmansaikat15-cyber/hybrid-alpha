@@ -12,22 +12,32 @@ use Illuminate\Support\Facades\Validator;
 class ProductController extends Controller
 {
     // ✅ List all products with pagination
-    public function index(Request $request)
+     public function index(Request $request)
     {
+        $keyword = $request->query('keyword', '');
         $limit = (int) $request->query('limit', 10);
-        $page = (int) $request->query('page', 1);
+       
 
-        $products = Prooducts::latest()->paginate($limit, ['*'], 'page', $page);
+        $query = Prooducts::with(['category', 'brand','subCategory','subItem','unit','productType']);
+
+        // 🔍 Apply search if keyword provided
+      if ($keyword) {
+        $query->where('name', 'like', "%{$keyword}%"); 
+    }
+
+        // 📄 Paginate and order
+        $data = $query->latest()->paginate($limit, ['*'], 'page');
 
         return response()->json([
             'message' => 'Products fetched successfully',
-            'page' => $products->currentPage(),
-            'perPage' => $products->perPage(),
-            'totalItems' => $products->total(),
-            'totalPages' => $products->lastPage(),
-            'data' => ProductsResource::collection($products->items()),
+            'current_page' => $data->currentPage(),
+            'per_page' => $data->perPage(),
+            'total_items' => $data->total(),
+            'total_pages' => $data->lastPage(),
+            'data' => ProductsResource::collection($data),
         ]);
     }
+    
 
     // ✅ Create a new product
     public function store(Request $request)
@@ -81,7 +91,7 @@ class ProductController extends Controller
     // ✅ Show a single product
     public function show($id)
     {
-        $product = Prooducts::find($id);
+        $product = Prooducts::with(['category', 'brand','subCategory','subItem','unit','productType'])->find($id);
 
         if (!$product) {
             return response()->json([
@@ -170,19 +180,5 @@ class ProductController extends Controller
             'success' => true,
             'message' => 'Product deleted successfully'
         ], 200);
-    }
-
-    // ✅ Search products
-    public function search(Request $request)
-    {
-        $keyword = $request->query('keyword', '');
-
-        $products = Prooducts::where('name', 'like', "%{$keyword}%")
-            ->get();
-
-        return response()->json([
-            'message' => 'Search results fetched successfully',
-            'data' => ProductsResource::collection($products),
-        ]);
     }
 }

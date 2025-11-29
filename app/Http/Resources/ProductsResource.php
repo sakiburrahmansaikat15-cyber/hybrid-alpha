@@ -29,7 +29,12 @@ class ProductsResource extends JsonResource
             'sub_item_id' => $this->sub_item_id,
             'unit_id' => $this->unit_id,
             'product_type_id' => $this->product_type_id,
-
+             'category' => new CategoriesResource($this->whenLoaded('category')),
+             'brand' => new BrandResource($this->whenLoaded('brand')),
+             'subCategory' => new SubCategoryResource($this->whenLoaded('subCategory')),
+             'subItem' => new SubItemsResource($this->whenLoaded('subItem')),
+             'unit' => new UnitResource($this->whenLoaded('unit')),
+            'productType' => new ProductTypeResource($this->whenLoaded('productType')),
             'created_at' => $this->created_at->toDateTimeString(),
             'updated_at' => $this->updated_at->toDateTimeString(),
         ];
