@@ -91,7 +91,7 @@ class UnitController extends Controller
 
         $data = $request->validate([
             'name' => 'sometimes|string|max:255',
-            'status' => 'required|in:active,inactive',
+            'status' => 'sometimes|in:active,inactive',
         ]);
 
         $unit->update($data);

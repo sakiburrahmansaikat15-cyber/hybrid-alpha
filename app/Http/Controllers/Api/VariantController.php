@@ -106,7 +106,7 @@ class VariantController extends Controller
             'name' => 'sometimes|string|max:255',
             'description' => 'nullable|string',
             'value' => 'sometimes|string|max:255',
-            'status' => 'required|in:active,inactive',
+            'status' => 'sometimes|in:active,inactive',
             'product_id' => 'sometimes|exists:prooducts,id',
         ]);
 

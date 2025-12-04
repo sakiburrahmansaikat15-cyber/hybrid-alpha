@@ -110,7 +110,7 @@ class TransactionsController extends Controller
             'payment_type_id' => 'nullable|exists:payment_types,id',
             'type' => 'nullable|string|max:255',
             'amount' => 'nullable|numeric|min:0',
-            'status' => 'required|in:active,inactive',
+            'status' => 'nullable|in:active,inactive',
         ]);
 
         $transaction->update($data);

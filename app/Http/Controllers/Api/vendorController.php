@@ -118,7 +118,7 @@ class VendorController extends Controller
             'email'     => 'sometimes|email|unique:vendors,email,' . $vendor->id,
             'contact'   => 'sometimes|string|max:20',
             'address'   => 'sometimes|string',
-            'status'    => 'required|in:active,inactive',
+            'status'    => 'sometimes|in:active,inactive',
             'image'     => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
         ]);
 
