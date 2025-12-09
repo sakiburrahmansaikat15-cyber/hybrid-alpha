@@ -37,9 +37,9 @@ const TransactionsManager = () => {
   const [editingTransaction, setEditingTransaction] = useState(null);
   const [actionMenu, setActionMenu] = useState(null);
   const [notification, setNotification] = useState({ show: false, message: '', type: '' });
-  
+
   const [paymentTypes, setPaymentTypes] = useState([]);
-  
+
   const [filterType, setFilterType] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
 

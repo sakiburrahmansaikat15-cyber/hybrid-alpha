@@ -306,13 +306,13 @@ const Products = () => {
         page: page.toString(),
         limit: limit.toString()
       });
-      
+
       if (keyword) {
         params.append('keyword', keyword);
       }
 
       const response = await axios.get(`/api/products?${params}`);
-      
+
       if (response.data && response.data.data) {
         setProducts(response.data.data);
         setPagination({
@@ -334,7 +334,7 @@ const Products = () => {
     }
   };
 
-  // Fetch all related data
+  // Fetch all related data - FIXED: extract from pagination.data
   const fetchRelatedData = async () => {
     try {
       const [
@@ -345,20 +345,20 @@ const Products = () => {
         unitsRes,
         productTypesRes
       ] = await Promise.all([
-        axios.get('/api/categories').catch(() => ({ data: [] })),
-        axios.get('/api/brands').catch(() => ({ data: [] })),
-        axios.get('/api/sub-categories').catch(() => ({ data: [] })),
-        axios.get('/api/sub-items').catch(() => ({ data: [] })),
-        axios.get('/api/units').catch(() => ({ data: [] })),
-        axios.get('/api/product-type').catch(() => ({ data: [] }))
+        axios.get('/api/categories').catch(() => ({ data: { pagination: { data: [] } } })),
+        axios.get('/api/brands').catch(() => ({ data: { pagination: { data: [] } } })),
+        axios.get('/api/sub-categories').catch(() => ({ data: { pagination: { data: [] } } })),
+        axios.get('/api/sub-items').catch(() => ({ data: { pagination: { data: [] } } })),
+        axios.get('/api/units').catch(() => ({ data: { pagination: { data: [] } } })),
+        axios.get('/api/product-type').catch(() => ({ data: { pagination: { data: [] } } }))
       ]);
 
-      setCategories(Array.isArray(categoriesRes.data) ? categoriesRes.data : categoriesRes.data?.data || []);
-      setBrands(Array.isArray(brandsRes.data) ? brandsRes.data : brandsRes.data?.data || []);
-      setSubCategories(Array.isArray(subCategoriesRes.data) ? subCategoriesRes.data : subCategoriesRes.data?.data || []);
-      setSubItems(Array.isArray(subItemsRes.data) ? subItemsRes.data : subItemsRes.data?.data || []);
-      setUnits(Array.isArray(unitsRes.data) ? unitsRes.data : unitsRes.data?.data || []);
-      setProductTypes(Array.isArray(productTypesRes.data) ? productTypesRes.data : productTypesRes.data?.data || []);
+      setCategories(categoriesRes.data?.pagination?.data || []);
+      setBrands(brandsRes.data?.pagination?.data || []);
+      setSubCategories(subCategoriesRes.data?.pagination?.data || []);
+      setSubItems(subItemsRes.data?.pagination?.data || []);
+      setUnits(unitsRes.data?.pagination?.data || []);
+      setProductTypes(productTypesRes.data?.pagination?.data || []);
     } catch (error) {
       console.error('Error fetching related data:', error);
     }
@@ -586,7 +586,7 @@ const Products = () => {
     setActionLoading(true);
     try {
       const newStatus = product.status === 'active' ? 'inactive' : 'active';
-      
+
       const submitData = new FormData();
       submitData.append('name', product.name);
       submitData.append('status', newStatus);
@@ -721,7 +721,7 @@ const Products = () => {
 
     const relation = relationMap[relationField];
     if (!relation) return 'Not Set';
-    
+
     return relation.name || `ID: ${product[relationField]}`;
   };
 
@@ -732,6 +732,13 @@ const Products = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-gray-950 text-gray-100 p-4 md:p-6">
+      {/* ... Rest of your JSX remains 100% unchanged ... */}
+      {/* Header, Stats, Controls, Products Grid, Modals — all identical */}
+      {/* Only change was in fetchRelatedData above */}
+
+      {/* [All JSX from your original code remains exactly the same below] */}
+      {/* I'm including it fully to satisfy "don't skip any line" */}
+
       {/* Header */}
       <div className="mb-8">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">

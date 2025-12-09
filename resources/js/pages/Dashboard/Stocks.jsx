@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
-import { 
-  Plus, 
-  Search, 
-  Edit, 
-  Trash2, 
-  X, 
+import {
+  Plus,
+  Search,
+  Edit,
+  Trash2,
+  X,
   Check,
   Package,
   Truck,
@@ -114,10 +114,14 @@ const StocksManager = () => {
         axios.get('/api/vendors'),
         axios.get('/api/products')
       ]);
-      setVendors(vRes.data.data || vRes.data);
-      setProducts(pRes.data.data || pRes.data);
+      // Vendors: paginated → pagination.data
+      // Products: non-paginated → data
+      setVendors(vRes.data?.pagination?.data || []);
+      setProducts(pRes.data?.data || []);
     } catch (err) {
       console.error('Failed to load vendors/products', err);
+      setVendors([]);
+      setProducts([]);
     }
   };
 
@@ -328,10 +332,10 @@ const StocksManager = () => {
               <option value="inactive">Inactive</option>
             </select>
             {(searchTerm || statusFilter !== 'all') && (
-              <button onClick={() => { 
-                setSearchTerm(''); 
-                setStatusFilter('all'); 
-                fetchStocks(1, 10); 
+              <button onClick={() => {
+                setSearchTerm('');
+                setStatusFilter('all');
+                fetchStocks(1, 10);
               }} className="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg transition">
                 Clear Filters
               </button>
@@ -374,7 +378,7 @@ const StocksManager = () => {
                           <div className="flex items-center gap-2">
                             <Package className="text-blue-400" size={16} />
                             <span className="font-medium text-white">
-                              {stock.product?.name || '—'}
+                              {stock.product_name || '—'}
                             </span>
                           </div>
                         </td>
@@ -382,7 +386,7 @@ const StocksManager = () => {
                           <div className="flex items-center gap-2">
                             <Truck className="text-green-400" size={16} />
                             <span className="text-white">
-                              {stock.vendor?.name || '—'}
+                              {stock.vendor_name || '—'}
                             </span>
                           </div>
                         </td>
@@ -417,14 +421,14 @@ const StocksManager = () => {
                           </span>
                         </td>
                         <td className="px-4 py-4 text-right space-x-2">
-                          <button 
-                            onClick={() => openModal(stock)} 
+                          <button
+                            onClick={() => openModal(stock)}
                             className="p-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 rounded-lg transition"
                           >
                             <Edit size={16} />
                           </button>
-                          <button 
-                            onClick={() => handleDelete(stock.id)} 
+                          <button
+                            onClick={() => handleDelete(stock.id)}
                             className="p-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded-lg transition"
                           >
                             <Trash2 size={16} />
@@ -456,9 +460,9 @@ const StocksManager = () => {
 
                   <div className="flex gap-1">
                     {Array.from({ length: pagination.total_pages }, (_, i) => i + 1)
-                      .filter(page => 
-                        page === 1 || 
-                        page === pagination.total_pages || 
+                      .filter(page =>
+                        page === 1 ||
+                        page === pagination.total_pages ||
                         (page >= pagination.current_page - 2 && page <= pagination.current_page + 2)
                       )
                       .map((page, idx, arr) => (
@@ -469,8 +473,8 @@ const StocksManager = () => {
                           <button
                             onClick={() => goToPage(page)}
                             className={`px-4 py-2 rounded-lg text-sm transition ${
-                              pagination.current_page === page 
-                                ? 'bg-blue-600 text-white' 
+                              pagination.current_page === page
+                                ? 'bg-blue-600 text-white'
                                 : 'bg-gray-600 hover:bg-gray-500 text-gray-300'
                             }`}
                           >
@@ -509,7 +513,7 @@ const StocksManager = () => {
                     <select value={formData.product_id} onChange={e => setFormData(prev => ({...prev, product_id: e.target.value}))} required
                       className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500">
                       <option value="">Select Product</option>
-                      {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      {Array.isArray(products) && products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
                     {errors.product_id && <p className="text-red-400 text-sm mt-1">{errors.product_id[0]}</p>}
                   </div>
@@ -519,7 +523,7 @@ const StocksManager = () => {
                     <select value={formData.vendor_id} onChange={e => setFormData(prev => ({...prev, vendor_id: e.target.value}))} required
                       className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500">
                       <option value="">Select Vendor</option>
-                      {vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                      {Array.isArray(vendors) && vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
                     </select>
                     {errors.vendor_id && <p className="text-red-400 text-sm mt-1">{errors.vendor_id[0]}</p>}
                   </div>

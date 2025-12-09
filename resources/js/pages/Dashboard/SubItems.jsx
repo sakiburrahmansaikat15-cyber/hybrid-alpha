@@ -104,9 +104,11 @@ const SubItemsManager = () => {
   const fetchSubCategories = async () => {
     try {
       const response = await axios.get('/api/sub-categories');
-      setSubCategories(response.data.data || []);
+      // Fixed: Extract from pagination.data (consistent with your API structure)
+      setSubCategories(response.data?.pagination?.data || []);
     } catch (error) {
       console.error('Error fetching sub-categories:', error);
+      setSubCategories([]);
     }
   };
 

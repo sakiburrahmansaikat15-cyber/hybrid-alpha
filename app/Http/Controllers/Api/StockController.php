@@ -17,7 +17,7 @@ class StockController extends Controller
         $limit = (int) $request->query('limit', 10);
         $page = (int) $request->query('page', 1);
 
-        $query = Stocks::with(['product', 'vendor']);
+        $query = Stocks::query();
 
         // 🔍 Apply search if keyword provided
           if ($keyword) {
@@ -38,7 +38,7 @@ class StockController extends Controller
             'data' => StocksResource::collection($stocks->items()),
         ]);
     }
-    
+
 
     // ✅ Store a new stock
     public function store(Request $request)
@@ -79,7 +79,7 @@ class StockController extends Controller
     // ✅ Show a single stock
     public function show($id)
     {
-        $stock = Stocks::with(['product', 'vendor'])->find($id);
+        $stock = Stocks::find($id);
 
         if (!$stock) {
             return response()->json([
