@@ -12,35 +12,51 @@ use Illuminate\Support\Facades\Validator;
 
 class CategoriesController extends Controller
 {
- 
-      public function index(Request $request)
-    {
-         $keyword = $request->query('keyword', '');
-        $limit = (int) $request->query('limit', 10);
-       
 
-        $query = Categories::query();
+ public function index(Request $request)
+{
+    $keyword = $request->query('keyword', '');
+    $limit = $request->query('limit');
 
-        // 🔍 Apply search if keyword provided
-      if ($keyword) {
-        $query->where('name', 'like', "%{$keyword}%"); 
+    $query = Categories::query();
+
+
+    if ($keyword) {
+        $query->where('name', 'like', "%{$keyword}%");
     }
 
-        // 📄 Paginate results
-        $serials = $query->latest()->paginate($limit);
+    
+    if (!$limit) {
+        $data = $query->latest()->get();
 
-        
         return response()->json([
             'message' => 'Categories fetched successfully',
             'pagination' => [
-                'current_page' => $serials->currentPage(),
-                'per_page' => $serials->perPage(),
-                'total_items' => $serials->total(),
-                'total_pages' => $serials->lastPage(),
-                'data' => CategoriesResource::collection($serials),
+                'current_page' => 1,
+                'per_page' => $data->count(),
+                'total_items' => $data->count(),
+                'total_pages' => 1,
+                'data' => CategoriesResource::collection($data),
             ],
         ]);
     }
+
+
+    $limit = (int) $limit ?: 10;
+
+    $serials = $query->latest()->paginate($limit);
+
+    return response()->json([
+        'message' => 'Categories fetched successfully',
+        'pagination' => [
+            'current_page' => $serials->currentPage(),
+            'per_page' => $serials->perPage(),
+            'total_items' => $serials->total(),
+            'total_pages' => $serials->lastPage(),
+            'data' => CategoriesResource::collection($serials),
+        ],
+    ]);
+}
 
 
     public function store(Request $request)
@@ -84,7 +100,7 @@ class CategoriesController extends Controller
             ], 201);
     }
 
-   
+
     public function show($id)
     {
             $category = Categories::find($id);
@@ -102,7 +118,7 @@ class CategoriesController extends Controller
             ], 200);
     }
 
-    
+
     public function update(Request $request, $id)
     {
         $category = Categories::findOrFail($id);
@@ -138,7 +154,7 @@ class CategoriesController extends Controller
         ], 200);
     }
 
-   
+
     public function destroy($id)
     {
             $category = Categories::find($id);
