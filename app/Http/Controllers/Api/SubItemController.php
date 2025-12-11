@@ -12,34 +12,50 @@ use Illuminate\Support\Facades\Validator;
 class SubItemController extends Controller
 {
     // ✅ List all sub-items with pagination
-     public function index(Request $request)
-    {
-         $keyword = $request->query('keyword', '');
-        $limit = (int) $request->query('limit', 10);
-       
+   public function index(Request $request)
+{
+    $keyword = $request->query('keyword', '');
+    $limit = $request->query('limit');
 
-        $query = SubItems::with(['subcategory']);
+    $query = SubItems::with('subcategory');
 
-       
-      if ($keyword) {
-        $query->where('name', 'like', "%{$keyword}%"); 
+    // 🔍 Apply search filter if keyword provided
+    if ($keyword) {
+        $query->where('name', 'like', "%{$keyword}%");
     }
 
-        // 📄 Paginate results
-        $item = $query->latest()->paginate($limit);
+    // ⚙️ If no limit, return all results
+    if (!$limit) {
+        $data = $query->latest()->get();
 
-        
         return response()->json([
             'message' => 'SubItems fetched successfully',
             'pagination' => [
-                'current_page' => $item->currentPage(),
-                'per_page' => $item->perPage(),
-                'total_items' => $item->total(),
-                'total_pages' => $item->lastPage(),
-                'data' => SubItemsResource::collection($item),
+                'current_page' => 1,
+                'per_page' => $data->count(),
+                'total_items' => $data->count(),
+                'total_pages' => 1,
+                'data' => SubItemsResource::collection($data),
             ],
         ]);
     }
+
+    // 📄 Otherwise, paginate results
+    $limit = (int) $limit ?: 10;
+    $items = $query->latest()->paginate($limit);
+
+    return response()->json([
+        'message' => 'SubItems fetched successfully',
+        'pagination' => [
+            'current_page' => $items->currentPage(),
+            'per_page' => $items->perPage(),
+            'total_items' => $items->total(),
+            'total_pages' => $items->lastPage(),
+            'data' => SubItemsResource::collection($items),
+        ],
+    ]);
+}
+
 
     // ✅ Store a new sub-item
     public function store(Request $request)

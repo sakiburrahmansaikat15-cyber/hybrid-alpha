@@ -12,36 +12,53 @@ use Illuminate\Support\Facades\Validator;
 class PaymentTypeController extends Controller
 {
     // ✅ List all payment types with pagination
-      public function index(Request $request)
-    {
-         $keyword = $request->query('keyword', '');
-        $limit = (int) $request->query('limit', 10);
-       
+   public function index(Request $request)
+{
+    $keyword = $request->query('keyword', '');
+    $limit = $request->query('limit');
 
-        $query = PaymentType::query();
+    $query = PaymentType::query();
 
-        // 🔍 Apply search if keyword provided
-   if ($keyword) {
-    $query->where(function ($q) use ($keyword) {
-        $q->where('name', 'like', "%{$keyword}%")
-          ->orWhere('type', 'like', "%{$keyword}%");
-    });
-}
+    // 🔍 Apply search if keyword provided
+    if ($keyword) {
+        $query->where(function ($q) use ($keyword) {
+            $q->where('name', 'like', "%{$keyword}%")
+              ->orWhere('type', 'like', "%{$keyword}%");
+        });
+    }
 
-        $serials = $query->latest()->paginate($limit);
+    // ⚙️ If no limit, return all results
+    if (!$limit) {
+        $data = $query->latest()->get();
 
-        
         return response()->json([
-            'message' => 'PaymentType fetched successfully',
+            'message' => 'PaymentTypes fetched successfully',
             'pagination' => [
-                'current_page' => $serials->currentPage(),
-                'per_page' => $serials->perPage(),
-                'total_items' => $serials->total(),
-                'total_pages' => $serials->lastPage(),
-                'data' => PaymentTypeResource::collection($serials),
+                'current_page' => 1,
+                'per_page' => $data->count(),
+                'total_items' => $data->count(),
+                'total_pages' => 1,
+                'data' => PaymentTypeResource::collection($data),
             ],
         ]);
     }
+
+    // 📄 Otherwise, paginate results
+    $limit = (int) $limit ?: 10;
+    $paymentTypes = $query->latest()->paginate($limit);
+
+    return response()->json([
+        'message' => 'PaymentTypes fetched successfully',
+        'pagination' => [
+            'current_page' => $paymentTypes->currentPage(),
+            'per_page' => $paymentTypes->perPage(),
+            'total_items' => $paymentTypes->total(),
+            'total_pages' => $paymentTypes->lastPage(),
+            'data' => PaymentTypeResource::collection($paymentTypes),
+        ],
+    ]);
+}
+
 
     // ✅ Store a new payment type
     public function store(Request $request)

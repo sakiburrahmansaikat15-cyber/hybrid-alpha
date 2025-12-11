@@ -12,32 +12,52 @@ use Illuminate\Support\Facades\Validator;
 class ProductController extends Controller
 {
     // ✅ List all products with pagination
-     public function index(Request $request)
+        public function index(Request $request)
     {
         $keyword = $request->query('keyword', '');
-        $limit = (int) $request->query('limit', 10);
-       
+        $limit = $request->query('limit');
 
-        $query = Prooducts::with(['category', 'brand','subCategory','subItem','unit','productType']);
+        // Include related models
+          $query = Prooducts::query();
+
 
         // 🔍 Apply search if keyword provided
-      if ($keyword) {
-        $query->where('name', 'like', "%{$keyword}%"); 
-    }
+        if ($keyword) {
+            $query->where('name', 'like', "%{$keyword}%");
+        }
 
-        // 📄 Paginate and order
-        $data = $query->latest()->paginate($limit, ['*'], 'page');
+        // ⚙️ If no limit, return all results
+        if (!$limit) {
+            $data = $query->latest()->get();
+
+            return response()->json([
+                'message' => 'Products fetched successfully',
+                'pagination' => [
+                    'current_page' => 1,
+                    'per_page' => $data->count(),
+                    'total_items' => $data->count(),
+                    'total_pages' => 1,
+                    'data' => ProductsResource::collection($data),
+                ],
+            ]);
+        }
+
+        // 📄 Otherwise, paginate results
+        $limit = (int) $limit ?: 10;
+        $products = $query->latest()->paginate($limit);
 
         return response()->json([
             'message' => 'Products fetched successfully',
-            'current_page' => $data->currentPage(),
-            'per_page' => $data->perPage(),
-            'total_items' => $data->total(),
-            'total_pages' => $data->lastPage(),
-            'data' => ProductsResource::collection($data),
+            'pagination' => [
+                'current_page' => $products->currentPage(),
+                'per_page' => $products->perPage(),
+                'total_items' => $products->total(),
+                'total_pages' => $products->lastPage(),
+                'data' => ProductsResource::collection($products),
+            ],
         ]);
     }
-    
+
 
     // ✅ Create a new product
     public function store(Request $request)

@@ -11,34 +11,50 @@ use Illuminate\Support\Facades\Validator;
 class ProductTypeController extends Controller
 {
     // ✅ List all product types with pagination
-      public function index(Request $request)
-    {
-         $keyword = $request->query('keyword', '');
-        $limit = (int) $request->query('limit', 10);
-       
+     public function index(Request $request)
+{
+    $keyword = $request->query('keyword', '');
+    $limit = $request->query('limit');
 
-        $query = ProductType::query();
+    $query = ProductType::query();
 
-        // 🔍 Apply search if keyword provided
-      if ($keyword) {
-        $query->where('name', 'like', "%{$keyword}%"); 
+    // 🔍 Apply search if keyword provided
+    if ($keyword) {
+        $query->where('name', 'like', "%{$keyword}%");
     }
 
-        // 📄 Paginate results
-        $serials = $query->latest()->paginate($limit);
+    // ⚙️ If no limit, return all results
+    if (!$limit) {
+        $data = $query->latest()->get();
 
-        
         return response()->json([
-            'message' => 'ProductType fetched successfully',
+            'message' => 'ProductTypes fetched successfully',
             'pagination' => [
-                'current_page' => $serials->currentPage(),
-                'per_page' => $serials->perPage(),
-                'total_items' => $serials->total(),
-                'total_pages' => $serials->lastPage(),
-                'data' => ProductTypeResource::collection($serials),
+                'current_page' => 1,
+                'per_page' => $data->count(),
+                'total_items' => $data->count(),
+                'total_pages' => 1,
+                'data' => ProductTypeResource::collection($data),
             ],
         ]);
     }
+
+    // 📄 Otherwise, paginate results
+    $limit = (int) $limit ?: 10;
+    $productTypes = $query->latest()->paginate($limit);
+
+    return response()->json([
+        'message' => 'ProductTypes fetched successfully',
+        'pagination' => [
+            'current_page' => $productTypes->currentPage(),
+            'per_page' => $productTypes->perPage(),
+            'total_items' => $productTypes->total(),
+            'total_pages' => $productTypes->lastPage(),
+            'data' => ProductTypeResource::collection($productTypes),
+        ],
+    ]);
+}
+
 
     // ✅ Store a new product type
     public function store(Request $request)

@@ -11,34 +11,49 @@ use Illuminate\Support\Facades\Validator;
 class UnitController extends Controller
 {
     // ✅ List units with pagination
-        public function index(Request $request)
-    {
-         $keyword = $request->query('keyword', '');
-        $limit = (int) $request->query('limit', 10);
-       
+   public function index(Request $request)
+{
+    $keyword = $request->query('keyword', '');
+    $limit = $request->query('limit');
 
-        $query = Unit::query();
+    $query = Unit::query();
 
-        // 🔍 Apply search if keyword provided
-      if ($keyword) {
-        $query->where('name', 'like', "%{$keyword}%"); 
+    // 🔍 Apply search filter if keyword provided
+    if ($keyword) {
+        $query->where('name', 'like', "%{$keyword}%");
     }
 
-        // 📄 Paginate results
-        $serials = $query->latest()->paginate($limit);
+    // ⚙️ If no limit, return all results
+    if (!$limit) {
+        $data = $query->latest()->get();
 
-        
         return response()->json([
-            'message' => 'Unit fetched successfully',
+            'message' => 'Units fetched successfully',
             'pagination' => [
-                'current_page' => $serials->currentPage(),
-                'per_page' => $serials->perPage(),
-                'total_items' => $serials->total(),
-                'total_pages' => $serials->lastPage(),
-                'data' => UnitResource::collection($serials),
+                'current_page' => 1,
+                'per_page' => $data->count(),
+                'total_items' => $data->count(),
+                'total_pages' => 1,
+                'data' => UnitResource::collection($data),
             ],
         ]);
     }
+
+    // 📄 Otherwise, paginate results
+    $limit = (int) $limit ?: 10;
+    $units = $query->latest()->paginate($limit);
+
+    return response()->json([
+        'message' => 'Units fetched successfully',
+        'pagination' => [
+            'current_page' => $units->currentPage(),
+            'per_page' => $units->perPage(),
+            'total_items' => $units->total(),
+            'total_pages' => $units->lastPage(),
+            'data' => UnitResource::collection($units),
+        ],
+    ]);
+}
 
     // ✅ Store a new unit
     public function store(Request $request)

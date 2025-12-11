@@ -11,37 +11,52 @@ use Illuminate\Support\Facades\Validator;
 
 class SubCategoryController extends Controller
 {
-      public function index(Request $request)
-    {
-         $keyword = $request->query('keyword', '');
-        $limit = (int) $request->query('limit', 10);
-       
+    public function index(Request $request)
+{
+    $keyword = $request->query('keyword', '');
+    $limit = $request->query('limit');
 
-        $query = SubCategory::with(['category']);
+    $query = SubCategory::with('category');
 
-        // 🔍 Apply search if keyword provided
-      if ($keyword) {
-        $query->where('name', 'like', "%{$keyword}%"); 
+    // 🔍 Apply search filter if keyword provided
+    if ($keyword) {
+        $query->where('name', 'like', "%{$keyword}%");
     }
 
-        // 📄 Paginate results
-        $serials = $query->latest()->paginate($limit);
+    // ⚙️ If no limit, return all results
+    if (!$limit) {
+        $data = $query->latest()->get();
 
-        
         return response()->json([
-            'message' => 'SubCategory fetched successfully',
+            'message' => 'SubCategories fetched successfully',
             'pagination' => [
-                'current_page' => $serials->currentPage(),
-                'per_page' => $serials->perPage(),
-                'total_items' => $serials->total(),
-                'total_pages' => $serials->lastPage(),
-                'data' => SubCategoryResource::collection($serials),
+                'current_page' => 1,
+                'per_page' => $data->count(),
+                'total_items' => $data->count(),
+                'total_pages' => 1,
+                'data' => SubCategoryResource::collection($data),
             ],
         ]);
     }
 
-    // ✅ Store a new sub-category
-    public function store(Request $request)
+    // 📄 Otherwise, paginate results
+    $limit = (int) $limit ?: 10;
+    $subCategories = $query->latest()->paginate($limit);
+
+    return response()->json([
+        'message' => 'SubCategories fetched successfully',
+        'pagination' => [
+            'current_page' => $subCategories->currentPage(),
+            'per_page' => $subCategories->perPage(),
+            'total_items' => $subCategories->total(),
+            'total_pages' => $subCategories->lastPage(),
+            'data' => SubCategoryResource::collection($subCategories),
+        ],
+    ]);
+}
+
+
+public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
