@@ -21,6 +21,12 @@ use App\Http\Controllers\Api\RoleController;
 
 
 
+    // HRM
+
+use App\Http\Controllers\HRM\DepartmentsController;
+use App\Http\Controllers\HRM\DesignationController;
+use App\Http\Controllers\HRM\EmployeeController;
+use App\Http\Controllers\HRM\EmployeeDocumentController;
 
 
 
@@ -81,11 +87,11 @@ Route::prefix('sub-items')->group(function () {
 
 
 Route::prefix('brands')->group(function () {
-    Route::get('/', [BrandController::class, 'index']);           
-    Route::post('/', [BrandController::class, 'store']);          
-    Route::get('/{id}', [BrandController::class, 'show']);         
-    Route::post('/{id}', [BrandController::class, 'update']);      
-    Route::delete('/{id}', [BrandController::class, 'destroy']);   
+    Route::get('/', [BrandController::class, 'index']);
+    Route::post('/', [BrandController::class, 'store']);
+    Route::get('/{id}', [BrandController::class, 'show']);
+    Route::post('/{id}', [BrandController::class, 'update']);
+    Route::delete('/{id}', [BrandController::class, 'destroy']);
 });
 
 
@@ -171,3 +177,49 @@ Route::prefix('transaction')->group(function () {
 });
 
 
+
+
+
+        // HRM
+
+
+Route::prefix('departments')->group(function () {
+    Route::get('/', [DepartmentsController::class, 'index']);
+    Route::post('/', [DepartmentsController::class, 'store']);
+    Route::get('/{id}', [DepartmentsController::class, 'show']);
+    Route::post('/{id}', [DepartmentsController::class, 'update']);
+    Route::delete('/{id}', [DepartmentsController::class, 'destroy']);
+});
+
+
+
+
+Route::prefix('designations')->group(function () {
+    Route::get('/', [DesignationController::class, 'index']);
+    Route::post('/', [DesignationController::class, 'store']);
+    Route::get('/{id}', [DesignationController::class, 'show']);
+    Route::post('/{id}', [DesignationController::class, 'update']);
+    Route::delete('/{id}', [DesignationController::class, 'destroy']);
+});
+
+
+
+
+Route::prefix('employees')->group(function () {
+    Route::get('/', [EmployeeController::class, 'index']);
+    Route::post('/', [EmployeeController::class, 'store']);
+    Route::get('/{id}', [EmployeeController::class, 'show']);
+    Route::post('/{id}', [EmployeeController::class, 'update']);
+    Route::delete('/{id}', [EmployeeController::class, 'destroy']);
+});
+
+
+
+
+Route::prefix('employee-documents')->group(function () {
+    Route::get('/', [EmployeeDocumentController::class, 'index']);
+    Route::post('/', [EmployeeDocumentController::class, 'store']);
+    Route::get('/{id}', [EmployeeDocumentController::class, 'show']);
+    Route::post('/{id}', [EmployeeDocumentController::class, 'update']);
+    Route::delete('/{id}', [EmployeeDocumentController::class, 'destroy']);
+});
