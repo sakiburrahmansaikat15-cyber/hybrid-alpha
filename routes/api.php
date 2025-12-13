@@ -27,11 +27,12 @@ use App\Http\Controllers\HRM\DepartmentsController;
 use App\Http\Controllers\HRM\DesignationController;
 use App\Http\Controllers\HRM\EmployeeController;
 use App\Http\Controllers\HRM\EmployeeDocumentController;
-
-
-
-
-
+use App\Http\Controllers\HRM\AttendanceController;
+use App\Http\Controllers\HRM\ShiftController;
+use App\Http\Controllers\HRM\LeaveTypesController;
+use App\Http\Controllers\HRM\LeaveApplicationController;
+use App\Http\Controllers\HRM\SalariesController;
+use App\Http\Controllers\HRM\PayRollController;
 
 
 Route::prefix('roles')->group(function () {
@@ -183,6 +184,70 @@ Route::prefix('transaction')->group(function () {
         // HRM
 
 
+// Route::prefix('departments')->group(function () {
+//     Route::get('/', [DepartmentsController::class, 'index']);
+//     Route::post('/', [DepartmentsController::class, 'store']);
+//     Route::get('/{id}', [DepartmentsController::class, 'show']);
+//     Route::post('/{id}', [DepartmentsController::class, 'update']);
+//     Route::delete('/{id}', [DepartmentsController::class, 'destroy']);
+// });
+
+
+
+
+// Route::prefix('designations')->group(function () {
+//     Route::get('/', [DesignationController::class, 'index']);
+//     Route::post('/', [DesignationController::class, 'store']);
+//     Route::get('/{id}', [DesignationController::class, 'show']);
+//     Route::post('/{id}', [DesignationController::class, 'update']);
+//     Route::delete('/{id}', [DesignationController::class, 'destroy']);
+// });
+
+
+
+
+// Route::prefix('employees')->group(function () {
+//     Route::get('/', [EmployeeController::class, 'index']);
+//     Route::post('/', [EmployeeController::class, 'store']);
+//     Route::get('/{id}', [EmployeeController::class, 'show']);
+//     Route::post('/{id}', [EmployeeController::class, 'update']);
+//     Route::delete('/{id}', [EmployeeController::class, 'destroy']);
+// });
+
+
+
+
+// Route::prefix('employee-documents')->group(function () {
+//     Route::get('/', [EmployeeDocumentController::class, 'index']);
+//     Route::post('/', [EmployeeDocumentController::class, 'store']);
+//     Route::get('/{id}', [EmployeeDocumentController::class, 'show']);
+//     Route::post('/{id}', [EmployeeDocumentController::class, 'update']);
+//     Route::delete('/{id}', [EmployeeDocumentController::class, 'destroy']);
+// });
+
+
+
+
+Route::prefix('hrm')->group(function () {
+
+    Route::prefix('attendances')->group(function () {
+        Route::get('/', [AttendanceController::class, 'index']);
+        Route::post('/', [AttendanceController::class, 'store']);
+        Route::get('/{id}', [AttendanceController::class, 'show']);
+        Route::post('/{id}', [AttendanceController::class, 'update']);
+        Route::delete('/{id}', [AttendanceController::class, 'destroy']);
+    });
+
+
+    Route::prefix('employee-documents')->group(function () {
+    Route::get('/', [EmployeeDocumentController::class, 'index']);
+    Route::post('/', [EmployeeDocumentController::class, 'store']);
+    Route::get('/{id}', [EmployeeDocumentController::class, 'show']);
+    Route::post('/{id}', [EmployeeDocumentController::class, 'update']);
+    Route::delete('/{id}', [EmployeeDocumentController::class, 'destroy']);
+});
+
+
 Route::prefix('departments')->group(function () {
     Route::get('/', [DepartmentsController::class, 'index']);
     Route::post('/', [DepartmentsController::class, 'store']);
@@ -214,12 +279,50 @@ Route::prefix('employees')->group(function () {
 });
 
 
+Route::prefix('shifts')->group(function () {
+    Route::get('/', [ShiftController::class, 'index']);
+    Route::post('/', [ShiftController::class, 'store']);
+    Route::get('/{id}', [ShiftController::class, 'show']);
+    Route::post('/{id}', [ShiftController::class, 'update']);
+    Route::delete('/{id}', [ShiftController::class, 'destroy']);
+});
 
 
-Route::prefix('employee-documents')->group(function () {
-    Route::get('/', [EmployeeDocumentController::class, 'index']);
-    Route::post('/', [EmployeeDocumentController::class, 'store']);
-    Route::get('/{id}', [EmployeeDocumentController::class, 'show']);
-    Route::post('/{id}', [EmployeeDocumentController::class, 'update']);
-    Route::delete('/{id}', [EmployeeDocumentController::class, 'destroy']);
+Route::prefix('leave-types')->group(function () {
+    Route::get('/', [LeaveTypesController::class, 'index']);
+    Route::post('/', [LeaveTypesController::class, 'store']);
+    Route::get('/{id}', [LeaveTypesController::class, 'show']);
+    Route::post('/{id}', [LeaveTypesController::class, 'update']);
+    Route::delete('/{id}', [LeaveTypesController::class, 'destroy']);
+});
+
+
+
+Route::prefix('leave-applications')->group(function () {
+    Route::get('/', [LeaveApplicationController::class, 'index']);
+    Route::post('/', [LeaveApplicationController::class, 'store']);
+    Route::get('/{id}', [LeaveApplicationController::class, 'show']);
+    Route::post('/{id}', [LeaveApplicationController::class, 'update']);
+    Route::delete('/{id}', [LeaveApplicationController::class, 'destroy']);
+});
+
+
+
+Route::prefix('salaries')->group(function () {
+    Route::get('/', [SalariesController::class, 'index']);
+    Route::post('/', [SalariesController::class, 'store']);
+    Route::get('/{id}', [SalariesController::class, 'show']);
+    Route::post('/{id}', [SalariesController::class, 'update']);
+    Route::delete('/{id}', [SalariesController::class, 'destroy']);
+});
+
+
+Route::prefix('payroll')->group(function () {
+    Route::get('/', [PayRollController::class, 'index']);
+    Route::post('/', [PayRollController::class, 'store']);
+    Route::get('/{id}', [PayRollController::class, 'show']);
+    Route::post('/{id}', [PayRollController::class, 'update']);
+    Route::delete('/{id}', [PayRollController::class, 'destroy']);
+});
+
 });

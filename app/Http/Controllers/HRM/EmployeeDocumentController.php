@@ -17,7 +17,7 @@ class EmployeeDocumentController extends Controller
         $keyword = $request->query('keyword', '');
         $limit = $request->query('limit');
 
-        $query = EmployeeDocument::with('employee');
+        $query = EmployeeDocument::query();
 
 
         if ($keyword) {
@@ -100,7 +100,7 @@ class EmployeeDocumentController extends Controller
 
     public function show($id)
     {
-        $document = EmployeeDocument::with('employee')->find($id);
+        $document = EmployeeDocument::find($id);
 
         if (!$document) {
             return response()->json([
