@@ -21,7 +21,6 @@ export const menuData = {
           description: "View all your projects",
           icon: "Folder"
         },
-
         {
           id: 24,
           title: "units",
@@ -29,107 +28,97 @@ export const menuData = {
           description: "View all your projects",
           icon: "Folder"
         },
-    {
+        {
           id: 25,
           title: "categories",
           path: "/categories",
           description: "View all your projects",
           icon: "Folder"
         },
-    {
+        {
           id: 26,
           title: "ProductType",
           path: "/ProductType",
           description: "View all your projects",
           icon: "Folder"
         },
-    {
+        {
           id: 27,
           title: "Brands",
           path: "/Brands",
           description: "View all your projects",
           icon: "Folder"
         },
-
-
-    {
+        {
           id: 28,
           title: "PaymentTypes",
           path: "/PaymentTypes",
           description: "View all your projects",
           icon: "Folder"
         },
-    {
+        {
           id: 29,
           title: "Warehouses",
           path: "/Warehouses",
           description: "View all your projects",
           icon: "Folder"
         },
-    {
+        {
           id: 30,
           title: "Vendor",
           path: "/Vendor",
           description: "View all your projects",
           icon: "Folder"
         },
-    {
+        {
           id: 31,
           title: "SubCategories",
           path: "/SubCategories",
           description: "View all your projects",
           icon: "Folder"
         },
-    {
+        {
           id: 32,
           title: "Subitems",
           path: "/Subitems",
           description: "View all your projects",
           icon: "Folder"
         },
-    {
+        {
           id: 33,
           title: "Products",
           path: "/Products",
           description: "View all your projects",
           icon: "Folder"
         },
-    {
+        {
           id: 34,
           title: "Variants",
           path: "/Variants",
           description: "View all your projects",
           icon: "Folder"
         },
-    {
+        {
           id: 35,
           title: "Stocks",
           path: "/Stocks",
           description: "View all your projects",
           icon: "Folder"
         },
-    {
+        {
           id: 36,
           title: "Transactions",
           path: "/Transactions",
           description: "View all your projects",
           icon: "Folder"
         },
-         {
+        {
           id: 37,
           title: "Serial-List",
           path: "/serial-list",
           description: "View all your projects",
           icon: "Folder"
         },
-
-
-
-
-
-
-
-
         {
           id: 22,
           title: "Create New",
@@ -144,6 +133,84 @@ export const menuData = {
           path: "/projects/templates",
           description: "Use pre-built templates",
           icon: "LayoutDashboard"
+        }
+      ]
+    },
+    {
+      id: 10,
+      title: "HR Management",
+      icon: "Users",
+      path: "/hr",
+      submenu: [
+        {
+          id: 101,
+          title: "Employees",
+          path: "/employees",
+          description: "Manage employee records",
+          icon: "User"
+        },
+        {
+          id: 102,
+          title: "Departments",
+          path: "/departments",
+          description: "Manage departments",
+          icon: "Building"
+        },
+        {
+          id: 103,
+          title: "Designations",
+          path: "/designations",
+          description: "Manage job titles",
+          icon: "Briefcase"
+        },
+        {
+          id: 104,
+          title: "Employee Documents",
+          path: "/employee_documents",
+          description: "Employee documentation",
+          icon: "FileText"
+        },
+        {
+          id: 105,
+          title: "Attendance",
+          path: "/attendance",
+          description: "Track employee attendance",
+          icon: "Clock"
+        },
+        {
+          id: 106,
+          title: "Shifts",
+          path: "/shifts",
+          description: "Manage work shifts",
+          icon: "CalendarClock"
+        },
+        {
+          id: 107,
+          title: "Leave Types",
+          path: "/leave_types",
+          description: "Configure leave types",
+          icon: "CalendarCheck"
+        },
+        {
+          id: 108,
+          title: "Leave Applications",
+          path: "/leave_applications",
+          description: "Manage leave requests",
+          icon: "FileCheck"
+        },
+        {
+          id: 109,
+          title: "Salaries",
+          path: "/salaries",
+          description: "Employee salary details",
+          icon: "DollarSign"
+        },
+        {
+          id: 110,
+          title: "Payroll",
+          path: "/payroll",
+          description: "Process payroll",
+          icon: "CreditCard"
         }
       ]
     },
@@ -293,7 +360,7 @@ export const menuData = {
         }
       ]
     },
-        {
+    {
       id: 9,
       title: "Test 002",
       icon: "Settings2",

@@ -18,6 +18,16 @@ import Variants from "./pages/Dashboard/Variants";
 import Stocks from "./pages/Dashboard/Stocks";
 import Transactions from "./pages/Dashboard/Transactions";
 import SerialList from "./pages/Dashboard/SerialList";
+import Employee from "./pages/Dashboard/HRM/Employee";
+import Departments from "./pages/Dashboard/HRM/Departments";
+import Designations from "./pages/Dashboard/HRM/Designations";
+import EmployeeDocuments from "./pages/Dashboard/HRM/EmployeeDocuments";
+import Attendance from "./pages/Dashboard/HRM/Attendance";
+import Shifts from "./pages/Dashboard/HRM/Shifts";
+import LeaveTypes from "./pages/Dashboard/HRM/LeaveTypes";
+import LeaveApplications from "./pages/Dashboard/HRM/LeaveApplications";
+
+
 const AppRouter = () => {
     return (
         <div>
@@ -40,6 +50,14 @@ const AppRouter = () => {
                     <Route path="/Stocks" element={<Stocks/>} />
                     <Route path="/Transactions" element={<Transactions/>} />
                    <Route path="/serial-list" element={<SerialList/>} />
+                   <Route path="/employees" element={<Employee/>} />
+                   <Route path="/departments" element={<Departments/>} />
+                    <Route path="/designations" element={<Designations/>} />
+                     <Route path="/employee_documents" element={<EmployeeDocuments/>} />
+                     <Route path="/attendance" element={<Attendance/>} />
+                      <Route path="/shifts" element={<Shifts/>} />
+                      <Route path="/leave_types" element={<LeaveTypes/>} />
+                       <Route path="/leave_applications" element={<LeaveApplications/>} />
                 </Route>
             </Routes>
         </div>

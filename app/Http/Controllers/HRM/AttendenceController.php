@@ -7,7 +7,7 @@ use App\Models\HRM\Attendance;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
-class AttendanceController extends Controller
+class AttendenceController extends Controller
 {
     public function index(Request $request)
     {

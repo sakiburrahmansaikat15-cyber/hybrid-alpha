@@ -14,7 +14,7 @@ class LeaveApplicationController extends Controller
         $keyword = $request->query('keyword', '');
         $limit = $request->query('limit');
 
-        $query = LeaveApplication::query();
+        $query = LeaveApplication::with('employee','leaveType');
 
         if ($keyword) {
             $query->whereDate('start_date', $keyword)

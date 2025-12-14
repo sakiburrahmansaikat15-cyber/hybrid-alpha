@@ -27,7 +27,7 @@ use App\Http\Controllers\HRM\DepartmentsController;
 use App\Http\Controllers\HRM\DesignationController;
 use App\Http\Controllers\HRM\EmployeeController;
 use App\Http\Controllers\HRM\EmployeeDocumentController;
-use App\Http\Controllers\HRM\AttendanceController;
+use App\Http\Controllers\HRM\AttendenceController;
 use App\Http\Controllers\HRM\ShiftController;
 use App\Http\Controllers\HRM\LeaveTypesController;
 use App\Http\Controllers\HRM\LeaveApplicationController;
@@ -231,11 +231,11 @@ Route::prefix('transaction')->group(function () {
 Route::prefix('hrm')->group(function () {
 
     Route::prefix('attendances')->group(function () {
-        Route::get('/', [AttendanceController::class, 'index']);
-        Route::post('/', [AttendanceController::class, 'store']);
-        Route::get('/{id}', [AttendanceController::class, 'show']);
-        Route::post('/{id}', [AttendanceController::class, 'update']);
-        Route::delete('/{id}', [AttendanceController::class, 'destroy']);
+        Route::get('/', [AttendenceController::class, 'index']);
+        Route::post('/', [AttendenceController::class, 'store']);
+        Route::get('/{id}', [AttendenceController::class, 'show']);
+        Route::post('/{id}', [AttendenceController::class, 'update']);
+        Route::delete('/{id}', [AttendenceController::class, 'destroy']);
     });
 
 
