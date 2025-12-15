@@ -298,7 +298,7 @@ const Products = () => {
 
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
-  // Fetch products with pagination and search
+  // Fetch products with pagination and search - FIXED: Correct data structure
   const fetchProducts = async (page = 1, limit = 8, keyword = '') => {
     setLoading(true);
     try {
@@ -313,13 +313,14 @@ const Products = () => {
 
       const response = await axios.get(`/api/products?${params}`);
 
-      if (response.data && response.data.data) {
-        setProducts(response.data.data);
+      if (response.data && response.data.pagination && response.data.pagination.data) {
+        // Corrected: Access data from pagination.data
+        setProducts(response.data.pagination.data);
         setPagination({
-          current_page: response.data.current_page,
-          per_page: response.data.per_page,
-          total_items: response.data.total_items,
-          total_pages: response.data.total_pages
+          current_page: response.data.pagination.current_page,
+          per_page: response.data.pagination.per_page,
+          total_items: response.data.pagination.total_items,
+          total_pages: response.data.pagination.total_pages
         });
       } else {
         setProducts([]);
@@ -732,13 +733,6 @@ const Products = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-gray-950 text-gray-100 p-4 md:p-6">
-      {/* ... Rest of your JSX remains 100% unchanged ... */}
-      {/* Header, Stats, Controls, Products Grid, Modals — all identical */}
-      {/* Only change was in fetchRelatedData above */}
-
-      {/* [All JSX from your original code remains exactly the same below] */}
-      {/* I'm including it fully to satisfy "don't skip any line" */}
-
       {/* Header */}
       <div className="mb-8">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">

@@ -65,7 +65,7 @@ const VariantManagement = () => {
 
       const [variantsRes, productsRes] = await Promise.all([
         axios.get(API_URL, { params }),
-        axios.get('/api/products')
+        axios.get('/api/products') // This returns { pagination: { data: [...] } }
       ]);
 
       const res = variantsRes.data;
@@ -101,14 +101,18 @@ const VariantManagement = () => {
         });
       }
 
+      // FIXED: Extract products from pagination.data
       const productsData = productsRes.data;
-      setProducts(Array.isArray(productsData) ? productsData : productsData?.data || []);
+      const productsArray = productsData?.pagination?.data || [];
+      setProducts(Array.isArray(productsArray) ? productsArray : []);
+
       setError('');
     } catch (err) {
       const msg = err.response?.data?.message || 'Failed to load variants.';
       setError(msg);
       showNotification(msg, 'error');
       setVariants([]);
+      setProducts([]);
     } finally {
       setLoading(false);
     }
@@ -493,7 +497,6 @@ const VariantManagement = () => {
           )}
         </AnimatePresence>
 
-        {/* FIXED: Wrapped the table and pagination in a fragment <> ... </> */}
         <>
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-gray-800/30 backdrop-blur-sm rounded-2xl border border-gray-700/30 overflow-hidden mb-8">
             <div className="px-6 py-4 border-b border-gray-700/30 bg-gray-800/20">
@@ -699,27 +702,58 @@ const VariantManagement = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="md:col-span-2">
                         <label className="block text-sm font-semibold text-gray-300 mb-3">Product *</label>
-                        <select name="product_id" value={formData.product_id} onChange={handleInputChange} className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 text-white placeholder-gray-400 transition-all duration-200 backdrop-blur-sm" required>
+                        <select 
+                          name="product_id" 
+                          value={formData.product_id} 
+                          onChange={handleInputChange} 
+                          className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 text-white placeholder-gray-400 transition-all duration-200 backdrop-blur-sm" 
+                          required
+                        >
                           <option value="">Select a product</option>
                           {products.map((product) => (
-                            <option key={product.id} value={product.id}>{product.name}</option>
+                            <option key={product.id} value={product.id}>
+                              {product.name}
+                            </option>
                           ))}
                         </select>
                       </div>
 
                       <div>
                         <label className="block text-sm font-semibold text-gray-300 mb-3">Variant Name *</label>
-                        <input type="text" name="name" value={formData.name} onChange={handleInputChange} className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 text-white placeholder-gray-400 transition-all duration-200 backdrop-blur-sm" placeholder="e.g., Color" required />
+                        <input 
+                          type="text" 
+                          name="name" 
+                          value={formData.name} 
+                          onChange={handleInputChange} 
+                          className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 text-white placeholder-gray-400 transition-all duration-200 backdrop-blur-sm" 
+                          placeholder="e.g., Color" 
+                          required 
+                        />
                       </div>
 
                       <div>
                         <label className="block text-sm font-semibold text-gray-300 mb-3">Variant Value *</label>
-                        <input type="text" name="value" value={formData.value} onChange={handleInputChange} className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 text-white placeholder-gray-400 transition-all duration-200 backdrop-blur-sm" placeholder="e.g., Red" required />
+                        <input 
+                          type="text" 
+                          name="value" 
+                          value={formData.value} 
+                          onChange={handleInputChange} 
+                          className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 text-white placeholder-gray-400 transition-all duration-200 backdrop-blur-sm" 
+                          placeholder="e.g., Red" 
+                          required 
+                        />
                       </div>
 
                       <div className="md:col-span-2">
                         <label className="block text-sm font-semibold text-gray-300 mb-3">Description</label>
-                        <textarea name="description" value={formData.description} onChange={handleInputChange} rows={3} className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 text-white placeholder-gray-400 transition-all duration-200 backdrop-blur-sm" placeholder="Optional description" />
+                        <textarea 
+                          name="description" 
+                          value={formData.description} 
+                          onChange={handleInputChange} 
+                          rows={3} 
+                          className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 text-white placeholder-gray-400 transition-all duration-200 backdrop-blur-sm" 
+                          placeholder="Optional description" 
+                        />
                       </div>
 
                       <div className="md:col-span-2">

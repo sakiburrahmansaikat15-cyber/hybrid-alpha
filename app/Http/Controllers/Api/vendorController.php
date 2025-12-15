@@ -12,37 +12,53 @@ use Illuminate\Support\Facades\Validator;
 class VendorController extends Controller
 {
     // ✅ List vendors with pagination
-        public function index(Request $request)
-    {
-         $keyword = $request->query('keyword', '');
-        $limit = (int) $request->query('limit', 10);
-       
+public function index(Request $request)
+{
+    $keyword = $request->query('keyword', '');
+    $limit = $request->query('limit');
 
-        $query = Vendor::query();
+    $query = Vendor::query();
 
-        // 🔍 Apply search if keyword provided
-       if ($keyword) {
-    $query->where(function ($q) use ($keyword) {
-        $q->where('name', 'like', "%{$keyword}%")
-          ->orWhere('shop_name', 'like', "%{$keyword}%");
-    });
-}
+    // 🔍 Apply search if keyword provided
+    if ($keyword) {
+        $query->where(function ($q) use ($keyword) {
+            $q->where('name', 'like', "%{$keyword}%")
+              ->orWhere('shop_name', 'like', "%{$keyword}%");
+        });
+    }
 
-        // 📄 Paginate results
-        $serials = $query->latest()->paginate($limit);
+    // ⚙️ If no limit, return all results (no pagination)
+    if (!$limit) {
+        $data = $query->latest()->get();
 
-        
         return response()->json([
-            'message' => 'Vendor fetched successfully',
+            'message' => 'Vendors fetched successfully',
             'pagination' => [
-                'current_page' => $serials->currentPage(),
-                'per_page' => $serials->perPage(),
-                'total_items' => $serials->total(),
-                'total_pages' => $serials->lastPage(),
-                'data' => VendorResource::collection($serials),
+                'current_page' => 1,
+                'per_page' => $data->count(),
+                'total_items' => $data->count(),
+                'total_pages' => 1,
+                'data' => VendorResource::collection($data),
             ],
         ]);
     }
+
+    // 📄 Otherwise, paginate results
+    $limit = (int) $limit ?: 10;
+    $vendors = $query->latest()->paginate($limit);
+
+    return response()->json([
+        'message' => 'Vendors fetched successfully',
+        'pagination' => [
+            'current_page' => $vendors->currentPage(),
+            'per_page' => $vendors->perPage(),
+            'total_items' => $vendors->total(),
+            'total_pages' => $vendors->lastPage(),
+            'data' => VendorResource::collection($vendors),
+        ],
+    ]);
+}
+
 
     // ✅ Store a new vendor
     public function store(Request $request)

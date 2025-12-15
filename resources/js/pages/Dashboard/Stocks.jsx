@@ -86,16 +86,24 @@ const StocksManager = () => {
 
       const res = await axios.get(API_BASE, { params });
 
-      setStocks(res.data.data || []);
-      setPagination({
-        current_page: res.data.current_page,
-        last_page: res.data.total_pages,
-        per_page: res.data.per_page,
-        total_items: res.data.total_items,
-        total_pages: res.data.total_pages
-      });
+      const paginated = res.data.pagination;
+
+      if (paginated && Array.isArray(paginated.data)) {
+        setStocks(paginated.data);
+        setPagination({
+          current_page: paginated.current_page,
+          last_page: paginated.total_pages,
+          per_page: paginated.per_page,
+          total_items: paginated.total_items,
+          total_pages: paginated.total_pages
+        });
+      } else {
+        setStocks([]);
+        setPagination(prev => ({ ...prev, total_items: 0, total_pages: 1 }));
+      }
     } catch (err) {
       handleApiError(err);
+      setStocks([]);
     } finally {
       setLoading(false);
     }
@@ -114,14 +122,18 @@ const StocksManager = () => {
         axios.get('/api/vendors'),
         axios.get('/api/products')
       ]);
-      // Vendors: paginated → pagination.data
-      // Products: non-paginated → data
-      setVendors(vRes.data?.pagination?.data || []);
-      setProducts(pRes.data?.data || []);
+
+      // Both APIs return { pagination: { data: [...] } }
+      const vendorsArray = vRes.data?.pagination?.data || [];
+      const productsArray = pRes.data?.pagination?.data || [];
+
+      setVendors(Array.isArray(vendorsArray) ? vendorsArray : []);
+      setProducts(Array.isArray(productsArray) ? productsArray : []);
     } catch (err) {
       console.error('Failed to load vendors/products', err);
       setVendors([]);
       setProducts([]);
+      showNotification('Failed to load dropdown data', 'error');
     }
   };
 
@@ -164,7 +176,7 @@ const StocksManager = () => {
         selling_price: parseFloat(stock.selling_price) || 0,
         total_amount: parseFloat(stock.total_amount || 0),
         due_amount: parseFloat(stock.due_amount || 0),
-        stock_date: stock.stock_date?.split('T')[0] || '',
+        stock_date: stock.stock_date?.split('T')[0] || new Date().toISOString().split('T')[0],
         comission: parseFloat(stock.comission || 0),
         sku: stock.sku || '',
         status: stock.status || 'active'
@@ -195,7 +207,6 @@ const StocksManager = () => {
 
     try {
       if (editingStock) {
-        // Only send product_id/vendor_id if they changed
         if (formData.product_id && parseInt(formData.product_id) !== editingStock.product_id) {
           payload.product_id = parseInt(formData.product_id);
         }
@@ -205,12 +216,11 @@ const StocksManager = () => {
 
         await axios.post(`${API_BASE}/${editingStock.id}`, {
           ...payload,
-          _method: 'POST'   // This is REQUIRED for update
+          _method: 'POST'
         });
 
         showNotification('Stock updated successfully');
       } else {
-        // Create: both required
         payload.product_id = parseInt(formData.product_id);
         payload.vendor_id = parseInt(formData.vendor_id);
 
@@ -510,20 +520,32 @@ const StocksManager = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">Product *</label>
-                    <select value={formData.product_id} onChange={e => setFormData(prev => ({...prev, product_id: e.target.value}))} required
-                      className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <select 
+                      value={formData.product_id} 
+                      onChange={e => setFormData(prev => ({...prev, product_id: e.target.value}))} 
+                      required
+                      className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    >
                       <option value="">Select Product</option>
-                      {Array.isArray(products) && products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      {products.map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
                     </select>
                     {errors.product_id && <p className="text-red-400 text-sm mt-1">{errors.product_id[0]}</p>}
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">Vendor *</label>
-                    <select value={formData.vendor_id} onChange={e => setFormData(prev => ({...prev, vendor_id: e.target.value}))} required
-                      className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <select 
+                      value={formData.vendor_id} 
+                      onChange={e => setFormData(prev => ({...prev, vendor_id: e.target.value}))} 
+                      required
+                      className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    >
                       <option value="">Select Vendor</option>
-                      {Array.isArray(vendors) && vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                      {vendors.map(v => (
+                        <option key={v.id} value={v.id}>{v.name}</option>
+                      ))}
                     </select>
                     {errors.vendor_id && <p className="text-red-400 text-sm mt-1">{errors.vendor_id[0]}</p>}
                   </div>
@@ -532,49 +554,90 @@ const StocksManager = () => {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">Quantity *</label>
-                    <input type="number" min="0" value={formData.quantity} onChange={e => setFormData(prev => ({...prev, quantity: e.target.value}))} required
-                      className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                    <input 
+                      type="number" 
+                      min="0" 
+                      value={formData.quantity} 
+                      onChange={e => setFormData(prev => ({...prev, quantity: e.target.value}))} 
+                      required
+                      className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500" 
+                    />
                     {errors.quantity && <p className="text-red-400 text-sm mt-1">{errors.quantity[0]}</p>}
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">Buying Price *</label>
-                    <input type="number" step="0.01" min="0" value={formData.buying_price} onChange={e => setFormData(prev => ({...prev, buying_price: e.target.value}))} required
-                      className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                    <input 
+                      type="number" 
+                      step="0.01" 
+                      min="0" 
+                      value={formData.buying_price} 
+                      onChange={e => setFormData(prev => ({...prev, buying_price: e.target.value}))} 
+                      required
+                      className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500" 
+                    />
                     {errors.buying_price && <p className="text-red-400 text-sm mt-1">{errors.buying_price[0]}</p>}
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">Selling Price *</label>
-                    <input type="number" step="0.01" min="0" value={formData.selling_price} onChange={e => setFormData(prev => ({...prev, selling_price: e.target.value}))} required
-                      className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                    <input 
+                      type="number" 
+                      step="0.01" 
+                      min="0" 
+                      value={formData.selling_price} 
+                      onChange={e => setFormData(prev => ({...prev, selling_price: e.target.value}))} 
+                      required
+                      className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500" 
+                    />
                     {errors.selling_price && <p className="text-red-400 text-sm mt-1">{errors.selling_price[0]}</p>}
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">Commission</label>
-                    <input type="number" step="0.01" min="0" value={formData.comission} onChange={e => setFormData(prev => ({...prev, comission: e.target.value}))}
-                      className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                    <input 
+                      type="number" 
+                      step="0.01" 
+                      min="0" 
+                      value={formData.comission} 
+                      onChange={e => setFormData(prev => ({...prev, comission: e.target.value}))}
+                      className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500" 
+                    />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">SKU</label>
-                    <input type="text" value={formData.sku} onChange={e => setFormData(prev => ({...prev, sku: e.target.value}))}
-                      className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="Optional" />
+                    <input 
+                      type="text" 
+                      value={formData.sku} 
+                      onChange={e => setFormData(prev => ({...prev, sku: e.target.value}))}
+                      className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500" 
+                      placeholder="Optional" 
+                    />
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">Due Amount</label>
-                    <input type="number" step="0.01" min="0" value={formData.due_amount} onChange={e => setFormData(prev => ({...prev, due_amount: e.target.value}))}
-                      className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                    <input 
+                      type="number" 
+                      step="0.01" 
+                      min="0" 
+                      value={formData.due_amount} 
+                      onChange={e => setFormData(prev => ({...prev, due_amount: e.target.value}))}
+                      className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500" 
+                    />
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">Stock Date</label>
-                    <input type="date" value={formData.stock_date} onChange={e => setFormData(prev => ({...prev, stock_date: e.target.value}))}
-                      className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                    <input 
+                      type="date" 
+                      value={formData.stock_date} 
+                      onChange={e => setFormData(prev => ({...prev, stock_date: e.target.value}))}
+                      className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500" 
+                    />
                   </div>
                 </div>
 
@@ -586,8 +649,11 @@ const StocksManager = () => {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">Status</label>
-                    <select value={formData.status} onChange={e => setFormData(prev => ({...prev, status: e.target.value}))}
-                      className="px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <select 
+                      value={formData.status} 
+                      onChange={e => setFormData(prev => ({...prev, status: e.target.value}))}
+                      className="px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    >
                       <option value="active">Active</option>
                       <option value="inactive">Inactive</option>
                     </select>
@@ -595,12 +661,18 @@ const StocksManager = () => {
                 </div>
 
                 <div className="flex gap-4 pt-4 border-t border-gray-700">
-                  <button type="button" onClick={() => setShowModal(false)}
-                    className="flex-1 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg font-medium transition">
+                  <button 
+                    type="button" 
+                    onClick={() => setShowModal(false)}
+                    className="flex-1 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg font-medium transition"
+                  >
                     Cancel
                   </button>
-                  <button type="submit" disabled={operationLoading}
-                    className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium flex items-center justify-center gap-2 transition">
+                  <button 
+                    type="submit" 
+                    disabled={operationLoading}
+                    className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium flex items-center justify-center gap-2 transition"
+                  >
                     {operationLoading ? 'Saving...' : <><Check size={20} /> {editingStock ? 'Update' : 'Create'} Stock</>}
                   </button>
                 </div>
