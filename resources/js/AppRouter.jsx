@@ -26,6 +26,8 @@ import Attendance from "./pages/Dashboard/HRM/Attendance";
 import Shifts from "./pages/Dashboard/HRM/Shifts";
 import LeaveTypes from "./pages/Dashboard/HRM/LeaveTypes";
 import LeaveApplications from "./pages/Dashboard/HRM/LeaveApplications";
+import Salaries from "./pages/Dashboard/HRM/Salaries";
+import Payroll from "./pages/Dashboard/HRM/Payroll";
 
 
 const AppRouter = () => {
@@ -58,6 +60,8 @@ const AppRouter = () => {
                       <Route path="/shifts" element={<Shifts/>} />
                       <Route path="/leave_types" element={<LeaveTypes/>} />
                        <Route path="/leave_applications" element={<LeaveApplications/>} />
+                        <Route path="/salaries" element={<Salaries/>} />
+                         <Route path="/payroll" element={<Payroll/>} />
                 </Route>
             </Routes>
         </div>

@@ -16,8 +16,8 @@ return new class extends Migration
             $table->decimal('basic_salary', 15, 2)->default(0);
 
         
-            $table->json('allowances')->nullable();
-            $table->json('deductions')->nullable();
+            $table->text('allowances')->nullable();
+            $table->text('deductions')->nullable();
 
             $table->date('effective_from');
 

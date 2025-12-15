@@ -14,7 +14,7 @@ class SalariesController extends Controller
         $keyword = $request->query('keyword', '');
         $limit = $request->query('limit');
 
-        $query = Salary::query();
+        $query = Salary::with('employee');
 
         if ($keyword) {
             $query->whereDate('effective_from', $keyword);
@@ -55,8 +55,8 @@ class SalariesController extends Controller
         $validator = Validator::make($request->all(), [
             'employee_id'    => 'required|exists:employees,id',
             'basic_salary'   => 'required|numeric|min:0',
-            'allowances'     => 'nullable|array',
-            'deductions'     => 'nullable|array',
+            'allowances'     => 'nullable|string',
+            'deductions'     => 'nullable|string',
             'effective_from' => 'required|date',
         ]);
 

@@ -4,7 +4,7 @@ namespace App\Http\Controllers\HRM;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\DepartmentResource;
-use App\Models\HRM\Departments;
+use App\Models\HRM\Department;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -15,7 +15,7 @@ class DepartmentsController extends Controller
         $keyword = $request->query('keyword', '');
         $limit = $request->query('limit');
 
-        $query = Departments::query();
+        $query = Department::query();
 
         if ($keyword) {
             $query->where('name', 'like', "%{$keyword}%");
@@ -66,7 +66,7 @@ class DepartmentsController extends Controller
             ], 422);
         }
 
-        $department = Departments::create($validator->validated());
+        $department = Department::create($validator->validated());
 
         return response()->json([
             'success' => true,
@@ -77,7 +77,7 @@ class DepartmentsController extends Controller
 
     public function show($id)
     {
-        $department = Departments::find($id);
+        $department = Department::find($id);
 
         if (!$department) {
             return response()->json([
@@ -94,7 +94,7 @@ class DepartmentsController extends Controller
 
     public function update(Request $request, $id)
     {
-        $department = Departments::findOrFail($id);
+        $department = Department::findOrFail($id);
 
         $data = $request->validate([
             'name' => 'sometimes|string|max:255',
@@ -113,7 +113,7 @@ class DepartmentsController extends Controller
 
     public function destroy($id)
     {
-        $department = Departments::find($id);
+        $department = Department::find($id);
 
         if (!$department) {
             return response()->json([

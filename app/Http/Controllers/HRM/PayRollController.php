@@ -14,12 +14,14 @@ class PayRollController extends Controller
         $keyword = $request->query('keyword', '');
         $limit = $request->query('limit');
 
-        $query = PayRoll::query();
+        $query = PayRoll::with('employee');
 
-        if ($keyword) {
-            $query->whereMonth('month', $keyword)
-                  ->orWhereYear('year', $keyword);
-        }
+           if ($keyword) {
+        $query->where(function ($q) use ($keyword) {
+            $q->where('month', $keyword)
+              ->orWhere('year', $keyword);
+        });
+    }
 
         if (!$limit) {
             $data = $query->latest()->get();

@@ -20,13 +20,23 @@ class DatabaseSeeder extends Seeder
 
         $this->call([
             CategorySeeder::class,
+            SubCategorySeeder::class,
             UnitSeeder::class,
             SubItemSeeder::class,
-            SubCategorySeeder::class,
             ProductTypeSeeder::class,
             BrandSeeder::class,
             PaymentTypeSeeder::class, 
             ProoductSeeder::class,
+            DepartmentSeeder::class,
+        DesignationSeeder::class,
+        EmployeeSeeder::class,
+        EmployeeDocumentSeeder::class,
+        ShiftSeeder::class,
+        AttendanceSeeder::class,
+        LeaveTypeSeeder::class,
+        LeaveApplicationSeeder::class,
+        SalarySeeder::class,
+        PayrollSeeder::class,
         ]);
     }
 }

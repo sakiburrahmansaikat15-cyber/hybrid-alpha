@@ -22,7 +22,7 @@ class SubCategorySeeder extends Seeder
                 'name' => ucfirst($faker->word) . ' SubCategory',
                 'image' => $faker->optional()->imageUrl(300, 300, 'category', true, 'SubCategory'),
                 'status' => $faker->randomElement(['active', 'inactive']),
-                'category_id' => 1, // 👈 your existing valid foreign key
+                'category_id' => $faker->numberBetween(1, 10),
                 'created_at' => now(),
                 'updated_at' => now(),
             ];

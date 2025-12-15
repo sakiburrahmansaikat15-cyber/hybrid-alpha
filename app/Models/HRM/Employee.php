@@ -14,7 +14,7 @@ class Employee extends Model
 
      public function department()
     {
-        return $this->belongsTo(Departments::class, 'department_id');
+        return $this->belongsTo(Department::class, 'department_id');
     }
 
 
