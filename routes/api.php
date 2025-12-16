@@ -35,6 +35,31 @@ use App\Http\Controllers\HRM\SalariesController;
 use App\Http\Controllers\HRM\PayRollController;
 
 
+
+
+
+
+        // CRM
+
+
+use App\Http\Controllers\CRM\LeadController;
+use App\Http\Controllers\CRM\LeadSourceController;
+use App\Http\Controllers\CRM\LeadStatusController;
+use App\Http\Controllers\CRM\CustomerController;
+use App\Http\Controllers\CRM\CompanyController;
+use App\Http\Controllers\CRM\ContactController;
+use App\Http\Controllers\CRM\OpportunityController;
+use App\Http\Controllers\CRM\OpportunityStageController;
+use App\Http\Controllers\CRM\ActivityController;
+use App\Http\Controllers\CRM\CampaignController;
+use App\Http\Controllers\CRM\TicketController;
+
+
+
+
+
+
+
 Route::prefix('roles')->group(function () {
     Route::get('/', [RoleController::class, 'index']);
     Route::post('/', [RoleController::class, 'store']);
@@ -282,5 +307,114 @@ Route::prefix('payroll')->group(function () {
     Route::post('/{id}', [PayRollController::class, 'update']);
     Route::delete('/{id}', [PayRollController::class, 'destroy']);
 });
+
+});
+
+
+
+
+
+Route::prefix('crm')->group(function () {
+
+    Route::prefix('leads')->group(function () {
+        Route::get('/', [LeadController::class, 'index']);
+        Route::post('/', [LeadController::class, 'store']);
+        Route::get('/{id}', [LeadController::class, 'show']);
+        Route::post('/{id}', [LeadController::class, 'update']);
+        Route::delete('/{id}', [LeadController::class, 'destroy']);
+    });
+
+
+        Route::prefix('lead-sources')->group(function () {
+        Route::get('/', [LeadSourceController::class, 'index']);
+        Route::post('/', [LeadSourceController::class, 'store']);
+        Route::get('/{id}', [LeadSourceController::class, 'show']);
+        Route::post('/{id}', [LeadSourceController::class, 'update']);
+        Route::delete('/{id}', [LeadSourceController::class, 'destroy']);
+    });
+
+
+     Route::prefix('lead-statuses')->group(function () {
+        Route::get('/', [LeadStatusController::class, 'index']);
+        Route::post('/', [LeadStatusController::class, 'store']);
+        Route::get('/{id}', [LeadStatusController::class, 'show']);
+        Route::post('/{id}', [LeadStatusController::class, 'update']);
+        Route::delete('/{id}', [LeadStatusController::class, 'destroy']);
+    });
+
+
+
+    Route::prefix('customers')->group(function () {
+        Route::get('/', [CustomerController::class, 'index']);
+        Route::post('/', [CustomerController::class, 'store']);
+        Route::get('/{id}', [CustomerController::class, 'show']);
+        Route::post('/{id}', [CustomerController::class, 'update']);
+        Route::delete('/{id}', [CustomerController::class, 'destroy']);
+    });
+
+       Route::prefix('companies')->group(function () {
+        Route::get('/', [CompanyController::class, 'index']);
+        Route::post('/', [CompanyController::class, 'store']);
+        Route::get('/{id}', [CompanyController::class, 'show']);
+        Route::post('/{id}', [CompanyController::class, 'update']);
+        Route::delete('/{id}', [CompanyController::class, 'destroy']);
+    });
+
+
+        Route::prefix('contacts')->group(function () {
+        Route::get('/', [ContactController::class, 'index']);
+        Route::post('/', [ContactController::class, 'store']);
+        Route::get('/{id}', [ContactController::class, 'show']);
+        Route::post('/{id}', [ContactController::class, 'update']);
+        Route::delete('/{id}', [ContactController::class, 'destroy']);
+    });
+
+
+
+    Route::prefix('opportunities')->group(function () {
+        Route::get('/', [OpportunityController::class, 'index']);
+        Route::post('/', [OpportunityController::class, 'store']);
+        Route::get('/{id}', [OpportunityController::class, 'show']);
+        Route::post('/{id}', [OpportunityController::class, 'update']);
+        Route::delete('/{id}', [OpportunityController::class, 'destroy']);
+    });
+
+
+     Route::prefix('opportunity-stages')->group(function () {
+        Route::get('/', [OpportunityStageController::class, 'index']);
+        Route::post('/', [OpportunityStageController::class, 'store']);
+        Route::get('/{id}', [OpportunityStageController::class, 'show']);
+        Route::post('/{id}', [OpportunityStageController::class, 'update']);
+        Route::delete('/{id}', [OpportunityStageController::class, 'destroy']);
+    });
+
+
+
+    Route::prefix('activities')->group(function () {
+        Route::get('/', [ActivityController::class, 'index']);
+        Route::post('/', [ActivityController::class, 'store']);
+        Route::get('/{id}', [ActivityController::class, 'show']);
+        Route::post('/{id}', [ActivityController::class, 'update']);
+        Route::delete('/{id}', [ActivityController::class, 'destroy']);
+    });
+
+
+
+    Route::prefix('campaigns')->group(function () {
+        Route::get('/', [CampaignController::class, 'index']);
+        Route::post('/', [CampaignController::class, 'store']);
+        Route::get('/{id}', [CampaignController::class, 'show']);
+        Route::post('/{id}', [CampaignController::class, 'update']);
+        Route::delete('/{id}', [CampaignController::class, 'destroy']);
+    });
+
+
+        Route::prefix('tickets')->group(function () {
+        Route::get('/', [TicketController::class, 'index']);
+        Route::post('/', [TicketController::class, 'store']);
+        Route::get('/{id}', [TicketController::class, 'show']);
+        Route::post('/{id}', [TicketController::class, 'update']);
+        Route::delete('/{id}', [TicketController::class, 'destroy']);
+    });
 
 });
