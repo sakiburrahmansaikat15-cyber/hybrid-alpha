@@ -28,6 +28,17 @@ import LeaveTypes from "./pages/Dashboard/HRM/LeaveTypes";
 import LeaveApplications from "./pages/Dashboard/HRM/LeaveApplications";
 import Salaries from "./pages/Dashboard/HRM/Salaries";
 import Payroll from "./pages/Dashboard/HRM/Payroll";
+import Lead from "./pages/Dashboard/CRM/Lead";
+import LeadSource from "./pages/Dashboard/CRM/LeadSource";
+import LeadStatus from "./pages/Dashboard/CRM/LeadStatus";
+import Customer from "./pages/Dashboard/CRM/Customer";
+import Company from "./pages/Dashboard/CRM/Company";
+import Contact from "./pages/Dashboard/CRM/Contact";
+import Opportunity from "./pages/Dashboard/CRM/Opportunity";
+import OpportunityStage from "./pages/Dashboard/CRM/OpportunityStage";
+import Activity from "./pages/Dashboard/CRM/Activity";
+import Campaign from "./pages/Dashboard/CRM/Campaign";
+import Ticket from "./pages/Dashboard/CRM/Ticket";
 
 
 const AppRouter = () => {
@@ -62,6 +73,17 @@ const AppRouter = () => {
                        <Route path="/leave_applications" element={<LeaveApplications/>} />
                         <Route path="/salaries" element={<Salaries/>} />
                          <Route path="/payroll" element={<Payroll/>} />
+                         <Route path="/lead" element={<Lead/>} />
+                         <Route path="/lead-source" element={<LeadSource/>} />
+                         <Route path="/lead-status" element={<LeadStatus/>} />
+                          <Route path="/customer" element={<Customer/>} />
+                           <Route path="/company" element={<Company/>} />
+                            <Route path="/Contact" element={<Contact/>} />
+                            <Route path="/opportunity" element={<Opportunity/>} />
+                             <Route path="/opportunity-stage" element={<OpportunityStage/>} />
+                              <Route path="/activity" element={<Activity/>} />
+                               <Route path="/campaign" element={<Campaign/>} />
+                               <Route path="/ticket" element={<Ticket/>} />
                 </Route>
             </Routes>
         </div>

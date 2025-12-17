@@ -214,6 +214,89 @@ export const menuData = {
         }
       ]
     },
+      {
+      id: 11,
+      title: "CRM Management",
+      icon: "Users",
+      path: "/crm",
+      submenu: [
+        {
+          id: 101,
+          title: "Lead",
+          path: "/lead",
+          icon: "User"
+        },
+        {
+          id: 102,
+          title: "Lead-Source",
+          path: "/lead-source",
+          icon: "Building"
+        },
+        {
+          id: 103,
+          title: "Lead-Status",
+          path: "/lead-status",
+         
+          icon: "Briefcase"
+        },
+        {
+          id: 104,
+          title: "Customer",
+          path: "/customer",
+         
+          icon: "FileText"
+        },
+        {
+          id: 105,
+          title: "Company",
+          path: "/company",
+        
+          icon: "Clock"
+        },
+        {
+          id: 106,
+          title: "Contact",
+          path: "/contact",
+          
+          icon: "CalendarClock"
+        },
+        {
+          id: 107,
+          title: "Opportunity",
+          path: "/opportunity",
+         
+          icon: "CalendarCheck"
+        },
+        {
+          id: 108,
+          title: "Opportunity-Stage",
+          path: "/opportunity-stage",
+        
+          icon: "FileCheck"
+        },
+        {
+          id: 109,
+          title: "Activity",
+          path: "/activity",
+         
+          icon: "DollarSign"
+        },
+        {
+          id: 110,
+          title: "Campaign",
+          path: "/campaign",
+         
+          icon: "CreditCard"
+        },
+        {
+          id: 111,
+          title: "Ticket",
+          path: "/ticket",
+         
+          icon: "CreditCard"
+        }
+      ]
+    },
     {
       id: 3,
       title: "User",
