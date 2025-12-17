@@ -17,7 +17,7 @@ class OpportunityStageController extends Controller
         $keyword = $request->query('keyword', '');
         $limit = $request->query('limit');
 
-        $query = OpportunityStage::with('opportunities');
+        $query = OpportunityStage::query();
 
         if ($keyword) {
             $query->where('name', 'like', "%$keyword%")

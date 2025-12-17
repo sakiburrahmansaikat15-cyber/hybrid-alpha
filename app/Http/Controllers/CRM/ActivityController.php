@@ -61,7 +61,6 @@ class ActivityController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'type'         => 'required|in:call,meeting,task,note',
-            'related_id'   => 'required|uuid',
             'description'  => 'nullable|string',
             'scheduled_at' => 'nullable|date',
         ]);
@@ -112,7 +111,7 @@ class ActivityController extends Controller
 
         $data = $request->validate([
             'type'         => 'sometimes|in:call,meeting,task,note',
-            'related_id'   => 'sometimes|uuid',
+          
             'description'  => 'nullable|string',
             'scheduled_at' => 'nullable|date',
         ]);
