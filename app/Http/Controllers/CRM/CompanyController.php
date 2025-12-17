@@ -17,7 +17,7 @@ class CompanyController extends Controller
         $keyword = $request->query('keyword', '');
         $limit = $request->query('limit');
 
-        $query = Company::with('customers');
+        $query = Company::query();
 
         if ($keyword) {
             $query->where('name', 'like', "%$keyword%")

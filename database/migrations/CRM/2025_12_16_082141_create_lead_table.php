@@ -9,7 +9,7 @@ return new class extends Migration
     public function up(): void
     {
       Schema::create('leads', function (Blueprint $table) {
-    $table->uuid('id')->primary();
+    $table->id();
     $table->string('name');
     $table->string('email')->nullable();
     $table->string('phone')->nullable();
@@ -19,8 +19,8 @@ return new class extends Migration
     $table->softDeletes();
 
     // Foreign keys
-    $table->foreignUuid('lead_source_id')->constrained('lead_sources')->onDelete('cascade');
-    $table->foreignUuid('lead_status_id')->constrained('lead_statuses')->onDelete('cascade');
+    $table->foreignId('lead_source_id')->constrained('lead_sources')->onDelete('cascade');
+    $table->foreignId('lead_status_id')->constrained('lead_statuses')->onDelete('cascade');
 });
 
     }

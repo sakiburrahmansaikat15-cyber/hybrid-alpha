@@ -17,7 +17,7 @@ class CustomerController extends Controller
         $keyword = $request->query('keyword', '');
         $limit = $request->query('limit');
 
-        $query = Customer::with(['company', 'contacts', 'opportunities', 'tickets']);
+        $query = Customer::with(['company']);
 
         if ($keyword) {
             $query->where('name', 'like', "%$keyword%")

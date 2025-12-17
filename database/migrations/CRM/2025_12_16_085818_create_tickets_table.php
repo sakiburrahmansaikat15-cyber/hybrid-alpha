@@ -9,8 +9,8 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('tickets', function (Blueprint $table) {
-            $table->uuid('id')->primary();
-            $table->foreignUuid('customer_id')->constrained('customers')->onDelete('cascade');
+             $table->id();
+            $table->foreignId('customer_id')->constrained('customers')->onDelete('cascade');
             $table->string('subject');
             $table->enum('priority', ['low', 'medium', 'high'])->default('medium');
             $table->enum('status', ['open', 'in_progress', 'closed'])->default('open');

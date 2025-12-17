@@ -9,7 +9,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('campaigns', function (Blueprint $table) {
-            $table->uuid('id')->primary();
+             $table->id();
             $table->string('name');
             $table->enum('type', ['email', 'sms', 'social']);
             $table->date('start_date')->nullable();

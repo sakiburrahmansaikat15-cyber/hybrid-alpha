@@ -9,7 +9,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('lead_statuses', function (Blueprint $table) {
-            $table->uuid('id')->primary();
+            $table->id();
             $table->string('name');
             $table->string('color_code')->nullable();
             $table->unsignedInteger('order')->default(0);
