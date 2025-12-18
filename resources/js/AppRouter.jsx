@@ -39,6 +39,25 @@ import OpportunityStage from "./pages/Dashboard/CRM/OpportunityStage";
 import Activity from "./pages/Dashboard/CRM/Activity";
 import Campaign from "./pages/Dashboard/CRM/Campaign";
 import Ticket from "./pages/Dashboard/CRM/Ticket";
+import PosTerminals from "./pages/Dashboard/POS/PosTerminals";
+import CustomerAddresses from "./pages/Dashboard/POS/CustomerAddresses";
+import CustomerGroups from "./pages/Dashboard/POS/CustomerGroups";
+import Customers from "./pages/Dashboard/POS/Customers";
+import GiftCards from "./pages/Dashboard/POS/GiftCards";
+import HoldCarts from "./pages/Dashboard/POS/HoldCarts";
+import PaymentGateways from "./pages/Dashboard/POS/PaymentGateways";
+import PaymentMethods from "./pages/Dashboard/POS/PaymentMethods";
+import PosSessions from "./pages/Dashboard/POS/PosSessions";
+import Receipts from "./pages/Dashboard/POS/Receipts";
+import ReceiptTemplates from "./pages/Dashboard/POS/ReceiptTemplates";
+import SaleDiscounts from "./pages/Dashboard/POS/SaleDiscounts";
+import SaleItems from "./pages/Dashboard/POS/SaleItems";
+import SalePayments from "./pages/Dashboard/POS/SalePayments";
+import Sales from "./pages/Dashboard/POS/Sales";
+import SaleTaxes from "./pages/Dashboard/POS/SaleTaxes";
+import TaxGroups from "./pages/Dashboard/POS/TaxGroups";
+import TaxRates from "./pages/Dashboard/POS/TaxRates";
+import Vouchers from "./pages/Dashboard/POS/Vouchers";
 
 
 const AppRouter = () => {
@@ -84,6 +103,25 @@ const AppRouter = () => {
                               <Route path="/activity" element={<Activity/>} />
                                <Route path="/campaign" element={<Campaign/>} />
                                <Route path="/ticket" element={<Ticket/>} />
+                               <Route path="/pos-terminals" element={<PosTerminals/>} />
+                               <Route path="/customer-addresses" element={<CustomerAddresses/>} />
+                                 <Route path="/customer-groups" element={<CustomerGroups/>} />
+                                 <Route path="/customers" element={<Customers/>} />
+                                 <Route path="/gift-cards" element={<GiftCards/>} />
+                                  <Route path="/hold-carts" element={<HoldCarts/>} />
+                                  <Route path="/payment-gateways" element={<PaymentGateways/>} />
+                                   <Route path="/Payment-Methods" element={<PaymentMethods/>} />
+                                     <Route path="/pos-sessions" element={<PosSessions/>} />
+                                       <Route path="/receipts" element={<Receipts/>} />
+                                        <Route path="/receipt-templates" element={<ReceiptTemplates/>} />
+                                        <Route path="/sale-discounts" element={<SaleDiscounts/>} />
+                                          <Route path="/sale-items" element={<SaleItems/>} />
+                                           <Route path="/sale-payments" element={<SalePayments/>} />
+                                           <Route path="/sales" element={<Sales/>} />
+                                             <Route path="/sale-taxes" element={<SaleTaxes/>} />
+                                             <Route path="/tax-groups" element={<TaxGroups/>} />
+                                              <Route path="/tax-rates" element={<TaxRates/>} />
+                                              <Route path="/vouchers" element={<Vouchers/>} />
                 </Route>
             </Routes>
         </div>

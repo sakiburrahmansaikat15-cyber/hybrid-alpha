@@ -298,6 +298,145 @@ export const menuData = {
       ]
     },
     {
+      id: 12,
+      title: "POS Management",
+      icon: "Users",
+      path: "/pos",
+      submenu: [
+        {
+          id: 101,
+          title: "Pos-Terminals",
+          path: "/pos-terminals",
+          icon: "User"
+        },
+        {
+          id: 102,
+          title: "Pos-Sessions",
+          path: "/pos-sessions",
+          icon: "Building"
+        },
+        {
+          id: 103,
+          title: "Sales",
+          path: "/sales",
+         
+          icon: "Briefcase"
+        },
+        {
+          id: 104,
+          title: "Sale-Items",
+          path: "/sale-items",
+         
+          icon: "FileText"
+        },
+        {
+          id: 105,
+          title: "Sale-Payments",
+          path: "/sale-payments",
+        
+          icon: "Clock"
+        },
+        {
+          id: 106,
+          title: "Sale-Taxes",
+          path: "/sale-taxes",
+          
+          icon: "CalendarClock"
+        },
+        {
+          id: 107,
+          title: "Sale-Discounts",
+          path: "/sale-discounts",
+         
+          icon: "CalendarCheck"
+        },
+        {
+          id: 108,
+          title: "Customers",
+          path: "/customers",
+        
+          icon: "FileCheck"
+        },
+        {
+          id: 109,
+          title: "Customer-Groups",
+          path: "/customer-groups",
+         
+          icon: "DollarSign"
+        },
+        {
+          id: 110,
+          title: "Customer-Addresses",
+          path: "/customer-addresses",
+         
+          icon: "CreditCard"
+        },
+        {
+          id: 111,
+          title: "Hold-Carts",
+          path: "/hold-carts",
+         
+          icon: "CreditCard"
+        },
+         {
+          id: 112,
+          title: "Gift-Cards",
+          path: "/gift-cards",
+         
+          icon: "CreditCard"
+        },
+         {
+          id: 113,
+          title: "Vouchers",
+          path: "/vouchers",
+         
+          icon: "CreditCard"
+        },
+         {
+          id: 114,
+          title: "Payment-Methods",
+          path: "/Payment-Methods",
+         
+          icon: "CreditCard"
+        },
+         {
+          id: 115,
+          title: "Payment-Gateways",
+          path: "/payment-gateways",
+         
+          icon: "CreditCard"
+        },
+         {
+          id: 116,
+          title: "Receipts",
+          path: "/receipts",
+         
+          icon: "CreditCard"
+        },
+         {
+          id: 117,
+          title: "Receipt-Templates",
+          path: "/receipt-templates",
+         
+          icon: "CreditCard"
+        },
+         {
+          id: 118,
+          title: "Tax-Rates",
+          path: "/tax-rates",
+         
+          icon: "CreditCard"
+        },
+          {
+          id: 119,
+          title: "Tax-Groups",
+          path: "/tax-groups",
+         
+          icon: "CreditCard"
+        }
+      ]
+    },
+    {
       id: 3,
       title: "User",
       icon: "Users",

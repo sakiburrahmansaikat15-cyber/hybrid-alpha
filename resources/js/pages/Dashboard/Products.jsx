@@ -50,7 +50,7 @@ const useDebounce = (value, delay) => {
   return debouncedValue;
 };
 
-// Product Card Component
+// Product Card Component - UPDATED to show all relations
 const ProductCard = ({
   product,
   onEdit,
@@ -72,7 +72,7 @@ const ProductCard = ({
         {product.image ? (
           <>
             <img
-              src={`/${product.image}`}
+              src={product.image.startsWith('http') ? product.image : `/${product.image}`}
               alt={product.name}
               className="w-full h-full object-cover transition-all duration-700 group-hover:scale-110"
               loading="lazy"
@@ -120,7 +120,7 @@ const ProductCard = ({
         </div>
       </div>
 
-      {/* Product Info */}
+      {/* Product Info - UPDATED to show all relations */}
       <div className="p-5 relative">
         <h3 className="font-bold text-white text-lg mb-3 line-clamp-2 leading-tight flex items-center gap-3 group-hover:text-blue-100 transition-colors duration-300">
           <div className="p-2 bg-blue-500/10 rounded-lg border border-blue-500/20">
@@ -129,26 +129,85 @@ const ProductCard = ({
           {product.name}
         </h3>
 
-        <div className="text-gray-400 text-sm mb-4 space-y-3">
-          <div className="flex items-center gap-3">
-            <div className="p-1.5 bg-gray-700/50 rounded-lg">
-              <Layers className="w-3.5 h-3.5 text-gray-300" />
+        {/* Updated Relations Display */}
+        <div className="mb-4 space-y-3">
+          {/* Category and Brand on one line */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-gray-700/50 rounded-lg">
+                <Layers className="w-3.5 h-3.5 text-blue-400" />
+              </div>
+              <div className="text-xs">
+                <div className="text-gray-500">Category</div>
+                <div className="text-gray-300 font-medium truncate max-w-[100px]">
+                  {product.category?.name || '—'}
+                </div>
+              </div>
             </div>
-            <div>
-              <span className="text-gray-500 text-xs">Category</span>
-              <div className="text-gray-300 font-medium">
-                {product.category?.name || 'No Category'}
+            
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-gray-700/50 rounded-lg">
+                <Building className="w-3.5 h-3.5 text-purple-400" />
+              </div>
+              <div className="text-xs">
+                <div className="text-gray-500">Brand</div>
+                <div className="text-gray-300 font-medium truncate max-w-[100px]">
+                  {product.brand?.name || '—'}
+                </div>
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="p-1.5 bg-gray-700/50 rounded-lg">
-              <Type className="w-3.5 h-3.5 text-gray-300" />
+
+          {/* Product Type and Unit on one line */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-gray-700/50 rounded-lg">
+                <Type className="w-3.5 h-3.5 text-green-400" />
+              </div>
+              <div className="text-xs">
+                <div className="text-gray-500">Type</div>
+                <div className="text-gray-300 font-medium truncate max-w-[100px]">
+                  {product.productType?.name || '—'}
+                </div>
+              </div>
             </div>
-            <div>
-              <span className="text-gray-500 text-xs">Type</span>
-              <div className="text-gray-300 font-medium">
-                {product.product_type?.name || 'No Type'}
+            
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-gray-700/50 rounded-lg">
+                <Ruler className="w-3.5 h-3.5 text-orange-400" />
+              </div>
+              <div className="text-xs">
+                <div className="text-gray-500">Unit</div>
+                <div className="text-gray-300 font-medium truncate max-w-[100px]">
+                  {product.unit?.name || '—'}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Sub Category and Sub Item on one line */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-gray-700/50 rounded-lg">
+                <Folder className="w-3.5 h-3.5 text-cyan-400" />
+              </div>
+              <div className="text-xs">
+                <div className="text-gray-500">Sub Category</div>
+                <div className="text-gray-300 font-medium truncate max-w-[100px]">
+                  {product.subCategory?.name || '—'}
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-gray-700/50 rounded-lg">
+                <Box className="w-3.5 h-3.5 text-pink-400" />
+              </div>
+              <div className="text-xs">
+                <div className="text-gray-500">Sub Item</div>
+                <div className="text-gray-300 font-medium truncate max-w-[100px]">
+                  {product.subItem?.name || '—'}
+                </div>
               </div>
             </div>
           </div>
@@ -298,7 +357,7 @@ const Products = () => {
 
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
-  // Fetch products with pagination and search - FIXED: Correct data structure
+  // Fetch products with pagination and search
   const fetchProducts = async (page = 1, limit = 8, keyword = '') => {
     setLoading(true);
     try {
@@ -314,7 +373,6 @@ const Products = () => {
       const response = await axios.get(`/api/products?${params}`);
 
       if (response.data && response.data.pagination && response.data.pagination.data) {
-        // Corrected: Access data from pagination.data
         setProducts(response.data.pagination.data);
         setPagination({
           current_page: response.data.pagination.current_page,
@@ -335,7 +393,7 @@ const Products = () => {
     }
   };
 
-  // Fetch all related data - FIXED: extract from pagination.data
+  // Fetch all related data
   const fetchRelatedData = async () => {
     try {
       const [
@@ -637,7 +695,7 @@ const Products = () => {
       image: null
     });
     setImagePreview(product.image ? {
-      preview: `/${product.image}`,
+      preview: product.image.startsWith('http') ? product.image : `/${product.image}`,
       name: 'Current image',
       size: 'Stored on server',
       type: 'EXISTING'
@@ -694,7 +752,7 @@ const Products = () => {
     withImages: products.filter(p => p.image).length,
   };
 
-  // Safe rendering functions
+  // Safe rendering functions - UPDATED to use correct keys
   const renderSelectOptions = (items, placeholder = "Select an option") => {
     if (!Array.isArray(items) || items.length === 0) {
       return <option value="">No {placeholder.toLowerCase()} available</option>;
@@ -710,20 +768,18 @@ const Products = () => {
     ];
   };
 
-  const getRelationName = (product, relationField) => {
+  // Helper function to get relation name - UPDATED for all relations
+  const getRelationName = (product, relationType) => {
     const relationMap = {
-      cat_id: product.category,
-      brand_id: product.brand,
-      product_type_id: product.product_type,
-      unit_id: product.unit,
-      sub_cat_id: product.sub_category,
-      sub_item_id: product.sub_item
+      category: product.category?.name,
+      brand: product.brand?.name,
+      productType: product.productType?.name,
+      unit: product.unit?.name,
+      subCategory: product.subCategory?.name,
+      subItem: product.subItem?.name
     };
 
-    const relation = relationMap[relationField];
-    if (!relation) return 'Not Set';
-
-    return relation.name || `ID: ${product[relationField]}`;
+    return relationMap[relationType] || '—';
   };
 
   const removeImage = () => {
@@ -1317,10 +1373,10 @@ const Products = () => {
         </div>
       )}
 
-      {/* View Product Modal */}
+      {/* View Product Modal - UPDATED to show all relations */}
       {showViewModal && selectedProduct && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-3xl max-w-4xl w-full max-h-[90vh] overflow-y-auto border border-gray-700/50 shadow-2xl">
+          <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-3xl max-w-5xl w-full max-h-[90vh] overflow-y-auto border border-gray-700/50 shadow-2xl">
             <div className="flex justify-between items-center p-8 border-b border-gray-700/50 sticky top-0 bg-gray-800/80 backdrop-blur-sm rounded-t-3xl">
               <h2 className="text-2xl font-bold text-white flex items-center gap-3">
                 <div className="p-2 bg-blue-500/10 rounded-lg border border-blue-500/20">
@@ -1343,7 +1399,7 @@ const Products = () => {
                   {selectedProduct.image ? (
                     <div className="relative group">
                       <img
-                        src={`/${selectedProduct.image}`}
+                        src={selectedProduct.image.startsWith('http') ? selectedProduct.image : `/${selectedProduct.image}`}
                         alt={selectedProduct.name}
                         className="w-full h-64 object-cover rounded-2xl border border-gray-600 transition-all duration-500 group-hover:scale-105"
                       />
@@ -1401,30 +1457,102 @@ const Products = () => {
                     </div>
                   )}
 
+                  {/* Updated Relations Grid with all 6 items */}
                   <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 pt-6 border-t border-gray-700/50">
+                    {/* Category */}
                     <div className="bg-gray-800/30 rounded-xl p-4 border border-gray-700/50">
-                      <p className="text-xs text-gray-400 mb-1">Category</p>
-                      <p className="text-sm font-medium text-white">{getRelationName(selectedProduct, 'cat_id')}</p>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Layers className="w-4 h-4 text-blue-400" />
+                        <p className="text-xs text-gray-400">Category</p>
+                      </div>
+                      <p className="text-sm font-medium text-white">
+                        {getRelationName(selectedProduct, 'category')}
+                      </p>
+                      {selectedProduct.category && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          ID: {selectedProduct.cat_id}
+                        </p>
+                      )}
                     </div>
+
+                    {/* Brand */}
                     <div className="bg-gray-800/30 rounded-xl p-4 border border-gray-700/50">
-                      <p className="text-xs text-gray-400 mb-1">Brand</p>
-                      <p className="text-sm font-medium text-white">{getRelationName(selectedProduct, 'brand_id')}</p>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Building className="w-4 h-4 text-purple-400" />
+                        <p className="text-xs text-gray-400">Brand</p>
+                      </div>
+                      <p className="text-sm font-medium text-white">
+                        {getRelationName(selectedProduct, 'brand')}
+                      </p>
+                      {selectedProduct.brand && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          ID: {selectedProduct.brand_id}
+                        </p>
+                      )}
                     </div>
+
+                    {/* Product Type */}
                     <div className="bg-gray-800/30 rounded-xl p-4 border border-gray-700/50">
-                      <p className="text-xs text-gray-400 mb-1">Product Type</p>
-                      <p className="text-sm font-medium text-white">{getRelationName(selectedProduct, 'product_type_id')}</p>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Type className="w-4 h-4 text-green-400" />
+                        <p className="text-xs text-gray-400">Product Type</p>
+                      </div>
+                      <p className="text-sm font-medium text-white">
+                        {getRelationName(selectedProduct, 'productType')}
+                      </p>
+                      {selectedProduct.productType && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          ID: {selectedProduct.product_type_id}
+                        </p>
+                      )}
                     </div>
+
+                    {/* Unit */}
                     <div className="bg-gray-800/30 rounded-xl p-4 border border-gray-700/50">
-                      <p className="text-xs text-gray-400 mb-1">Unit</p>
-                      <p className="text-sm font-medium text-white">{getRelationName(selectedProduct, 'unit_id')}</p>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Ruler className="w-4 h-4 text-orange-400" />
+                        <p className="text-xs text-gray-400">Unit</p>
+                      </div>
+                      <p className="text-sm font-medium text-white">
+                        {getRelationName(selectedProduct, 'unit')}
+                      </p>
+                      {selectedProduct.unit && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          ID: {selectedProduct.unit_id}
+                        </p>
+                      )}
                     </div>
+
+                    {/* Sub Category */}
                     <div className="bg-gray-800/30 rounded-xl p-4 border border-gray-700/50">
-                      <p className="text-xs text-gray-400 mb-1">Sub Category</p>
-                      <p className="text-sm font-medium text-white">{getRelationName(selectedProduct, 'sub_cat_id')}</p>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Folder className="w-4 h-4 text-cyan-400" />
+                        <p className="text-xs text-gray-400">Sub Category</p>
+                      </div>
+                      <p className="text-sm font-medium text-white">
+                        {getRelationName(selectedProduct, 'subCategory')}
+                      </p>
+                      {selectedProduct.subCategory && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          ID: {selectedProduct.sub_cat_id}
+                        </p>
+                      )}
                     </div>
+
+                    {/* Sub Item */}
                     <div className="bg-gray-800/30 rounded-xl p-4 border border-gray-700/50">
-                      <p className="text-xs text-gray-400 mb-1">Sub Item</p>
-                      <p className="text-sm font-medium text-white">{getRelationName(selectedProduct, 'sub_item_id')}</p>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Box className="w-4 h-4 text-pink-400" />
+                        <p className="text-xs text-gray-400">Sub Item</p>
+                      </div>
+                      <p className="text-sm font-medium text-white">
+                        {getRelationName(selectedProduct, 'subItem')}
+                      </p>
+                      {selectedProduct.subItem && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          ID: {selectedProduct.sub_item_id}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>

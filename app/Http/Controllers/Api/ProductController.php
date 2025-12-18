@@ -18,7 +18,7 @@ class ProductController extends Controller
         $limit = $request->query('limit');
 
         // Include related models
-          $query = Prooducts::query();
+          $query = Prooducts::with("category","brand","subCategory","subItem","unit","productType");
 
 
         // 🔍 Apply search if keyword provided

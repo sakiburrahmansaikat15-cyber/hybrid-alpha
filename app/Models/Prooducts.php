@@ -58,4 +58,12 @@ class Prooducts extends Model
 {
     return $this->hasMany(Stocks::class, 'product_id');
 }
+
+
+public function saleItems()
+{
+    return $this->hasMany(SaleItem::class, 'product_id');
+}
+
+
 }
