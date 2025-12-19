@@ -37,6 +37,13 @@ const Payroll = () => {
     total_items: 0,
   });
 
+  // Month names for search matching
+  const monthNames = [
+    'january', 'february', 'march', 'april', 'may', 'june',
+    'july', 'august', 'september', 'october', 'november', 'december'
+  ];
+  const shortMonthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+
   const showNotification = useCallback((message, type = 'success') => {
     setNotification({ show: true, message, type });
     setTimeout(() => setNotification({ show: false, message: '', type: '' }), 4000);
@@ -65,7 +72,34 @@ const Payroll = () => {
       setLoading(true);
       try {
         const params = { page, limit: perPage };
-        if (keyword.trim()) params.keyword = keyword.trim();
+
+        // Handle month name search (convert to number if possible)
+        if (keyword.trim()) {
+          const lowerKeyword = keyword.toLowerCase().trim();
+
+          // Check if keyword matches a month name
+          let monthNumber = null;
+          const fullMatchIndex = monthNames.indexOf(lowerKeyword);
+          const shortMatchIndex = shortMonthNames.findIndex(short => short === lowerKeyword);
+
+          if (fullMatchIndex !== -1) {
+            monthNumber = fullMatchIndex + 1;
+          } else if (shortMatchIndex !== -1) {
+            monthNumber = shortMatchIndex + 1;
+          } else if (!isNaN(lowerKeyword) && lowerKeyword.length <= 4) {
+            // Allow direct year or month number search
+            const num = parseInt(lowerKeyword);
+            if (num >= 1 && num <= 12) monthNumber = num;
+            else if (num >= 2000 && num <= 2100) params.keyword = num; // year search
+          }
+
+          if (monthNumber) {
+            params.keyword = monthNumber.toString();
+          } else if (lowerKeyword.length >= 4) {
+            // Likely a year
+            params.keyword = lowerKeyword;
+          }
+        }
 
         const response = await axios.get(PAYROLL_API, { params });
         const res = response.data;
@@ -359,7 +393,7 @@ const Payroll = () => {
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
               <input
                 type="text"
-                placeholder="Search by month (1-12) or year (e.g. 2025)..."
+                placeholder="Search by month name (e.g. January, Jan, December) or year..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-12 pr-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500/50 outline-none"
@@ -381,6 +415,10 @@ const Payroll = () => {
           </div>
         </div>
 
+        {/* Rest of the component remains unchanged */}
+        {/* Payroll Grid, Pagination, Empty State, Modal — all same as before */}
+        {/* ... (same as your original code from here down) */}
+        
         {/* Payroll Grid */}
         <motion.div
           initial={{ opacity: 0 }}
@@ -548,7 +586,7 @@ const Payroll = () => {
               {searchTerm ? 'No payroll records found' : 'No payroll records created yet'}
             </h3>
             <p className="text-gray-400 mb-8">
-              {searchTerm ? 'Try a different month or year' : 'Create the first payroll entry to get started'}
+              {searchTerm ? 'Try a different month name or year' : 'Create the first payroll entry to get started'}
             </p>
             {!searchTerm && (
               <button
@@ -562,7 +600,7 @@ const Payroll = () => {
         )}
       </div>
 
-      {/* Modal */}
+      {/* Modal remains unchanged */}
       <AnimatePresence>
         {showModal && (
           <motion.div
@@ -589,6 +627,7 @@ const Payroll = () => {
               </div>
 
               <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* All form fields same as before */}
                 <div>
                   <label className="block text-sm font-semibold mb-2">Employee *</label>
                   <select

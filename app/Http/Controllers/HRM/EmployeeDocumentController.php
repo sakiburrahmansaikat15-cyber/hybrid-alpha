@@ -17,7 +17,7 @@ class EmployeeDocumentController extends Controller
         $keyword = $request->query('keyword', '');
         $limit = $request->query('limit');
 
-        $query = EmployeeDocument::query();
+        $query = EmployeeDocument::with('employee');
 
 
         if ($keyword) {

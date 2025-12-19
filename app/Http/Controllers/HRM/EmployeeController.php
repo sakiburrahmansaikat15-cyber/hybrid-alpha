@@ -60,7 +60,7 @@ class EmployeeController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'employee_code' => 'required|string|unique:employees,employee_code',
+            'employee_code' => 'required|string',
             'first_name' => 'required|string|max:255',
             'last_name' => 'nullable|string|max:255',
             'gender' => 'nullable|in:male,female,other',

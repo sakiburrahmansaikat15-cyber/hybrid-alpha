@@ -30,23 +30,22 @@ import {
   Settings,
   DollarSign,
   Hash,
-  ShoppingCart
+  ShoppingCart,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 
 // Custom hook for debounce
 const useDebounce = (value, delay) => {
   const [debouncedValue, setDebouncedValue] = useState(value);
-
   useEffect(() => {
     const handler = setTimeout(() => {
       setDebouncedValue(value);
     }, delay);
-
     return () => {
       clearTimeout(handler);
     };
   }, [value, delay]);
-
   return debouncedValue;
 };
 
@@ -60,7 +59,6 @@ const ProductCard = ({
   actionLoading
 }) => {
   const [isHovered, setIsHovered] = useState(false);
-
   return (
     <div
       className="relative bg-gradient-to-br from-gray-800/50 to-gray-900/50 backdrop-blur-sm rounded-2xl overflow-hidden transition-all duration-500 border-2 border-gray-700/80 hover:border-gray-600/80 hover:shadow-2xl hover:scale-105 group"
@@ -97,7 +95,6 @@ const ProductCard = ({
             <span className="text-sm font-medium">No Image</span>
           </div>
         )}
-
         {/* Status Badge */}
         <div
           className={`absolute top-4 right-4 px-3 py-1.5 rounded-full text-xs font-bold shadow-2xl backdrop-blur-sm border transition-all duration-300 ${
@@ -119,7 +116,6 @@ const ProductCard = ({
           )}
         </div>
       </div>
-
       {/* Product Info - UPDATED to show all relations */}
       <div className="p-5 relative">
         <h3 className="font-bold text-white text-lg mb-3 line-clamp-2 leading-tight flex items-center gap-3 group-hover:text-blue-100 transition-colors duration-300">
@@ -128,7 +124,6 @@ const ProductCard = ({
           </div>
           {product.name}
         </h3>
-
         {/* Updated Relations Display */}
         <div className="mb-4 space-y-3">
           {/* Category and Brand on one line */}
@@ -144,7 +139,7 @@ const ProductCard = ({
                 </div>
               </div>
             </div>
-            
+           
             <div className="flex items-center gap-2">
               <div className="p-1.5 bg-gray-700/50 rounded-lg">
                 <Building className="w-3.5 h-3.5 text-purple-400" />
@@ -157,7 +152,6 @@ const ProductCard = ({
               </div>
             </div>
           </div>
-
           {/* Product Type and Unit on one line */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -171,7 +165,7 @@ const ProductCard = ({
                 </div>
               </div>
             </div>
-            
+           
             <div className="flex items-center gap-2">
               <div className="p-1.5 bg-gray-700/50 rounded-lg">
                 <Ruler className="w-3.5 h-3.5 text-orange-400" />
@@ -184,7 +178,6 @@ const ProductCard = ({
               </div>
             </div>
           </div>
-
           {/* Sub Category and Sub Item on one line */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -198,7 +191,7 @@ const ProductCard = ({
                 </div>
               </div>
             </div>
-            
+           
             <div className="flex items-center gap-2">
               <div className="p-1.5 bg-gray-700/50 rounded-lg">
                 <Box className="w-3.5 h-3.5 text-pink-400" />
@@ -212,14 +205,12 @@ const ProductCard = ({
             </div>
           </div>
         </div>
-
         {/* Description Preview */}
         {product.description && (
           <div className="mb-4 p-3 bg-gray-800/30 rounded-lg border border-gray-700/30">
             <p className="text-gray-400 text-xs line-clamp-2">{product.description}</p>
           </div>
         )}
-
         {/* Actions */}
         <div className="flex justify-between items-center pt-4 border-t border-gray-700/50">
           <div className="flex gap-2">
@@ -238,7 +229,6 @@ const ProductCard = ({
               <Edit className="w-4 h-4 group-hover/btn:scale-110 transition-transform" />
             </button>
           </div>
-
           <div className="flex gap-2">
             <button
               onClick={() => onToggleStatus(product)}
@@ -268,7 +258,6 @@ const ProductCard = ({
           </div>
         </div>
       </div>
-
       {/* Hover Glow Effect */}
       <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-blue-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
     </div>
@@ -278,7 +267,6 @@ const ProductCard = ({
 // Image Preview Component
 const ImagePreview = ({ image, onRemove, isEditing = false }) => {
   if (!image) return null;
-
   return (
     <div className="mt-4">
       <div className="relative group bg-gray-800/80 backdrop-blur-sm rounded-xl p-4 border border-gray-700 hover:border-blue-500/50 transition-all duration-300">
@@ -354,7 +342,6 @@ const Products = () => {
     total_items: 0,
     total_pages: 1
   });
-
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
   // Fetch products with pagination and search
@@ -365,13 +352,10 @@ const Products = () => {
         page: page.toString(),
         limit: limit.toString()
       });
-
       if (keyword) {
         params.append('keyword', keyword);
       }
-
       const response = await axios.get(`/api/products?${params}`);
-
       if (response.data && response.data.pagination && response.data.pagination.data) {
         setProducts(response.data.pagination.data);
         setPagination({
@@ -411,7 +395,6 @@ const Products = () => {
         axios.get('/api/units').catch(() => ({ data: { pagination: { data: [] } } })),
         axios.get('/api/product-type').catch(() => ({ data: { pagination: { data: [] } } }))
       ]);
-
       setCategories(categoriesRes.data?.pagination?.data || []);
       setBrands(brandsRes.data?.pagination?.data || []);
       setSubCategories(subCategoriesRes.data?.pagination?.data || []);
@@ -445,10 +428,8 @@ const Products = () => {
   // Handle form input changes
   const handleInputChange = (e) => {
     const { name, value, type, files } = e.target;
-
     if (type === 'file') {
       const file = files[0];
-
       if (file && !file.type.startsWith('image/')) {
         setErrors(prev => ({
           ...prev,
@@ -456,7 +437,6 @@ const Products = () => {
         }));
         return;
       }
-
       if (file && file.size > 2 * 1024 * 1024) {
         setErrors(prev => ({
           ...prev,
@@ -464,12 +444,10 @@ const Products = () => {
         }));
         return;
       }
-
       setFormData(prev => ({
         ...prev,
         image: file
       }));
-
       if (file) {
         const reader = new FileReader();
         reader.onload = (e) => setImagePreview({
@@ -489,14 +467,12 @@ const Products = () => {
         [name]: value
       }));
     }
-
     if (errors[name]) {
       setErrors(prev => ({
         ...prev,
         [name]: ''
       }));
     }
-
     if (apiError) {
       setApiError('');
     }
@@ -507,12 +483,10 @@ const Products = () => {
     e.preventDefault();
     setDragOver(true);
   };
-
   const handleDragLeave = (e) => {
     e.preventDefault();
     setDragOver(false);
   };
-
   const handleDrop = (e) => {
     e.preventDefault();
     setDragOver(false);
@@ -527,11 +501,9 @@ const Products = () => {
   // Validate form
   const validateForm = () => {
     const newErrors = {};
-
     if (!formData.name.trim()) {
       newErrors.name = 'Product name is required';
     }
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -539,65 +511,46 @@ const Products = () => {
   // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     if (!validateForm()) return;
-
     setLoading(true);
     setApiError('');
-
     try {
       const submitData = new FormData();
-
-      // Append all form data according to API structure
       submitData.append('name', formData.name);
       submitData.append('status', formData.status);
-
-      // Append optional fields only if they have values
       if (formData.description) submitData.append('description', formData.description);
       if (formData.specification) submitData.append('specification', formData.specification);
-
-      // Append foreign keys - send empty string for null values
       submitData.append('cat_id', formData.cat_id || '');
       submitData.append('brand_id', formData.brand_id || '');
       submitData.append('sub_cat_id', formData.sub_cat_id || '');
       submitData.append('sub_item_id', formData.sub_item_id || '');
       submitData.append('unit_id', formData.unit_id || '');
       submitData.append('product_type_id', formData.product_type_id || '');
-
       if (formData.image) {
         submitData.append('image', formData.image);
       }
-
       let response;
-
       if (selectedProduct) {
-        // For update - using POST as per your API route
         response = await axios.post(`/api/products/${selectedProduct.id}`, submitData, {
           headers: { 'Content-Type': 'multipart/form-data' }
         });
       } else {
-        // For create
         response = await axios.post('/api/products', submitData, {
           headers: { 'Content-Type': 'multipart/form-data' }
         });
       }
-
       setShowModal(false);
       resetForm();
       fetchProducts(pagination.current_page, pagination.per_page, searchTerm);
       showNotification(`Product ${selectedProduct ? 'updated' : 'created'} successfully!`);
-
     } catch (error) {
       console.error('Error saving product:', error);
-
       if (error.response?.data?.errors) {
         const serverErrors = error.response.data.errors;
         const formattedErrors = {};
-
         Object.keys(serverErrors).forEach(key => {
           formattedErrors[key] = serverErrors[key][0];
         });
-
         setErrors(formattedErrors);
         setApiError('Please fix the validation errors above.');
       } else if (error.response?.data?.message) {
@@ -615,21 +568,22 @@ const Products = () => {
   // Delete product
   const handleDelete = async () => {
     if (!selectedProduct) return;
-
     setActionLoading(true);
     setApiError('');
-
     try {
       await axios.delete(`/api/products/${selectedProduct.id}`);
-
       setShowDeleteModal(false);
       setSelectedProduct(null);
-      fetchProducts(pagination.current_page, pagination.per_page, searchTerm);
-      showNotification('Product deleted successfully!');
 
+      // Adjust page if needed after deletion
+      const remainingItems = pagination.total_items - 1;
+      const maxPage = Math.ceil(remainingItems / pagination.per_page);
+      const targetPage = pagination.current_page > maxPage ? maxPage : pagination.current_page;
+
+      fetchProducts(targetPage || 1, pagination.per_page, searchTerm);
+      showNotification('Product deleted successfully!');
     } catch (error) {
       console.error('Error deleting product:', error);
-
       if (error.response?.data?.message) {
         setApiError(error.response.data.message);
       } else {
@@ -645,7 +599,6 @@ const Products = () => {
     setActionLoading(true);
     try {
       const newStatus = product.status === 'active' ? 'inactive' : 'active';
-
       const submitData = new FormData();
       submitData.append('name', product.name);
       submitData.append('status', newStatus);
@@ -657,13 +610,11 @@ const Products = () => {
       submitData.append('sub_item_id', product.sub_item_id || '');
       submitData.append('unit_id', product.unit_id || '');
       submitData.append('product_type_id', product.product_type_id || '');
-
       const response = await axios.post(
         `/api/products/${product.id}`,
         submitData,
         { headers: { 'Content-Type': 'multipart/form-data' } }
       );
-
       if (response.data) {
         showNotification(`Product ${newStatus === 'active' ? "activated" : "deactivated"}!`);
         await fetchProducts(pagination.current_page, pagination.per_page, searchTerm);
@@ -739,9 +690,9 @@ const Products = () => {
     return true;
   });
 
-  // Pagination
+  // Pagination handler
   const paginate = (pageNumber) => {
-    fetchProducts(pageNumber, pagination.per_page, searchTerm);
+    fetchProducts(pageNumber, pagination.per_page, debouncedSearchTerm);
   };
 
   // Stats calculation
@@ -752,12 +703,11 @@ const Products = () => {
     withImages: products.filter(p => p.image).length,
   };
 
-  // Safe rendering functions - UPDATED to use correct keys
+  // Safe rendering functions
   const renderSelectOptions = (items, placeholder = "Select an option") => {
     if (!Array.isArray(items) || items.length === 0) {
       return <option value="">No {placeholder.toLowerCase()} available</option>;
     }
-
     return [
       <option key="placeholder" value="">{placeholder}</option>,
       ...items.map((item) => (
@@ -768,7 +718,7 @@ const Products = () => {
     ];
   };
 
-  // Helper function to get relation name - UPDATED for all relations
+  // Helper function to get relation name
   const getRelationName = (product, relationType) => {
     const relationMap = {
       category: product.category?.name,
@@ -778,7 +728,6 @@ const Products = () => {
       subCategory: product.subCategory?.name,
       subItem: product.subItem?.name
     };
-
     return relationMap[relationType] || '—';
   };
 
@@ -834,7 +783,6 @@ const Products = () => {
             </button>
           </div>
         )}
-
         {successMessage && (
           <div className="p-4 bg-green-500/20 border border-green-500/30 rounded-xl flex items-center justify-between animate-fade-in backdrop-blur-sm shadow-lg">
             <div className="flex items-center space-x-3">
@@ -891,7 +839,7 @@ const Products = () => {
         </div>
       </div>
 
-      {/* Controls Section */}
+      {/* Controls Section - Updated with Per Page Selector */}
       <div className="bg-gradient-to-br from-gray-800/40 to-gray-900/40 backdrop-blur-sm rounded-2xl p-6 mb-8 border border-gray-700/50 shadow-xl">
         <div className="flex flex-col lg:flex-row gap-6 justify-between items-start lg:items-center">
           {/* Search and Filters */}
@@ -906,7 +854,6 @@ const Products = () => {
                 className="w-full sm:w-80 pl-12 pr-4 py-3.5 bg-gray-800/80 border border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400 transition-all backdrop-blur-sm shadow-inner"
               />
             </div>
-
             <div className="flex gap-3 flex-wrap">
               <div className="relative">
                 <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -920,7 +867,6 @@ const Products = () => {
                   <option value="inactive">Inactive</option>
                 </select>
               </div>
-
               <div className="relative">
                 <Layers className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <select
@@ -932,9 +878,26 @@ const Products = () => {
                   {renderSelectOptions(categories, "Select Category")}
                 </select>
               </div>
+              {/* Items per page selector */}
+              <div className="flex items-center gap-2 bg-gray-800/80 border border-gray-700 rounded-xl px-4 py-3.5">
+                <span className="text-sm text-gray-400">Show:</span>
+                <select
+                  value={pagination.per_page}
+                  onChange={(e) => {
+                    const newLimit = parseInt(e.target.value);
+                    setPagination(prev => ({ ...prev, per_page: newLimit }));
+                    fetchProducts(1, newLimit, debouncedSearchTerm);
+                  }}
+                  className="bg-transparent border-0 text-white text-sm focus:ring-0 focus:outline-none cursor-pointer"
+                >
+                  <option value="8">8</option>
+                  <option value="12">12</option>
+                  <option value="24">24</option>
+                  <option value="48">48</option>
+                </select>
+              </div>
             </div>
           </div>
-
           <button
             onClick={() => {
               resetForm();
@@ -1029,26 +992,80 @@ const Products = () => {
           </div>
         )}
 
-        {/* Pagination */}
+        {/* Pagination - Modern Design */}
         {pagination.total_pages > 1 && (
-          <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-8 pt-6 border-t border-gray-700/50">
+          <div className="flex flex-col sm:flex-row justify-between items-center py-6 border-t border-gray-700/50 gap-4">
             <div className="text-sm text-gray-400">
-              Showing {((pagination.current_page - 1) * pagination.per_page) + 1} to {Math.min(pagination.current_page * pagination.per_page, pagination.total_items)} of {pagination.total_items} results
+              Showing {((pagination.current_page - 1) * pagination.per_page) + 1} to{' '}
+              {Math.min(pagination.current_page * pagination.per_page, pagination.total_items)} of{' '}
+              {pagination.total_items} products
             </div>
-            <div className="flex gap-1 sm:gap-2 flex-wrap justify-center">
-              {Array.from({ length: pagination.total_pages }, (_, i) => i + 1).map((page) => (
-                <button
-                  key={page}
-                  onClick={() => paginate(page)}
-                  className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 hover:scale-105 ${
-                    pagination.current_page === page
-                      ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg'
-                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600 border border-gray-600'
-                  }`}
-                >
-                  {page}
-                </button>
-              ))}
+
+            <div className="flex items-center gap-2">
+              {/* Previous Button */}
+              <button
+                onClick={() => paginate(pagination.current_page - 1)}
+                disabled={pagination.current_page === 1}
+                className="px-4 py-2.5 rounded-xl border border-gray-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 hover:bg-gray-700/50 transition-all"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                Previous
+              </button>
+
+              {/* Page Numbers with Ellipsis */}
+              {(() => {
+                const pages = [];
+                const current = pagination.current_page;
+                const total = pagination.total_pages;
+
+                pages.push(1);
+
+                if (current > 3) {
+                  pages.push('...');
+                }
+
+                for (let i = Math.max(2, current - 1); i <= Math.min(total - 1, current + 1); i++) {
+                  if (!pages.includes(i) && i !== 1 && i !== total) {
+                    pages.push(i);
+                  }
+                }
+
+                if (current < total - 2) {
+                  if (!pages.includes('...')) pages.push('...');
+                }
+
+                if (total > 1 && !pages.includes(total)) {
+                  pages.push(total);
+                }
+
+                return pages.map((page, idx) =>
+                  page === '...' ? (
+                    <span key={idx} className="px-3 text-gray-500">...</span>
+                  ) : (
+                    <button
+                      key={page}
+                      onClick={() => paginate(page)}
+                      className={`px-4 py-2.5 rounded-xl border transition-all ${
+                        current === page
+                          ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white border-blue-500 shadow-lg'
+                          : 'border-gray-700 hover:bg-gray-700/50 hover:border-gray-600'
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  )
+                );
+              })()}
+
+              {/* Next Button */}
+              <button
+                onClick={() => paginate(pagination.current_page + 1)}
+                disabled={pagination.current_page === pagination.total_pages}
+                className="px-4 py-2.5 rounded-xl border border-gray-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 hover:bg-gray-700/50 transition-all"
+              >
+                Next
+                <ChevronRight className="w-4 h-4" />
+              </button>
             </div>
           </div>
         )}
@@ -1086,7 +1103,6 @@ const Products = () => {
                 <X className="w-5 h-5" />
               </button>
             </div>
-
             <form onSubmit={handleSubmit} className="p-8 space-y-8">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {/* Left Column - Basic Info */}
@@ -1138,23 +1154,18 @@ const Products = () => {
                         <span>{errors.image}</span>
                       </p>
                     )}
-
-                    {/* Image Preview */}
                     <ImagePreview
                       image={imagePreview}
                       onRemove={removeImage}
                       isEditing={!!selectedProduct}
                     />
                   </div>
-
                   {/* Basic Information */}
                   <div className="space-y-4">
                     <h3 className="text-lg font-medium text-white flex items-center gap-2">
                       <Package className="w-5 h-5" />
                       Basic Information
                     </h3>
-
-                    {/* Name */}
                     <div>
                       <label className="block text-sm font-medium text-gray-300 mb-2">
                         Product Name *
@@ -1177,8 +1188,6 @@ const Products = () => {
                         </p>
                       )}
                     </div>
-
-                    {/* Description */}
                     <div>
                       <label className="block text-sm font-medium text-gray-300 mb-2">
                         Description
@@ -1192,8 +1201,6 @@ const Products = () => {
                         placeholder="Enter product description"
                       />
                     </div>
-
-                    {/* Specification */}
                     <div>
                       <label className="block text-sm font-medium text-gray-300 mb-2">
                         Specification
@@ -1209,15 +1216,12 @@ const Products = () => {
                     </div>
                   </div>
                 </div>
-
                 {/* Right Column - Relationships */}
                 <div className="space-y-6">
                   <h3 className="text-lg font-medium text-white flex items-center gap-2">
                     <Tag className="w-5 h-5" />
                     Product Relationships
                   </h3>
-
-                  {/* Category */}
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
                       <Layers className="w-4 h-4" />
@@ -1232,8 +1236,6 @@ const Products = () => {
                       {renderSelectOptions(categories, "Select Category")}
                     </select>
                   </div>
-
-                  {/* Brand */}
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
                       <Building className="w-4 h-4" />
@@ -1248,8 +1250,6 @@ const Products = () => {
                       {renderSelectOptions(brands, "Select Brand")}
                     </select>
                   </div>
-
-                  {/* Product Type */}
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
                       <Type className="w-4 h-4" />
@@ -1263,14 +1263,7 @@ const Products = () => {
                     >
                       {renderSelectOptions(productTypes, "Select Product Type")}
                     </select>
-                    {productTypes.length === 0 && (
-                      <p className="mt-2 text-sm text-yellow-400">
-                        No product types available. Please add some in the database.
-                      </p>
-                    )}
                   </div>
-
-                  {/* Unit */}
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
                       <Ruler className="w-4 h-4" />
@@ -1285,8 +1278,6 @@ const Products = () => {
                       {renderSelectOptions(units, "Select Unit")}
                     </select>
                   </div>
-
-                  {/* Sub Category */}
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
                       <Folder className="w-4 h-4" />
@@ -1301,8 +1292,6 @@ const Products = () => {
                       {renderSelectOptions(subCategories, "Select Sub Category")}
                     </select>
                   </div>
-
-                  {/* Sub Item */}
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
                       <Box className="w-4 h-4" />
@@ -1317,8 +1306,6 @@ const Products = () => {
                       {renderSelectOptions(subItems, "Select Sub Item")}
                     </select>
                   </div>
-
-                  {/* Status */}
                   <div className="flex items-center justify-between p-4 bg-gray-800/60 rounded-xl border border-gray-700/50 backdrop-blur-sm">
                     <div className="flex items-center space-x-3">
                       <div className={`w-3 h-3 rounded-full ${formData.status === 'active' ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
@@ -1343,7 +1330,6 @@ const Products = () => {
                   </div>
                 </div>
               </div>
-
               {/* Form Actions */}
               <div className="flex gap-4 pt-8 mt-8 border-t border-gray-700/50">
                 <button
@@ -1373,7 +1359,7 @@ const Products = () => {
         </div>
       )}
 
-      {/* View Product Modal - UPDATED to show all relations */}
+      {/* View Product Modal */}
       {showViewModal && selectedProduct && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
           <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-3xl max-w-5xl w-full max-h-[90vh] overflow-y-auto border border-gray-700/50 shadow-2xl">
@@ -1391,10 +1377,8 @@ const Products = () => {
                 <X className="w-5 h-5" />
               </button>
             </div>
-
             <div className="p-8">
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Image */}
                 <div className="lg:col-span-1">
                   {selectedProduct.image ? (
                     <div className="relative group">
@@ -1411,8 +1395,6 @@ const Products = () => {
                     </div>
                   )}
                 </div>
-
-                {/* Details */}
                 <div className="lg:col-span-2 space-y-6">
                   <div className="flex items-start justify-between">
                     <div>
@@ -1436,7 +1418,6 @@ const Products = () => {
                       </span>
                     </div>
                   </div>
-
                   {selectedProduct.description && (
                     <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700/50">
                       <h4 className="text-sm font-semibold text-gray-300 mb-2 flex items-center gap-2">
@@ -1446,7 +1427,6 @@ const Products = () => {
                       <p className="text-gray-400 text-sm leading-relaxed">{selectedProduct.description}</p>
                     </div>
                   )}
-
                   {selectedProduct.specification && (
                     <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700/50">
                       <h4 className="text-sm font-semibold text-gray-300 mb-2 flex items-center gap-2">
@@ -1456,10 +1436,7 @@ const Products = () => {
                       <p className="text-gray-400 text-sm whitespace-pre-wrap leading-relaxed">{selectedProduct.specification}</p>
                     </div>
                   )}
-
-                  {/* Updated Relations Grid with all 6 items */}
                   <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 pt-6 border-t border-gray-700/50">
-                    {/* Category */}
                     <div className="bg-gray-800/30 rounded-xl p-4 border border-gray-700/50">
                       <div className="flex items-center gap-2 mb-2">
                         <Layers className="w-4 h-4 text-blue-400" />
@@ -1468,14 +1445,7 @@ const Products = () => {
                       <p className="text-sm font-medium text-white">
                         {getRelationName(selectedProduct, 'category')}
                       </p>
-                      {selectedProduct.category && (
-                        <p className="text-xs text-gray-500 mt-1">
-                          ID: {selectedProduct.cat_id}
-                        </p>
-                      )}
                     </div>
-
-                    {/* Brand */}
                     <div className="bg-gray-800/30 rounded-xl p-4 border border-gray-700/50">
                       <div className="flex items-center gap-2 mb-2">
                         <Building className="w-4 h-4 text-purple-400" />
@@ -1484,14 +1454,7 @@ const Products = () => {
                       <p className="text-sm font-medium text-white">
                         {getRelationName(selectedProduct, 'brand')}
                       </p>
-                      {selectedProduct.brand && (
-                        <p className="text-xs text-gray-500 mt-1">
-                          ID: {selectedProduct.brand_id}
-                        </p>
-                      )}
                     </div>
-
-                    {/* Product Type */}
                     <div className="bg-gray-800/30 rounded-xl p-4 border border-gray-700/50">
                       <div className="flex items-center gap-2 mb-2">
                         <Type className="w-4 h-4 text-green-400" />
@@ -1500,14 +1463,7 @@ const Products = () => {
                       <p className="text-sm font-medium text-white">
                         {getRelationName(selectedProduct, 'productType')}
                       </p>
-                      {selectedProduct.productType && (
-                        <p className="text-xs text-gray-500 mt-1">
-                          ID: {selectedProduct.product_type_id}
-                        </p>
-                      )}
                     </div>
-
-                    {/* Unit */}
                     <div className="bg-gray-800/30 rounded-xl p-4 border border-gray-700/50">
                       <div className="flex items-center gap-2 mb-2">
                         <Ruler className="w-4 h-4 text-orange-400" />
@@ -1516,14 +1472,7 @@ const Products = () => {
                       <p className="text-sm font-medium text-white">
                         {getRelationName(selectedProduct, 'unit')}
                       </p>
-                      {selectedProduct.unit && (
-                        <p className="text-xs text-gray-500 mt-1">
-                          ID: {selectedProduct.unit_id}
-                        </p>
-                      )}
                     </div>
-
-                    {/* Sub Category */}
                     <div className="bg-gray-800/30 rounded-xl p-4 border border-gray-700/50">
                       <div className="flex items-center gap-2 mb-2">
                         <Folder className="w-4 h-4 text-cyan-400" />
@@ -1532,14 +1481,7 @@ const Products = () => {
                       <p className="text-sm font-medium text-white">
                         {getRelationName(selectedProduct, 'subCategory')}
                       </p>
-                      {selectedProduct.subCategory && (
-                        <p className="text-xs text-gray-500 mt-1">
-                          ID: {selectedProduct.sub_cat_id}
-                        </p>
-                      )}
                     </div>
-
-                    {/* Sub Item */}
                     <div className="bg-gray-800/30 rounded-xl p-4 border border-gray-700/50">
                       <div className="flex items-center gap-2 mb-2">
                         <Box className="w-4 h-4 text-pink-400" />
@@ -1548,11 +1490,6 @@ const Products = () => {
                       <p className="text-sm font-medium text-white">
                         {getRelationName(selectedProduct, 'subItem')}
                       </p>
-                      {selectedProduct.subItem && (
-                        <p className="text-xs text-gray-500 mt-1">
-                          ID: {selectedProduct.sub_item_id}
-                        </p>
-                      )}
                     </div>
                   </div>
                 </div>

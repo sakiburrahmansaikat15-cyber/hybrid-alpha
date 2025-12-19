@@ -326,31 +326,32 @@ const Salaries = () => {
           </div>
         </div>
 
-        {/* Search & Limit */}
+        {/* Search & Limit - Customized like Attendance */}
         <div className="bg-gray-800/30 backdrop-blur-sm rounded-2xl p-6 mb-8 border border-gray-700/30">
           <div className="flex flex-col lg:flex-row gap-6">
             <div className="flex-1 relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+              <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
               <input
-                type="text"
-                placeholder="Search by effective date (YYYY-MM-DD)..."
+                type="date"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-12 pr-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500/50 outline-none"
               />
             </div>
-            <div className="flex items-center gap-2 bg-gray-700/50 border border-gray-600/50 rounded-xl px-4 py-3">
-              <span className="text-sm text-gray-400">Show:</span>
-              <select
-                value={pagination.per_page}
-                onChange={(e) => handleLimitChange(e.target.value)}
-                className="bg-transparent border-0 text-white text-sm focus:ring-0 focus:outline-none"
-              >
-                <option value="5">5</option>
-                <option value="10">10</option>
-                <option value="25">25</option>
-                <option value="50">50</option>
-              </select>
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex items-center gap-2 bg-gray-700/50 border border-gray-600/50 rounded-xl px-4 py-3">
+                <span className="text-sm text-gray-400">Show:</span>
+                <select
+                  value={pagination.per_page}
+                  onChange={(e) => handleLimitChange(e.target.value)}
+                  className="bg-transparent border-0 text-white text-sm focus:ring-0 focus:outline-none"
+                >
+                  <option value="5">5</option>
+                  <option value="10">10</option>
+                  <option value="25">25</option>
+                  <option value="50">50</option>
+                </select>
+              </div>
             </div>
           </div>
         </div>
@@ -517,10 +518,10 @@ const Salaries = () => {
           <div className="text-center py-20">
             <DollarSign size={64} className="mx-auto text-gray-600 mb-6" />
             <h3 className="text-2xl font-bold mb-3">
-              {searchTerm ? 'No salary records found' : 'No salary records created yet'}
+              {searchTerm ? 'No salary records found for this date' : 'No salary records created yet'}
             </h3>
             <p className="text-gray-400 mb-8">
-              {searchTerm ? 'Try a different date' : 'Create the first salary record to get started'}
+              {searchTerm ? 'Try selecting a different date' : 'Create the first salary record to get started'}
             </p>
             {!searchTerm && (
               <button

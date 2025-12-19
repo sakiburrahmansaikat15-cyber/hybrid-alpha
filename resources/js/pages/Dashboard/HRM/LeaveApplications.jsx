@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Search, Edit, Trash2, X, Check, Loader, ChevronLeft, ChevronRight, MoreVertical, Calendar, User } from 'lucide-react';
+import { Plus, Calendar, Edit, Trash2, X, Check, Loader, ChevronLeft, ChevronRight, MoreVertical, User } from 'lucide-react';
 
 const LEAVE_APPLICATIONS_API = 'http://localhost:8000/api/hrm/leave-applications';
 const EMPLOYEES_API = 'http://localhost:8000/api/hrm/employees';
@@ -355,14 +355,13 @@ const LeaveApplications = () => {
           </div>
         </div>
 
-        {/* Search & Limit */}
+        {/* Search & Limit - Customized like Attendance */}
         <div className="bg-gray-800/30 backdrop-blur-sm rounded-2xl p-6 mb-8 border border-gray-700/30">
           <div className="flex flex-col lg:flex-row gap-6">
             <div className="flex-1 relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+              <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
               <input
-                type="text"
-                placeholder="Search by date (YYYY-MM-DD)..."
+                type="date"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-12 pr-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500/50 outline-none"
@@ -543,10 +542,10 @@ const LeaveApplications = () => {
           <div className="text-center py-20">
             <Calendar size={64} className="mx-auto text-gray-600 mb-6" />
             <h3 className="text-2xl font-bold mb-3">
-              {searchTerm ? 'No applications found' : 'No leave applications yet'}
+              {searchTerm ? 'No applications found for this date' : 'No leave applications yet'}
             </h3>
             <p className="text-gray-400 mb-8">
-              {searchTerm ? 'Try a different date' : 'Create the first leave request'}
+              {searchTerm ? 'Try selecting a different date' : 'Create the first leave request'}
             </p>
             {!searchTerm && (
               <button
