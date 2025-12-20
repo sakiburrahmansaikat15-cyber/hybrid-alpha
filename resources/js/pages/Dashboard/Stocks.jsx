@@ -43,6 +43,12 @@ const StocksManager = () => {
   const [vendors, setVendors] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
 
+  // Track if the selected product is electronic
+  const [isElectronicProduct, setIsElectronicProduct] = useState(false);
+
+  // Dynamic SKU inputs for electronic products
+  const [skuInputs, setSkuInputs] = useState([]);
+
   const [formData, setFormData] = useState({
     product_id: '',
     vendor_id: '',
@@ -54,7 +60,7 @@ const StocksManager = () => {
     due_amount: '',
     stock_date: new Date().toISOString().split('T')[0],
     comission: '',
-    sku: '',
+    sku: '', // used only for non-electronic
     status: 'active',
   });
 
@@ -137,7 +143,6 @@ const StocksManager = () => {
     [handleApiError]
   );
 
-  // Robust extraction for products/vendors/warehouses (handles various API response shapes)
   const fetchRelatedData = useCallback(async () => {
     try {
       const [prodRes, vendRes, wareRes] = await Promise.all([
@@ -154,9 +159,18 @@ const StocksManager = () => {
         return [];
       };
 
-      setProducts(extractItems(prodRes));
+      const prods = extractItems(prodRes);
+      setProducts(prods);
       setVendors(extractItems(vendRes));
       setWarehouses(extractItems(wareRes));
+
+      if (editingStock && editingStock.product?.id) {
+        const selectedProduct = prods.find(p => p.id === editingStock.product.id);
+        if (selectedProduct?.product_type?.name || selectedProduct?.productType?.name) {
+          const typeName = (selectedProduct.product_type?.name || selectedProduct.productType?.name || '').toLowerCase();
+          setIsElectronicProduct(typeName === 'electronic');
+        }
+      }
     } catch (error) {
       console.error('Failed to load related data', error);
       showNotification('Failed to load products, vendors, or warehouses', 'error');
@@ -164,7 +178,7 @@ const StocksManager = () => {
       setVendors([]);
       setWarehouses([]);
     }
-  }, [showNotification]);
+  }, [showNotification, editingStock]);
 
   useEffect(() => {
     fetchStocks(1, 10);
@@ -177,6 +191,42 @@ const StocksManager = () => {
     }, 500);
     return () => clearTimeout(timer);
   }, [searchTerm, pagination.per_page, fetchStocks]);
+
+  // Update isElectronicProduct when product changes
+  useEffect(() => {
+    if (formData.product_id) {
+      const selectedProduct = products.find(p => p.id === parseInt(formData.product_id));
+      const typeName = (selectedProduct?.product_type?.name || selectedProduct?.productType?.name || '').toLowerCase();
+      const isElectronic = typeName === 'electronic';
+      setIsElectronicProduct(isElectronic);
+
+      if (isElectronic) {
+        const qty = parseInt(formData.quantity) || 0;
+        setSkuInputs(Array(qty).fill(''));
+        setFormData(prev => ({ ...prev, sku: '' }));
+      } else {
+        setSkuInputs([]);
+      }
+    } else {
+      setIsElectronicProduct(false);
+      setSkuInputs([]);
+    }
+  }, [formData.product_id, products]);
+
+  // Adjust skuInputs length when quantity changes (electronic only)
+  useEffect(() => {
+    if (isElectronicProduct) {
+      const qty = parseInt(formData.quantity) || 0;
+      setSkuInputs(prev => {
+        const newArr = [...prev];
+        newArr.length = qty;
+        for (let i = prev.length; i < qty; i++) {
+          newArr[i] = '';
+        }
+        return newArr.filter(s => s !== undefined);
+      });
+    }
+  }, [formData.quantity, isElectronicProduct]);
 
   const handlePageChange = (newPage) => {
     if (newPage < 1 || newPage > pagination.last_page) return;
@@ -206,6 +256,8 @@ const StocksManager = () => {
     });
     setErrors({});
     setEditingStock(null);
+    setIsElectronicProduct(false);
+    setSkuInputs([]);
   };
 
   const openModal = (stock = null) => {
@@ -225,6 +277,18 @@ const StocksManager = () => {
         sku: stock.sku || '',
         status: stock.status || 'active',
       });
+
+      const selectedProduct = products.find(p => p.id === stock.product?.id);
+      const typeName = (selectedProduct?.product_type?.name || selectedProduct?.productType?.name || '').toLowerCase();
+      const isElec = typeName === 'electronic';
+
+      if (isElec && stock.sku) {
+        const skuList = stock.sku.split(',').map(s => s.trim());
+        setSkuInputs(skuList);
+      } else {
+        setSkuInputs([]);
+      }
+      setIsElectronicProduct(isElec);
     } else {
       resetForm();
     }
@@ -247,6 +311,21 @@ const StocksManager = () => {
     setOperationLoading('saving');
     setErrors({});
 
+    let finalSku = '';
+
+    if (isElectronicProduct) {
+      const filledSkus = skuInputs.filter(s => s.trim() !== '');
+      if (filledSkus.length !== skuInputs.length || skuInputs.length === 0) {
+        setErrors({ sku: ['All SKU fields must be filled for electronic products.'] });
+        showNotification('Please fill all SKU fields for electronic products.', 'error');
+        setOperationLoading(null);
+        return;
+      }
+      finalSku = skuInputs.map(s => s.trim()).join(',');
+    } else {
+      finalSku = formData.sku.trim();
+    }
+
     const payload = {
       product_id: formData.product_id ? parseInt(formData.product_id) : null,
       vendor_id: formData.vendor_id ? parseInt(formData.vendor_id) : null,
@@ -258,7 +337,7 @@ const StocksManager = () => {
       due_amount: formData.due_amount ? parseFloat(formData.due_amount) : null,
       comission: formData.comission ? parseFloat(formData.comission) : null,
       stock_date: formData.stock_date || null,
-      sku: formData.sku.trim() || null,
+      sku: finalSku || null,
       status: formData.status,
     };
 
@@ -770,15 +849,53 @@ const StocksManager = () => {
                   </div>
                 </div>
 
+                {/* SKU Field - Dynamic for Electronic */}
                 <div>
-                  <label className="block text-sm font-semibold mb-2">SKU</label>
-                  <input
-                    type="text"
-                    name="sku"
-                    value={formData.sku}
-                    onChange={handleChange}
-                    className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-                  />
+                  <label className="block text-sm font-semibold mb-2">
+                    SKU {isElectronicProduct && <span className="text-red-400">*</span>}
+                  </label>
+
+                  {isElectronicProduct ? (
+                    <div className="space-y-3">
+                      {skuInputs.map((sku, index) => (
+                        <div key={index} className="flex items-center gap-3">
+                          <span className="text-gray-400 w-12 text-sm">#{index + 1}</span>
+                          <input
+                            type="text"
+                            value={sku}
+                            onChange={(e) => {
+                              const newSkus = [...skuInputs];
+                              newSkus[index] = e.target.value;
+                              setSkuInputs(newSkus);
+                            }}
+                            placeholder={`SKU for item ${index + 1}`}
+                            className="flex-1 px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                            required
+                          />
+                        </div>
+                      ))}
+                      <p className="text-xs text-gray-400 mt-2">
+                        Provide exactly <strong>{formData.quantity || 0}</strong> unique SKU(s) – one per item.
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <input
+                        type="text"
+                        name="sku"
+                        value={formData.sku}
+                        onChange={handleChange}
+                        placeholder="Optional – will be auto-generated if left empty"
+                        className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                      />
+                      <p className="text-xs text-gray-400 mt-2">
+                        Leave empty for auto-generated single SKU (non-electronic products).
+                      </p>
+                    </>
+                  )}
+
+                  {errors.sku && <p className="text-red-400 text-sm mt-1">{errors.sku[0]}</p>}
+                  {errors._general && <p className="text-red-400 text-sm mt-1">{errors._general}</p>}
                 </div>
 
                 {/* Status */}
