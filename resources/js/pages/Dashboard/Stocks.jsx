@@ -9,7 +9,6 @@ import {
   X,
   Check,
   AlertCircle,
-  MoreVertical,
   Package,
   DollarSign,
   BarChart3,
@@ -19,14 +18,15 @@ import {
   Loader,
   ChevronLeft,
   ChevronRight,
-  Shield,
   CheckCircle,
   XCircle,
   Building,
-  MapPin
 } from 'lucide-react';
 
 const API_URL = '/api/stocks';
+const PRODUCTS_URL = '/api/products';
+const VENDORS_URL = '/api/vendors';
+const WAREHOUSES_URL = '/api/warehouses';
 
 const StocksManager = () => {
   const [stocks, setStocks] = useState([]);
@@ -36,11 +36,13 @@ const StocksManager = () => {
   const [editingStock, setEditingStock] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [actionMenu, setActionMenu] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+
+  // Initialized as empty arrays to prevent .map() errors
   const [products, setProducts] = useState([]);
   const [vendors, setVendors] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
+
   const [formData, setFormData] = useState({
     product_id: '',
     vendor_id: '',
@@ -48,13 +50,14 @@ const StocksManager = () => {
     quantity: '',
     buying_price: '',
     selling_price: '',
-    total_amount: '', // Now editable
+    total_amount: '',
     due_amount: '',
-    stock_date: '',
+    stock_date: new Date().toISOString().split('T')[0],
     comission: '',
     sku: '',
-    status: 'active'
+    status: 'active',
   });
+
   const [errors, setErrors] = useState({});
   const [notification, setNotification] = useState({ show: false, message: '', type: '' });
 
@@ -62,7 +65,7 @@ const StocksManager = () => {
     current_page: 1,
     last_page: 1,
     per_page: 10,
-    total_items: 0
+    total_items: 0,
   });
 
   const showNotification = useCallback((message, type = 'success') => {
@@ -70,86 +73,103 @@ const StocksManager = () => {
     setTimeout(() => setNotification({ show: false, message: '', type: '' }), 4000);
   }, []);
 
-  const handleApiError = useCallback((error, defaultMessage) => {
-    if (error.response?.status === 422) {
-      const validationErrors = error.response.data.errors || {};
-      setErrors(validationErrors);
-      const firstError = Object.values(validationErrors)[0]?.[0];
-      showNotification(firstError || 'Validation error', 'error');
-    } else if (error.response?.data?.message) {
-      showNotification(error.response.data.message, 'error');
-      setErrors({ _general: error.response.data.message });
-    } else {
-      showNotification(defaultMessage || 'Something went wrong', 'error');
-      setErrors({ _general: defaultMessage });
-    }
-  }, [showNotification]);
+  const handleApiError = useCallback(
+    (error, defaultMessage) => {
+      if (error.response?.status === 422) {
+        const validationErrors = error.response.data.errors || {};
+        setErrors(validationErrors);
+        const firstError = Object.values(validationErrors)[0]?.[0];
+        showNotification(firstError || 'Validation error', 'error');
+      } else if (error.response?.data?.message) {
+        showNotification(error.response.data.message, 'error');
+        setErrors({ _general: error.response.data.message });
+      } else {
+        showNotification(defaultMessage || 'Something went wrong', 'error');
+        setErrors({ _general: defaultMessage });
+      }
+    },
+    [showNotification]
+  );
 
-  const fetchStocks = useCallback(async (page = 1, perPage = 10, keyword = '') => {
-    setLoading(true);
-    try {
-      const params = { page, limit: perPage };
-      if (keyword.trim()) params.keyword = keyword.trim();
+  const fetchStocks = useCallback(
+    async (page = 1, perPage = 10, keyword = '') => {
+      setLoading(true);
+      try {
+        const params = { page, limit: perPage };
+        if (keyword.trim()) params.keyword = keyword.trim();
 
-      const response = await axios.get(API_URL, { params });
-      const res = response.data;
+        const response = await axios.get(API_URL, { params });
+        const res = response.data;
 
-      const stockData = res.data || [];
-      const formatted = stockData.map(item => ({
-        id: item.id,
-        product: item.product || {},
-        vendor: item.vendor || {},
-        warehouse: item.warehouse || {},
-        quantity: item.quantity,
-        buying_price: item.buying_price,
-        selling_price: item.selling_price,
-        total_amount: item.total_amount,
-        due_amount: item.due_amount,
-        stock_date: item.stock_date,
-        comission: item.comission,
-        sku: item.sku,
-        status: item.status,
-        created_at: item.created_at,
-        updated_at: item.updated_at
-      }));
+        const stockData = res.data || [];
+        const formatted = stockData.map((item) => ({
+          id: item.id,
+          product: item.product || {},
+          vendor: item.vendor || {},
+          warehouse: item.warehouse || {},
+          quantity: item.quantity ?? 0,
+          buying_price: item.buying_price ?? '0.00',
+          selling_price: item.selling_price ?? '0.00',
+          total_amount: item.total_amount ?? null,
+          due_amount: item.due_amount ?? null,
+          comission: item.comission ?? null,
+          stock_date: item.stock_date ?? null,
+          sku: item.sku || '',
+          status: item.status || 'active',
+          created_at: item.created_at,
+          updated_at: item.updated_at,
+        }));
 
-      setStocks(formatted);
-      setPagination({
-        current_page: res.current_page || 1,
-        last_page: res.total_pages || 1,
-        per_page: res.per_page || 10,
-        total_items: res.total_items || 0
-      });
-    } catch (error) {
-      handleApiError(error, 'Failed to fetch stocks');
-      setStocks([]);
-      setPagination({ current_page: 1, last_page: 1, per_page: 10, total_items: 0 });
-    } finally {
-      setLoading(false);
-    }
-  }, [handleApiError]);
+        setStocks(formatted);
+        setPagination({
+          current_page: res.current_page || 1,
+          last_page: res.total_pages || 1,
+          per_page: res.per_page || 10,
+          total_items: res.total_items || 0,
+        });
+      } catch (error) {
+        handleApiError(error, 'Failed to fetch stocks');
+        setStocks([]);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [handleApiError]
+  );
 
+  // Robust extraction for products/vendors/warehouses (handles various API response shapes)
   const fetchRelatedData = useCallback(async () => {
     try {
       const [prodRes, vendRes, wareRes] = await Promise.all([
-        axios.get('/api/products'),
-        axios.get('/api/vendors'),
-        axios.get('/api/warehouses')
+        axios.get(PRODUCTS_URL),
+        axios.get(VENDORS_URL),
+        axios.get(WAREHOUSES_URL),
       ]);
 
-      setProducts(prodRes.data.pagination?.data || prodRes.data.data || prodRes.data || []);
-      setVendors(vendRes.data.pagination?.data || vendRes.data.data || vendRes.data || []);
-      setWarehouses(wareRes.data.pagination?.data || wareRes.data.data || wareRes.data || []);
+      const extractItems = (response) => {
+        const data = response.data;
+        if (Array.isArray(data)) return data;
+        if (data?.data && Array.isArray(data.data)) return data.data;
+        if (data?.pagination?.data && Array.isArray(data.pagination.data)) return data.pagination.data;
+        return [];
+      };
+
+      setProducts(extractItems(prodRes));
+      setVendors(extractItems(vendRes));
+      setWarehouses(extractItems(wareRes));
     } catch (error) {
       console.error('Failed to load related data', error);
       showNotification('Failed to load products, vendors, or warehouses', 'error');
+      setProducts([]);
+      setVendors([]);
+      setWarehouses([]);
     }
   }, [showNotification]);
 
   useEffect(() => {
     fetchStocks(1, 10);
     fetchRelatedData();
-  }, [fetchRelatedData]);
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -165,7 +185,7 @@ const StocksManager = () => {
 
   const handleLimitChange = (newLimit) => {
     const limit = parseInt(newLimit);
-    setPagination(prev => ({ ...prev, per_page: limit }));
+    setPagination((prev) => ({ ...prev, per_page: limit }));
     fetchStocks(1, limit, searchTerm);
   };
 
@@ -182,7 +202,7 @@ const StocksManager = () => {
       stock_date: new Date().toISOString().split('T')[0],
       comission: '',
       sku: '',
-      status: 'active'
+      status: 'active',
     });
     setErrors({});
     setEditingStock(null);
@@ -195,15 +215,15 @@ const StocksManager = () => {
         product_id: stock.product?.id?.toString() || '',
         vendor_id: stock.vendor?.id?.toString() || '',
         warehouse_id: stock.warehouse?.id?.toString() || '',
-        quantity: stock.quantity || '',
+        quantity: stock.quantity?.toString() || '',
         buying_price: stock.buying_price || '',
         selling_price: stock.selling_price || '',
         total_amount: stock.total_amount || '',
         due_amount: stock.due_amount || '',
-        stock_date: stock.stock_date ? stock.stock_date.split('T')[0] : '',
         comission: stock.comission || '',
+        stock_date: stock.stock_date || new Date().toISOString().split('T')[0],
         sku: stock.sku || '',
-        status: stock.status || 'active'
+        status: stock.status || 'active',
       });
     } else {
       resetForm();
@@ -218,8 +238,8 @@ const StocksManager = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-    if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
+    if (errors[name]) setErrors((prev) => ({ ...prev, [name]: undefined }));
   };
 
   const handleSubmit = async (e) => {
@@ -231,26 +251,26 @@ const StocksManager = () => {
       product_id: formData.product_id ? parseInt(formData.product_id) : null,
       vendor_id: formData.vendor_id ? parseInt(formData.vendor_id) : null,
       warehouse_id: formData.warehouse_id ? parseInt(formData.warehouse_id) : null,
-      quantity: parseInt(formData.quantity) || 0,
+      quantity: formData.quantity ? parseInt(formData.quantity) : 0,
       buying_price: parseFloat(formData.buying_price) || 0,
       selling_price: parseFloat(formData.selling_price) || 0,
-      total_amount: parseFloat(formData.total_amount) || null,
-      due_amount: parseFloat(formData.due_amount) || null,
+      total_amount: formData.total_amount ? parseFloat(formData.total_amount) : null,
+      due_amount: formData.due_amount ? parseFloat(formData.due_amount) : null,
+      comission: formData.comission ? parseFloat(formData.comission) : null,
       stock_date: formData.stock_date || null,
-      comission: parseFloat(formData.comission) || null,
       sku: formData.sku.trim() || null,
-      status: formData.status
+      status: formData.status,
     };
 
     try {
-      let response;
       if (editingStock) {
-        response = await axios.put(`${API_URL}/${editingStock.id}`, payload);
+        await axios.post(`${API_URL}/${editingStock.id}`, payload);
+        showNotification('Stock updated successfully!');
       } else {
-        response = await axios.post(API_URL, payload);
+        await axios.post(API_URL, payload);
+        showNotification('Stock created successfully!');
       }
 
-      showNotification(response.data.message || `Stock ${editingStock ? 'updated' : 'created'} successfully!`);
       fetchStocks(pagination.current_page, pagination.per_page, searchTerm);
       closeModal();
     } catch (error) {
@@ -281,49 +301,55 @@ const StocksManager = () => {
     const newStatus = stock.status === 'active' ? 'inactive' : 'active';
     setOperationLoading(`status-${stock.id}`);
     try {
-      await axios.put(`${API_URL}/${stock.id}`, { status: newStatus });
+      await axios.post(`${API_URL}/${stock.id}`, { status: newStatus });
       showNotification(`Stock ${newStatus === 'active' ? 'activated' : 'deactivated'}!`);
       fetchStocks(pagination.current_page, pagination.per_page, searchTerm);
     } catch (error) {
       handleApiError(error, 'Status update failed');
     } finally {
       setOperationLoading(null);
-      setActionMenu(null);
     }
   };
 
   const stats = {
     total: pagination.total_items,
-    quantity: stocks.reduce((acc, s) => acc + (s.quantity || 0), 0),
-    value: stocks.reduce((acc, s) => acc + ((s.quantity || 0) * (parseFloat(s.buying_price) || 0)), 0),
-    active: stocks.filter(s => s.status === 'active').length
+    quantity: stocks.reduce((acc, s) => acc + (parseInt(s.quantity) || 0), 0),
+    value: stocks.reduce(
+      (acc, s) => acc + ((parseInt(s.quantity) || 0) * (parseFloat(s.buying_price) || 0)),
+      0
+    ),
+    active: stocks.filter((s) => s.status === 'active').length,
   };
 
-  const formatDate = (date) => date ? new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
+  const formatCurrency = (value) => {
+    if (value === null || value === undefined || value === '') return '—';
+    return `$${parseFloat(value).toFixed(2)}`;
+  };
 
-  useEffect(() => {
-    const handler = () => setActionMenu(null);
-    document.addEventListener('click', handler);
-    return () => document.removeEventListener('click', handler);
-  }, []);
+  const formatDate = (date) =>
+    date ? new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-gray-100 py-8">
+      {/* Notification */}
       <AnimatePresence>
         {notification.show && (
           <motion.div
             initial={{ opacity: 0, x: 300 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 300 }}
-            className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-xl shadow-2xl ${notification.type === 'error' ? 'bg-red-600' : 'bg-green-600'} text-white font-medium flex items-center gap-2`}
+            className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-xl shadow-2xl ${
+              notification.type === 'error' ? 'bg-red-600' : 'bg-green-600'
+            } text-white font-medium flex items-center gap-2`}
           >
-            <Check size={20} />
+            {notification.type === 'error' ? <AlertCircle size={20} /> : <Check size={20} />}
             {notification.message}
           </motion.div>
         )}
       </AnimatePresence>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -343,6 +369,7 @@ const StocksManager = () => {
           </button>
         </motion.div>
 
+        {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           {[
             { label: 'Total Stocks', value: stats.total, icon: Package, color: 'blue' },
@@ -364,6 +391,7 @@ const StocksManager = () => {
           ))}
         </div>
 
+        {/* Filters */}
         <div className="bg-gray-800/30 backdrop-blur-sm rounded-2xl p-6 mb-8 border border-gray-700/30">
           <div className="flex flex-col lg:flex-row gap-6">
             <div className="flex-1 relative">
@@ -403,6 +431,7 @@ const StocksManager = () => {
           </div>
         </div>
 
+        {/* Table */}
         <div className="bg-gray-800/30 backdrop-blur-sm rounded-2xl border border-gray-700/30 overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-700/30 bg-gray-800/20">
             <div className="flex items-center justify-between">
@@ -419,10 +448,12 @@ const StocksManager = () => {
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Vendor</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Warehouse</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">SKU</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Quantity</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Qty</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Buy Price</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Sell Price</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Total Amount</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Total Amt</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Due Amt</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Commission</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Date</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Status</th>
                   <th className="px-6 py-4 text-right text-sm font-semibold text-gray-300 uppercase tracking-wider">Actions</th>
@@ -431,21 +462,26 @@ const StocksManager = () => {
               <tbody className="divide-y divide-gray-700/30">
                 {loading ? (
                   <tr>
-                    <td colSpan="11" className="px-6 py-12 text-center">
+                    <td colSpan="13" className="px-6 py-12 text-center">
                       <Loader size={32} className="animate-spin mx-auto text-blue-400" />
                       <p className="text-gray-400 mt-3">Loading stocks...</p>
                     </td>
                   </tr>
                 ) : stocks.length === 0 ? (
                   <tr>
-                    <td colSpan="11" className="px-6 py-16 text-center">
+                    <td colSpan="13" className="px-6 py-16 text-center">
                       <Package size={64} className="mx-auto text-gray-500 mb-4" />
-                      <h3 className="text-2xl font-bold text-white mb-2">{searchTerm ? 'No stocks found' : 'No stock entries yet'}</h3>
+                      <h3 className="text-2xl font-bold text-white mb-2">
+                        {searchTerm ? 'No stocks found' : 'No stock entries yet'}
+                      </h3>
                       <p className="text-gray-400 mb-6">
                         {searchTerm ? 'Try different search terms' : 'Add your first stock entry to get started'}
                       </p>
                       {!searchTerm && (
-                        <button onClick={() => openModal()} className="bg-gradient-to-r from-blue-600 to-cyan-600 px-8 py-3 rounded-xl font-bold flex items-center gap-2 mx-auto">
+                        <button
+                          onClick={() => openModal()}
+                          className="bg-gradient-to-r from-blue-600 to-cyan-600 px-8 py-3 rounded-xl font-bold flex items-center gap-2 mx-auto"
+                        >
                           <Plus size={20} /> Add First Stock
                         </button>
                       )}
@@ -453,8 +489,8 @@ const StocksManager = () => {
                   </tr>
                 ) : (
                   stocks
-                    .filter(s => statusFilter === 'all' || s.status === statusFilter)
-                    .map(stock => (
+                    .filter((s) => statusFilter === 'all' || s.status === statusFilter)
+                    .map((stock) => (
                       <tr key={stock.id} className="hover:bg-gray-700/20 transition-colors">
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
@@ -480,9 +516,11 @@ const StocksManager = () => {
                           )}
                         </td>
                         <td className="px-6 py-4 font-bold text-blue-400">{stock.quantity}</td>
-                        <td className="px-6 py-4 text-green-400">${parseFloat(stock.buying_price || 0).toFixed(2)}</td>
-                        <td className="px-6 py-4 text-yellow-400">${parseFloat(stock.selling_price || 0).toFixed(2)}</td>
-                        <td className="px-6 py-4 font-bold text-purple-400">${parseFloat(stock.total_amount || 0).toFixed(2)}</td>
+                        <td className="px-6 py-4 text-green-400">{formatCurrency(stock.buying_price)}</td>
+                        <td className="px-6 py-4 text-yellow-400">{formatCurrency(stock.selling_price)}</td>
+                        <td className="px-6 py-4 font-bold text-purple-400">{formatCurrency(stock.total_amount)}</td>
+                        <td className="px-6 py-4 text-orange-400 font-medium">{formatCurrency(stock.due_amount)}</td>
+                        <td className="px-6 py-4 text-cyan-400 font-medium">{formatCurrency(stock.comission)}</td>
                         <td className="px-6 py-4 text-sm text-gray-300">
                           <Calendar size={16} className="inline mr-2" />
                           {formatDate(stock.stock_date)}
@@ -497,16 +535,24 @@ const StocksManager = () => {
                                 : 'bg-red-500/20 text-red-400 border border-red-500/30'
                             }`}
                           >
-                            {operationLoading === `status-${stock.id}` ? <Loader size={12} className="animate-spin" /> : null}
+                            {operationLoading === `status-${stock.id}` ? (
+                              <Loader size={12} className="animate-spin" />
+                            ) : null}
                             {stock.status === 'active' ? 'Active' : 'Inactive'}
                           </button>
                         </td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex items-center justify-end gap-2">
-                            <button onClick={() => openModal(stock)} className="p-2 bg-blue-500/20 hover:bg-blue-500/30 rounded-lg">
+                            <button
+                              onClick={() => openModal(stock)}
+                              className="p-2 bg-blue-500/20 hover:bg-blue-500/30 rounded-lg"
+                            >
                               <Edit size={16} />
                             </button>
-                            <button onClick={() => setDeleteConfirm(stock.id)} className="p-2 bg-red-500/20 hover:bg-red-500/30 rounded-lg">
+                            <button
+                              onClick={() => setDeleteConfirm(stock.id)}
+                              className="p-2 bg-red-500/20 hover:bg-red-500/30 rounded-lg"
+                            >
                               <Trash2 size={16} />
                             </button>
                           </div>
@@ -518,10 +564,13 @@ const StocksManager = () => {
             </table>
           </div>
 
+          {/* Pagination */}
           {pagination.last_page > 1 && (
             <div className="px-6 py-4 border-t border-gray-700/30 flex flex-col sm:flex-row justify-between items-center gap-4">
               <div className="text-sm text-gray-400">
-                Showing {(pagination.current_page - 1) * pagination.per_page + 1} to {Math.min(pagination.current_page * pagination.per_page, pagination.total_items)} of {pagination.total_items}
+                Showing {(pagination.current_page - 1) * pagination.per_page + 1} to{' '}
+                {Math.min(pagination.current_page * pagination.per_page, pagination.total_items)} of{' '}
+                {pagination.total_items}
               </div>
               <div className="flex gap-2">
                 <button
@@ -531,17 +580,9 @@ const StocksManager = () => {
                 >
                   <ChevronLeft size={16} /> Prev
                 </button>
-                {Array.from({ length: pagination.last_page }, (_, i) => i + 1)
-                  .filter(p => p === 1 || p === pagination.last_page || Math.abs(p - pagination.current_page) <= 2)
-                  .map(p => (
-                    <button
-                      key={p}
-                      onClick={() => handlePageChange(p)}
-                      className={`px-4 py-2 rounded-xl border ${pagination.current_page === p ? 'bg-blue-600 border-blue-500' : 'border-gray-600'}`}
-                    >
-                      {p}
-                    </button>
-                  ))}
+                <button className="px-4 py-2 rounded-xl bg-blue-600 border-blue-500">
+                  {pagination.current_page}
+                </button>
                 <button
                   onClick={() => handlePageChange(pagination.current_page + 1)}
                   disabled={pagination.current_page === pagination.last_page}
@@ -555,6 +596,7 @@ const StocksManager = () => {
         </div>
       </div>
 
+      {/* Modal Form */}
       <AnimatePresence>
         {showModal && (
           <motion.div
@@ -569,29 +611,33 @@ const StocksManager = () => {
               animate={{ scale: 1 }}
               exit={{ scale: 0.9 }}
               className="bg-gray-800 rounded-3xl p-8 max-w-4xl w-full border border-gray-700 max-h-[90vh] overflow-y-auto"
-              onClick={e => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
             >
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-cyan-500 bg-clip-text text-transparent">
                   {editingStock ? 'Edit Stock' : 'Add New Stock'}
                 </h2>
-                <button onClick={closeModal} className="p-2 hover:bg-gray-700 rounded-lg"><X size={24} /></button>
+                <button onClick={closeModal} className="p-2 hover:bg-gray-700 rounded-lg">
+                  <X size={24} />
+                </button>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-6">
+                {/* Product & Vendor */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-sm font-semibold mb-2">Product *</label>
+                    <label className="block text-sm font-semibold mb-2">Product</label>
                     <select
                       name="product_id"
                       value={formData.product_id}
                       onChange={handleChange}
-                      required
-                      className={`w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none ${errors.product_id ? 'border-red-500' : ''}`}
+                      className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
                     >
-                      <option value="">Select Product</option>
-                      {products.map(p => (
-                        <option key={p.id} value={p.id}>{p.name}</option>
+                      <option value="">No Product (Optional)</option>
+                      {products.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
                       ))}
                     </select>
                     {errors.product_id && <p className="text-red-400 text-sm mt-1">{errors.product_id[0]}</p>}
@@ -602,32 +648,38 @@ const StocksManager = () => {
                       name="vendor_id"
                       value={formData.vendor_id}
                       onChange={handleChange}
-                      className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none border-gray-600/50"
+                      className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
                     >
-                      <option value="">Select Vendor</option>
-                      {vendors.map(v => (
-                        <option key={v.id} value={v.id}>{v.name}</option>
+                      <option value="">No Vendor (Optional)</option>
+                      {vendors.map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {v.name}
+                        </option>
                       ))}
                     </select>
                   </div>
                 </div>
 
+                {/* Warehouse */}
                 <div>
                   <label className="block text-sm font-semibold mb-2">Warehouse</label>
                   <select
                     name="warehouse_id"
                     value={formData.warehouse_id}
                     onChange={handleChange}
-                    className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none border-gray-600/50"
+                    className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
                   >
-                    <option value="">Select Warehouse</option>
-                    {warehouses.map(w => (
-                      <option key={w.id} value={w.id}>{w.name}</option>
+                    <option value="">No Warehouse (Optional)</option>
+                    {warehouses.map((w) => (
+                      <option key={w.id} value={w.id}>
+                        {w.name}
+                      </option>
                     ))}
                   </select>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                {/* Required Fields */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div>
                     <label className="block text-sm font-semibold mb-2">Quantity *</label>
                     <input
@@ -637,9 +689,8 @@ const StocksManager = () => {
                       onChange={handleChange}
                       required
                       min="0"
-                      className={`w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none ${errors.quantity ? 'border-red-500' : ''}`}
+                      className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
                     />
-                    {errors.quantity && <p className="text-red-400 text-sm mt-1">{errors.quantity[0]}</p>}
                   </div>
                   <div>
                     <label className="block text-sm font-semibold mb-2">Buying Price *</label>
@@ -651,9 +702,8 @@ const StocksManager = () => {
                       onChange={handleChange}
                       required
                       min="0"
-                      className={`w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none ${errors.buying_price ? 'border-red-500' : ''}`}
+                      className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
                     />
-                    {errors.buying_price && <p className="text-red-400 text-sm mt-1">{errors.buying_price[0]}</p>}
                   </div>
                   <div>
                     <label className="block text-sm font-semibold mb-2">Selling Price *</label>
@@ -665,10 +715,13 @@ const StocksManager = () => {
                       onChange={handleChange}
                       required
                       min="0"
-                      className={`w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none ${errors.selling_price ? 'border-red-500' : ''}`}
+                      className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
                     />
-                    {errors.selling_price && <p className="text-red-400 text-sm mt-1">{errors.selling_price[0]}</p>}
                   </div>
+                </div>
+
+                {/* Optional Fields */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                   <div>
                     <label className="block text-sm font-semibold mb-2">Total Amount</label>
                     <input
@@ -677,23 +730,8 @@ const StocksManager = () => {
                       name="total_amount"
                       value={formData.total_amount}
                       onChange={handleChange}
-                      min="0"
-                      className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none border-gray-600/50"
-                      placeholder="Total amount (optional)"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div>
-                    <label className="block text-sm font-semibold mb-2">SKU</label>
-                    <input
-                      type="text"
-                      name="sku"
-                      value={formData.sku}
-                      onChange={handleChange}
-                      className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none border-gray-600/50"
-                      placeholder="Optional SKU"
+                      placeholder="Optional"
+                      className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
                     />
                   </div>
                   <div>
@@ -704,8 +742,20 @@ const StocksManager = () => {
                       name="due_amount"
                       value={formData.due_amount}
                       onChange={handleChange}
-                      min="0"
-                      className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none border-gray-600/50"
+                      placeholder="0.00"
+                      className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold mb-2">Commission</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      name="comission"
+                      value={formData.comission}
+                      onChange={handleChange}
+                      placeholder="0.00"
+                      className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
                     />
                   </div>
                   <div>
@@ -715,18 +765,30 @@ const StocksManager = () => {
                       name="stock_date"
                       value={formData.stock_date}
                       onChange={handleChange}
-                      className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none border-gray-600/50"
+                      className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
                     />
                   </div>
                 </div>
 
                 <div>
+                  <label className="block text-sm font-semibold mb-2">SKU</label>
+                  <input
+                    type="text"
+                    name="sku"
+                    value={formData.sku}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                </div>
+
+                {/* Status */}
+                <div>
                   <label className="block text-sm font-semibold mb-3">Status</label>
                   <div className="grid grid-cols-2 gap-4">
-                    {['active', 'inactive'].map(st => (
+                    {['active', 'inactive'].map((st) => (
                       <label
                         key={st}
-                        onClick={() => setFormData(prev => ({ ...prev, status: st }))}
+                        onClick={() => setFormData((prev) => ({ ...prev, status: st }))}
                         className={`p-4 border-2 rounded-xl text-center cursor-pointer transition ${
                           formData.status === st
                             ? st === 'active'
@@ -735,7 +797,11 @@ const StocksManager = () => {
                             : 'border-gray-600'
                         }`}
                       >
-                        {st === 'active' ? <CheckCircle size={20} className="mx-auto mb-2 text-green-400" /> : <XCircle size={20} className="mx-auto mb-2 text-red-400" />}
+                        {st === 'active' ? (
+                          <CheckCircle size={20} className="mx-auto mb-2 text-green-400" />
+                        ) : (
+                          <XCircle size={20} className="mx-auto mb-2 text-red-400" />
+                        )}
                         <span className="capitalize font-medium">{st}</span>
                       </label>
                     ))}
@@ -743,13 +809,23 @@ const StocksManager = () => {
                 </div>
 
                 <div className="flex justify-end gap-3 pt-6 border-t border-gray-700">
-                  <button type="button" onClick={closeModal} className="px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-xl">Cancel</button>
+                  <button
+                    type="button"
+                    onClick={closeModal}
+                    className="px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-xl"
+                  >
+                    Cancel
+                  </button>
                   <button
                     type="submit"
                     disabled={operationLoading === 'saving'}
                     className="px-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-xl font-bold flex items-center gap-2 disabled:opacity-70"
                   >
-                    {operationLoading === 'saving' ? <Loader size={20} className="animate-spin" /> : <Check size={20} />}
+                    {operationLoading === 'saving' ? (
+                      <Loader size={20} className="animate-spin" />
+                    ) : (
+                      <Check size={20} />
+                    )}
                     {editingStock ? 'Update Stock' : 'Create Stock'}
                   </button>
                 </div>
@@ -759,6 +835,7 @@ const StocksManager = () => {
         )}
       </AnimatePresence>
 
+      {/* Delete Confirmation */}
       <AnimatePresence>
         {deleteConfirm && (
           <motion.div
@@ -773,20 +850,29 @@ const StocksManager = () => {
               animate={{ scale: 1 }}
               exit={{ scale: 0.9 }}
               className="bg-gray-800 rounded-3xl p-8 max-w-md w-full border border-gray-700"
-              onClick={e => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
             >
               <div className="text-center">
                 <Trash2 size={48} className="mx-auto text-red-500 mb-4" />
                 <h3 className="text-xl font-bold text-white mb-2">Delete Stock Entry</h3>
                 <p className="text-gray-400 mb-6">This action cannot be undone.</p>
                 <div className="flex gap-3">
-                  <button onClick={() => setDeleteConfirm(null)} className="flex-1 px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-xl">Cancel</button>
+                  <button
+                    onClick={() => setDeleteConfirm(null)}
+                    className="flex-1 px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-xl"
+                  >
+                    Cancel
+                  </button>
                   <button
                     onClick={() => handleDelete(deleteConfirm)}
-                    disabled={operationLoading === `delete-${deleteConfirm}`}
+                    disabled={operationLoading?.startsWith('delete-')}
                     className="flex-1 px-6 py-3 bg-red-600 hover:bg-red-700 rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-70"
                   >
-                    {operationLoading === `delete-${deleteConfirm}` ? <Loader size={20} className="animate-spin" /> : <Trash2 size={20} />}
+                    {operationLoading?.startsWith('delete-') ? (
+                      <Loader size={20} className="animate-spin" />
+                    ) : (
+                      <Trash2 size={20} />
+                    )}
                     Delete
                   </button>
                 </div>

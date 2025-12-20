@@ -47,13 +47,13 @@ class StockController extends Controller
             'product_id' => 'nullable|exists:prooducts,id',
             'vendor_id' => 'nullable|exists:vendors,id',
             "warehouse_id" =>'nullable|exists:warehouses,id',
-            'quantity' => 'required|integer|min:0',
-            'buying_price' => 'required|numeric|min:0',
-            'selling_price' => 'required|numeric|min:0',
-            'total_amount' => 'nullable|numeric|min:0',
+            'quantity' => 'required|integer',
+            'buying_price' => 'required|numeric',
+            'selling_price' => 'required|numeric',
+            'total_amount' => 'nullable|numeric',
             'due_amount' => 'nullable|numeric',
             'stock_date' => 'nullable|date',
-            'comission' => 'nullable|numeric|min:0',
+            'comission' => 'nullable|numeric',
             'status' => 'required|in:active,inactive',
             'sku' => 'nullable|string|max:255',
         ]);
@@ -108,7 +108,7 @@ class StockController extends Controller
         }
 
         $data = $request->validate([
-            'product_id' => 'sometimes|exists:products,id',
+            'product_id' => 'sometimes|exists:prooducts,id',
             'vendor_id' => 'sometimes|exists:vendors,id',
              "warehouse_id" =>'nullable|exists:warehouses,id',
             'quantity' => 'sometimes|integer|min:0',

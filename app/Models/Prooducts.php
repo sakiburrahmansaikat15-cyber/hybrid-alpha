@@ -11,6 +11,8 @@ class Prooducts extends Model
 
     protected $guarded = [];
 
+    protected $table = 'prooducts';
+
     // Belongs to category
     public function category()
     {
