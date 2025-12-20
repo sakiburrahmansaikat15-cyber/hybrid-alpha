@@ -14,7 +14,7 @@ class AttendenceController extends Controller
         $keyword = $request->query('keyword', '');
         $limit = $request->query('limit');
 
-        $query = Attendance::query();
+        $query = Attendance::with('employee');
 
         if ($keyword) {
             $query->whereDate('date', $keyword);

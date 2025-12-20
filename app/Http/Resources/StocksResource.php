@@ -24,6 +24,7 @@ class StocksResource extends JsonResource
             'sku' => $this->sku,
             'product' => new ProductsResource($this->whenLoaded('product')),
             'vendor' => new VendorResource($this->whenLoaded('vendor')),
+            'warehouse' => new WarehouseResource($this->whenLoaded('warehouse')),
             'created_at' => $this->created_at?->toDateTimeString(),
             'updated_at' => $this->updated_at?->toDateTimeString(),
         ];

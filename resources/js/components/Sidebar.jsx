@@ -1,5 +1,5 @@
 // components/Layout/Sidebar.jsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '../hooks/useTheme';
@@ -18,6 +18,7 @@ const Sidebar = ({
   const [isMobile, setIsMobile] = useState(false);
   const { color } = useTheme();
   const location = useLocation();
+  const navRef = useRef(null); // Ref to the nav container for smooth scrolling
 
   // -----------------------------------------------------------------
   // 1. Detect mobile
@@ -393,7 +394,7 @@ const Sidebar = ({
                 </div>
               </div>
 
-              <nav className="flex-1 overflow-y-auto">{renderMenuItems()}</nav>
+              <nav className="flex-1 overflow-y-auto" ref={navRef}>{renderMenuItems()}</nav>
 
               <div className="p-4 border-t border-gray-200 dark:border-gray-800">
                 <div className="flex items-center space-x-3 p-3 rounded-lg bg-gray-50 dark:bg-gray-800">
@@ -474,7 +475,9 @@ const Sidebar = ({
         </div>
       </div>
 
-      <nav className="flex-1 overflow-y-auto">{renderMenuItems()}</nav>
+      <nav className="flex-1 overflow-y-auto scroll-smooth" ref={navRef}>
+        {renderMenuItems()}
+      </nav>
 
       <div className="p-4 border-t border-gray-200 dark:border-gray-800">
         <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'}`}>

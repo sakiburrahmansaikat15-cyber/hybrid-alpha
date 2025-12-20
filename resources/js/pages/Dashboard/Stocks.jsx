@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus,
   Search,
@@ -7,177 +8,200 @@ import {
   Trash2,
   X,
   Check,
+  AlertCircle,
+  MoreVertical,
   Package,
-  Truck,
   DollarSign,
   BarChart3,
   Calendar,
   Barcode,
   Hash,
+  Loader,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Shield,
+  CheckCircle,
+  XCircle,
+  Building,
+  MapPin
 } from 'lucide-react';
 
-const API_BASE = '/api/stocks';
+const API_URL = '/api/stocks';
 
 const StocksManager = () => {
   const [stocks, setStocks] = useState([]);
-  const [vendors, setVendors] = useState([]);
-  const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [operationLoading, setOperationLoading] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [editingStock, setEditingStock] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [actionMenu, setActionMenu] = useState(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [products, setProducts] = useState([]);
+  const [vendors, setVendors] = useState([]);
+  const [warehouses, setWarehouses] = useState([]);
+  const [formData, setFormData] = useState({
+    product_id: '',
+    vendor_id: '',
+    warehouse_id: '',
+    quantity: '',
+    buying_price: '',
+    selling_price: '',
+    total_amount: '', // Now editable
+    due_amount: '',
+    stock_date: '',
+    comission: '',
+    sku: '',
+    status: 'active'
+  });
+  const [errors, setErrors] = useState({});
+  const [notification, setNotification] = useState({ show: false, message: '', type: '' });
 
   const [pagination, setPagination] = useState({
     current_page: 1,
     last_page: 1,
     per_page: 10,
-    total_items: 0,
-    total_pages: 1
+    total_items: 0
   });
-
-  const [formData, setFormData] = useState({
-    product_id: '',
-    vendor_id: '',
-    quantity: 1,
-    buying_price: 0,
-    selling_price: 0,
-    total_amount: 0,
-    due_amount: 0,
-    stock_date: new Date().toISOString().split('T')[0],
-    comission: 0,
-    sku: '',
-    status: 'active'
-  });
-
-  const [errors, setErrors] = useState({});
-  const [operationLoading, setOperationLoading] = useState(false);
 
   const showNotification = useCallback((message, type = 'success') => {
-    const el = document.createElement('div');
-    el.className = `fixed top-4 right-4 z-50 px-6 py-3 rounded-lg shadow-2xl text-white font-medium transition-all ${
-      type === 'error' ? 'bg-red-600' : 'bg-green-600'
-    }`;
-    el.textContent = message;
-    document.body.appendChild(el);
-    setTimeout(() => el.remove(), 4000);
+    setNotification({ show: true, message, type });
+    setTimeout(() => setNotification({ show: false, message: '', type: '' }), 4000);
   }, []);
 
-  const handleApiError = useCallback((error) => {
+  const handleApiError = useCallback((error, defaultMessage) => {
     if (error.response?.status === 422) {
-      const errs = error.response.data.errors || {};
-      setErrors(errs);
-      const first = Object.values(errs)[0]?.[0];
-      showNotification(first || 'Please check the form', 'error');
-    } else if (error.response?.status === 404) {
-      showNotification(error.response.data.message || 'Not found', 'error');
+      const validationErrors = error.response.data.errors || {};
+      setErrors(validationErrors);
+      const firstError = Object.values(validationErrors)[0]?.[0];
+      showNotification(firstError || 'Validation error', 'error');
+    } else if (error.response?.data?.message) {
+      showNotification(error.response.data.message, 'error');
+      setErrors({ _general: error.response.data.message });
     } else {
-      showNotification(error.response?.data?.message || 'Operation failed', 'error');
+      showNotification(defaultMessage || 'Something went wrong', 'error');
+      setErrors({ _general: defaultMessage });
     }
   }, [showNotification]);
 
-  const fetchStocks = useCallback(async (page = 1, limit = 10, keyword = '') => {
+  const fetchStocks = useCallback(async (page = 1, perPage = 10, keyword = '') => {
     setLoading(true);
     try {
-      const params = { page, limit };
+      const params = { page, limit: perPage };
       if (keyword.trim()) params.keyword = keyword.trim();
 
-      const res = await axios.get(API_BASE, { params });
+      const response = await axios.get(API_URL, { params });
+      const res = response.data;
 
-      const paginated = res.data.pagination;
+      const stockData = res.data || [];
+      const formatted = stockData.map(item => ({
+        id: item.id,
+        product: item.product || {},
+        vendor: item.vendor || {},
+        warehouse: item.warehouse || {},
+        quantity: item.quantity,
+        buying_price: item.buying_price,
+        selling_price: item.selling_price,
+        total_amount: item.total_amount,
+        due_amount: item.due_amount,
+        stock_date: item.stock_date,
+        comission: item.comission,
+        sku: item.sku,
+        status: item.status,
+        created_at: item.created_at,
+        updated_at: item.updated_at
+      }));
 
-      if (paginated && Array.isArray(paginated.data)) {
-        setStocks(paginated.data);
-        setPagination({
-          current_page: paginated.current_page,
-          last_page: paginated.total_pages,
-          per_page: paginated.per_page,
-          total_items: paginated.total_items,
-          total_pages: paginated.total_pages
-        });
-      } else {
-        setStocks([]);
-        setPagination(prev => ({ ...prev, total_items: 0, total_pages: 1 }));
-      }
-    } catch (err) {
-      handleApiError(err);
+      setStocks(formatted);
+      setPagination({
+        current_page: res.current_page || 1,
+        last_page: res.total_pages || 1,
+        per_page: res.per_page || 10,
+        total_items: res.total_items || 0
+      });
+    } catch (error) {
+      handleApiError(error, 'Failed to fetch stocks');
       setStocks([]);
+      setPagination({ current_page: 1, last_page: 1, per_page: 10, total_items: 0 });
     } finally {
       setLoading(false);
     }
   }, [handleApiError]);
+
+  const fetchRelatedData = useCallback(async () => {
+    try {
+      const [prodRes, vendRes, wareRes] = await Promise.all([
+        axios.get('/api/products'),
+        axios.get('/api/vendors'),
+        axios.get('/api/warehouses')
+      ]);
+
+      setProducts(prodRes.data.pagination?.data || prodRes.data.data || prodRes.data || []);
+      setVendors(vendRes.data.pagination?.data || vendRes.data.data || vendRes.data || []);
+      setWarehouses(wareRes.data.pagination?.data || wareRes.data.data || wareRes.data || []);
+    } catch (error) {
+      console.error('Failed to load related data', error);
+      showNotification('Failed to load products, vendors, or warehouses', 'error');
+    }
+  }, [showNotification]);
+
+  useEffect(() => {
+    fetchStocks(1, 10);
+    fetchRelatedData();
+  }, [fetchRelatedData]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
       fetchStocks(1, pagination.per_page, searchTerm);
     }, 500);
     return () => clearTimeout(timer);
-  }, [searchTerm, fetchStocks, pagination.per_page]);
+  }, [searchTerm, pagination.per_page, fetchStocks]);
 
-  const fetchRelated = async () => {
-    try {
-      const [vRes, pRes] = await Promise.all([
-        axios.get('/api/vendors'),
-        axios.get('/api/products')
-      ]);
-
-      // Both APIs return { pagination: { data: [...] } }
-      const vendorsArray = vRes.data?.pagination?.data || [];
-      const productsArray = pRes.data?.pagination?.data || [];
-
-      setVendors(Array.isArray(vendorsArray) ? vendorsArray : []);
-      setProducts(Array.isArray(productsArray) ? productsArray : []);
-    } catch (err) {
-      console.error('Failed to load vendors/products', err);
-      setVendors([]);
-      setProducts([]);
-      showNotification('Failed to load dropdown data', 'error');
-    }
+  const handlePageChange = (newPage) => {
+    if (newPage < 1 || newPage > pagination.last_page) return;
+    fetchStocks(newPage, pagination.per_page, searchTerm);
   };
 
-  useEffect(() => {
-    fetchStocks(1, 10);
-    fetchRelated();
-  }, []);
-
-  useEffect(() => {
-    const total = (parseFloat(formData.quantity) || 0) * (parseFloat(formData.buying_price) || 0);
-    setFormData(prev => ({ ...prev, total_amount: total.toFixed(2) }));
-  }, [formData.quantity, formData.buying_price]);
+  const handleLimitChange = (newLimit) => {
+    const limit = parseInt(newLimit);
+    setPagination(prev => ({ ...prev, per_page: limit }));
+    fetchStocks(1, limit, searchTerm);
+  };
 
   const resetForm = () => {
     setFormData({
       product_id: '',
       vendor_id: '',
-      quantity: 1,
-      buying_price: 0,
-      selling_price: 0,
-      total_amount: 0,
-      due_amount: 0,
+      warehouse_id: '',
+      quantity: '',
+      buying_price: '',
+      selling_price: '',
+      total_amount: '',
+      due_amount: '',
       stock_date: new Date().toISOString().split('T')[0],
-      comission: 0,
+      comission: '',
       sku: '',
       status: 'active'
     });
-    setEditingStock(null);
     setErrors({});
+    setEditingStock(null);
   };
 
   const openModal = (stock = null) => {
     if (stock) {
       setEditingStock(stock);
       setFormData({
-        product_id: stock.product_id?.toString() || '',
-        vendor_id: stock.vendor_id?.toString() || '',
-        quantity: stock.quantity || 1,
-        buying_price: parseFloat(stock.buying_price) || 0,
-        selling_price: parseFloat(stock.selling_price) || 0,
-        total_amount: parseFloat(stock.total_amount || 0),
-        due_amount: parseFloat(stock.due_amount || 0),
-        stock_date: stock.stock_date?.split('T')[0] || new Date().toISOString().split('T')[0],
-        comission: parseFloat(stock.comission || 0),
+        product_id: stock.product?.id?.toString() || '',
+        vendor_id: stock.vendor?.id?.toString() || '',
+        warehouse_id: stock.warehouse?.id?.toString() || '',
+        quantity: stock.quantity || '',
+        buying_price: stock.buying_price || '',
+        selling_price: stock.selling_price || '',
+        total_amount: stock.total_amount || '',
+        due_amount: stock.due_amount || '',
+        stock_date: stock.stock_date ? stock.stock_date.split('T')[0] : '',
+        comission: stock.comission || '',
         sku: stock.sku || '',
         status: stock.status || 'active'
       });
@@ -187,344 +211,383 @@ const StocksManager = () => {
     setShowModal(true);
   };
 
+  const closeModal = () => {
+    setShowModal(false);
+    setTimeout(resetForm, 300);
+  };
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+    if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setOperationLoading(true);
+    setOperationLoading('saving');
     setErrors({});
 
     const payload = {
-      quantity: parseInt(formData.quantity),
-      buying_price: parseFloat(formData.buying_price),
-      selling_price: parseFloat(formData.selling_price),
+      product_id: formData.product_id ? parseInt(formData.product_id) : null,
+      vendor_id: formData.vendor_id ? parseInt(formData.vendor_id) : null,
+      warehouse_id: formData.warehouse_id ? parseInt(formData.warehouse_id) : null,
+      quantity: parseInt(formData.quantity) || 0,
+      buying_price: parseFloat(formData.buying_price) || 0,
+      selling_price: parseFloat(formData.selling_price) || 0,
       total_amount: parseFloat(formData.total_amount) || null,
-      status: formData.status,
+      due_amount: parseFloat(formData.due_amount) || null,
+      stock_date: formData.stock_date || null,
+      comission: parseFloat(formData.comission) || null,
+      sku: formData.sku.trim() || null,
+      status: formData.status
     };
 
-    if (formData.due_amount) payload.due_amount = parseFloat(formData.due_amount);
-    if (formData.stock_date) payload.stock_date = formData.stock_date;
-    if (formData.comission) payload.comission = parseFloat(formData.comission);
-    if (formData.sku?.trim()) payload.sku = formData.sku.trim();
-
     try {
+      let response;
       if (editingStock) {
-        if (formData.product_id && parseInt(formData.product_id) !== editingStock.product_id) {
-          payload.product_id = parseInt(formData.product_id);
-        }
-        if (formData.vendor_id && parseInt(formData.vendor_id) !== editingStock.vendor_id) {
-          payload.vendor_id = parseInt(formData.vendor_id);
-        }
-
-        await axios.post(`${API_BASE}/${editingStock.id}`, {
-          ...payload,
-          _method: 'POST'
-        });
-
-        showNotification('Stock updated successfully');
+        response = await axios.put(`${API_URL}/${editingStock.id}`, payload);
       } else {
-        payload.product_id = parseInt(formData.product_id);
-        payload.vendor_id = parseInt(formData.vendor_id);
-
-        await axios.post(API_BASE, payload);
-        showNotification('Stock created successfully');
+        response = await axios.post(API_URL, payload);
       }
 
+      showNotification(response.data.message || `Stock ${editingStock ? 'updated' : 'created'} successfully!`);
       fetchStocks(pagination.current_page, pagination.per_page, searchTerm);
-      setShowModal(false);
-    } catch (err) {
-      handleApiError(err);
+      closeModal();
+    } catch (error) {
+      handleApiError(error, 'Failed to save stock');
     } finally {
-      setOperationLoading(false);
+      setOperationLoading(null);
     }
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Delete this stock permanently?')) return;
-
+    setOperationLoading(`delete-${id}`);
     try {
-      await axios.delete(`${API_BASE}/${id}`);
+      await axios.delete(`${API_URL}/${id}`);
       showNotification('Stock deleted successfully');
+      const remaining = pagination.total_items - 1;
+      const maxPage = Math.ceil(remaining / pagination.per_page);
+      const targetPage = pagination.current_page > maxPage ? maxPage : pagination.current_page;
+      fetchStocks(targetPage || 1, pagination.per_page, searchTerm);
+    } catch (error) {
+      handleApiError(error, 'Delete failed');
+    } finally {
+      setOperationLoading(null);
+      setDeleteConfirm(null);
+    }
+  };
 
-      const newTotal = pagination.total_items - 1;
-      const maxPage = Math.ceil(newTotal / pagination.per_page);
-      const targetPage = pagination.current_page > maxPage && maxPage > 0 ? maxPage : pagination.current_page;
-
-      fetchStocks(targetPage, pagination.per_page, searchTerm);
-    } catch (err) {
-      handleApiError(err);
+  const toggleStatus = async (stock) => {
+    const newStatus = stock.status === 'active' ? 'inactive' : 'active';
+    setOperationLoading(`status-${stock.id}`);
+    try {
+      await axios.put(`${API_URL}/${stock.id}`, { status: newStatus });
+      showNotification(`Stock ${newStatus === 'active' ? 'activated' : 'deactivated'}!`);
+      fetchStocks(pagination.current_page, pagination.per_page, searchTerm);
+    } catch (error) {
+      handleApiError(error, 'Status update failed');
+    } finally {
+      setOperationLoading(null);
+      setActionMenu(null);
     }
   };
 
   const stats = {
     total: pagination.total_items,
-    quantity: stocks.reduce((a, s) => a + (s.quantity || 0), 0),
-    value: stocks.reduce((a, s) => a + ((s.quantity || 0) * (parseFloat(s.buying_price) || 0)), 0),
+    quantity: stocks.reduce((acc, s) => acc + (s.quantity || 0), 0),
+    value: stocks.reduce((acc, s) => acc + ((s.quantity || 0) * (parseFloat(s.buying_price) || 0)), 0),
     active: stocks.filter(s => s.status === 'active').length
   };
 
-  const filtered = stocks.filter(s => statusFilter === 'all' || s.status === statusFilter);
+  const formatDate = (date) => date ? new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
 
-  const goToPage = (page) => {
-    if (page < 1 || page > pagination.last_page || page === pagination.current_page) return;
-    fetchStocks(page, pagination.per_page, searchTerm);
-  };
+  useEffect(() => {
+    const handler = () => setActionMenu(null);
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
+  }, []);
 
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100 p-4 md:p-6">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-gray-100 py-8">
+      <AnimatePresence>
+        {notification.show && (
+          <motion.div
+            initial={{ opacity: 0, x: 300 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 300 }}
+            className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-xl shadow-2xl ${notification.type === 'error' ? 'bg-red-600' : 'bg-green-600'} text-white font-medium flex items-center gap-2`}
+          >
+            <Check size={20} />
+            {notification.message}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-8 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6"
+        >
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-white">Stock Management</h1>
-            <p className="text-gray-400 mt-1">Manage inventory and stock entries</p>
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-cyan-500 bg-clip-text text-transparent">
+              Stock Management
+            </h1>
+            <p className="text-gray-400 mt-2">Manage inventory entries and stock levels</p>
           </div>
-          <button onClick={() => openModal()} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 px-5 py-3 rounded-lg font-medium shadow-lg transition">
-            <Plus size={20} /> Add Stock
+          <button
+            onClick={() => openModal()}
+            className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 px-6 py-3 rounded-xl font-bold flex items-center gap-3 shadow-lg"
+          >
+            <Plus size={22} /> Add New Stock
           </button>
+        </motion.div>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          {[
+            { label: 'Total Stocks', value: stats.total, icon: Package, color: 'blue' },
+            { label: 'Total Quantity', value: stats.quantity, icon: Hash, color: 'green' },
+            { label: 'Total Value', value: `$${stats.value.toFixed(0)}`, icon: DollarSign, color: 'purple' },
+            { label: 'Active Entries', value: stats.active, icon: BarChart3, color: 'yellow' },
+          ].map((s, i) => (
+            <div key={i} className="bg-gray-800/40 backdrop-blur-sm rounded-2xl p-6 border border-gray-700/40">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-400 text-sm">{s.label}</p>
+                  <p className="text-3xl font-bold mt-1">{s.value}</p>
+                </div>
+                <div className={`p-3 bg-${s.color}-500/10 rounded-xl`}>
+                  <s.icon size={28} className={`text-${s.color}-400`} />
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-gray-800 rounded-lg p-4 border-l-4 border-blue-500">
-            <div className="flex items-center gap-3">
-              <Package className="text-blue-400" size={24} />
-              <div>
-                <div className="text-2xl font-bold">{stats.total}</div>
-                <div className="text-gray-400 text-sm">Total Entries</div>
-              </div>
-            </div>
-          </div>
-          <div className="bg-gray-800 rounded-lg p-4 border-l-4 border-green-500">
-            <div className="flex items-center gap-3">
-              <Hash className="text-green-400" size={24} />
-              <div>
-                <div className="text-2xl font-bold">{stats.quantity}</div>
-                <div className="text-gray-400 text-sm">Total Qty</div>
-              </div>
-            </div>
-          </div>
-          <div className="bg-gray-800 rounded-lg p-4 border-l-4 border-purple-500">
-            <div className="flex items-center gap-3">
-              <DollarSign className="text-purple-400" size={24} />
-              <div>
-                <div className="text-2xl font-bold">${stats.value.toFixed(0)}</div>
-                <div className="text-gray-400 text-sm">Total Value</div>
-              </div>
-            </div>
-          </div>
-          <div className="bg-gray-800 rounded-lg p-4 border-l-4 border-yellow-500">
-            <div className="flex items-center gap-3">
-              <BarChart3 className="text-yellow-400" size={24} />
-              <div>
-                <div className="text-2xl font-bold">{stats.active}</div>
-                <div className="text-gray-400 text-sm">Active</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Search & Filter */}
-        <div className="bg-gray-800 rounded-lg p-4 mb-6">
-          <div className="flex flex-col lg:flex-row gap-4">
+        <div className="bg-gray-800/30 backdrop-blur-sm rounded-2xl p-6 mb-8 border border-gray-700/30">
+          <div className="flex flex-col lg:flex-row gap-6">
             <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
               <input
                 type="text"
-                placeholder="Search by SKU, Product or Vendor..."
+                placeholder="Search by SKU, product, vendor, or warehouse..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full pl-12 pr-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500/50 outline-none"
               />
             </div>
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-              <option value="all">All Status</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
-            {(searchTerm || statusFilter !== 'all') && (
-              <button onClick={() => {
-                setSearchTerm('');
-                setStatusFilter('all');
-                fetchStocks(1, 10);
-              }} className="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg transition">
-                Clear Filters
-              </button>
-            )}
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex items-center gap-2 bg-gray-700/50 border border-gray-600/50 rounded-xl px-4 py-3">
+                <span className="text-sm text-gray-400">Show:</span>
+                <select
+                  value={pagination.per_page}
+                  onChange={(e) => handleLimitChange(e.target.value)}
+                  className="bg-transparent border-0 text-white text-sm focus:ring-0 focus:outline-none"
+                >
+                  <option value="5">5</option>
+                  <option value="10">10</option>
+                  <option value="25">25</option>
+                  <option value="50">50</option>
+                </select>
+              </div>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 backdrop-blur-sm min-w-[140px]"
+              >
+                <option value="all">All Status</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </div>
           </div>
         </div>
 
-        {/* Table */}
-        {loading ? (
-          <div className="flex justify-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+        <div className="bg-gray-800/30 backdrop-blur-sm rounded-2xl border border-gray-700/30 overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-700/30 bg-gray-800/20">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-white">Stock Entries</h3>
+              <span className="text-sm text-gray-400">{pagination.total_items} entries</span>
+            </div>
           </div>
-        ) : (
-          <div className="bg-gray-800 rounded-lg overflow-hidden shadow-lg">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-700">
+
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-max">
+              <thead>
+                <tr className="border-b border-gray-700/30">
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Product</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Vendor</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Warehouse</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">SKU</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Quantity</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Buy Price</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Sell Price</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Total Amount</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Date</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-4 text-right text-sm font-semibold text-gray-300 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-700/30">
+                {loading ? (
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Product</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Vendor</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">SKU</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Qty</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Buy / Sell</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Date</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Status</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-300 uppercase">Actions</th>
+                    <td colSpan="11" className="px-6 py-12 text-center">
+                      <Loader size={32} className="animate-spin mx-auto text-blue-400" />
+                      <p className="text-gray-400 mt-3">Loading stocks...</p>
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-700">
-                  {filtered.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="text-center py-12 text-gray-500">
-                        {searchTerm ? 'No stocks match your search' : 'No stocks found'}
-                      </td>
-                    </tr>
-                  ) : (
-                    filtered.map(stock => (
-                      <tr key={stock.id} className="hover:bg-gray-750 transition-colors">
-                        <td className="px-4 py-4">
-                          <div className="flex items-center gap-2">
-                            <Package className="text-blue-400" size={16} />
-                            <span className="font-medium text-white">
-                              {stock.product_name || '—'}
-                            </span>
+                ) : stocks.length === 0 ? (
+                  <tr>
+                    <td colSpan="11" className="px-6 py-16 text-center">
+                      <Package size={64} className="mx-auto text-gray-500 mb-4" />
+                      <h3 className="text-2xl font-bold text-white mb-2">{searchTerm ? 'No stocks found' : 'No stock entries yet'}</h3>
+                      <p className="text-gray-400 mb-6">
+                        {searchTerm ? 'Try different search terms' : 'Add your first stock entry to get started'}
+                      </p>
+                      {!searchTerm && (
+                        <button onClick={() => openModal()} className="bg-gradient-to-r from-blue-600 to-cyan-600 px-8 py-3 rounded-xl font-bold flex items-center gap-2 mx-auto">
+                          <Plus size={20} /> Add First Stock
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ) : (
+                  stocks
+                    .filter(s => statusFilter === 'all' || s.status === statusFilter)
+                    .map(stock => (
+                      <tr key={stock.id} className="hover:bg-gray-700/20 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <Package size={20} className="text-blue-400" />
+                            <span className="font-medium">{stock.product?.name || '-'}</span>
                           </div>
                         </td>
-                        <td className="px-4 py-4">
-                          <div className="flex items-center gap-2">
-                            <Truck className="text-green-400" size={16} />
-                            <span className="text-white">
-                              {stock.vendor_name || '—'}
-                            </span>
+                        <td className="px-6 py-4">{stock.vendor?.name || '-'}</td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <Building size={20} className="text-amber-400" />
+                            <span>{stock.warehouse?.name || '-'}</span>
                           </div>
                         </td>
-                        <td className="px-4 py-4">
+                        <td className="px-6 py-4">
                           {stock.sku ? (
-                            <div className="flex items-center gap-1 text-sm font-mono">
-                              <Barcode size={14} />
-                              {stock.sku}
+                            <div className="flex items-center gap-2">
+                              <Barcode size={16} />
+                              <span className="font-mono">{stock.sku}</span>
                             </div>
                           ) : (
-                            <span className="text-gray-500">-</span>
+                            '-'
                           )}
                         </td>
-                        <td className="px-4 py-4">
-                          <span className="text-blue-400 font-bold text-lg">{stock.quantity}</span>
+                        <td className="px-6 py-4 font-bold text-blue-400">{stock.quantity}</td>
+                        <td className="px-6 py-4 text-green-400">${parseFloat(stock.buying_price || 0).toFixed(2)}</td>
+                        <td className="px-6 py-4 text-yellow-400">${parseFloat(stock.selling_price || 0).toFixed(2)}</td>
+                        <td className="px-6 py-4 font-bold text-purple-400">${parseFloat(stock.total_amount || 0).toFixed(2)}</td>
+                        <td className="px-6 py-4 text-sm text-gray-300">
+                          <Calendar size={16} className="inline mr-2" />
+                          {formatDate(stock.stock_date)}
                         </td>
-                        <td className="px-4 py-4 text-sm">
-                          <div>Buy: <span className="text-green-400 font-medium">${parseFloat(stock.buying_price || 0).toFixed(2)}</span></div>
-                          <div>Sell: <span className="text-yellow-400 font-medium">${parseFloat(stock.selling_price || 0).toFixed(2)}</span></div>
-                        </td>
-                        <td className="px-4 py-4 text-sm">
-                          <Calendar size={14} className="inline mr-1 text-gray-400" />
-                          {stock.stock_date ? new Date(stock.stock_date).toLocaleDateString() : '-'}
-                        </td>
-                        <td className="px-4 py-4">
-                          <span className={`inline-flex px-3 py-1 rounded-full text-xs font-medium ${
-                            stock.status === 'active'
-                              ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                              : 'bg-red-500/20 text-red-400 border border-red-500/30'
-                          }`}>
-                            {stock.status || 'unknown'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-4 text-right space-x-2">
+                        <td className="px-6 py-4">
                           <button
-                            onClick={() => openModal(stock)}
-                            className="p-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 rounded-lg transition"
+                            onClick={() => toggleStatus(stock)}
+                            disabled={operationLoading === `status-${stock.id}`}
+                            className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold ${
+                              stock.status === 'active'
+                                ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                                : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                            }`}
                           >
-                            <Edit size={16} />
+                            {operationLoading === `status-${stock.id}` ? <Loader size={12} className="animate-spin" /> : null}
+                            {stock.status === 'active' ? 'Active' : 'Inactive'}
                           </button>
-                          <button
-                            onClick={() => handleDelete(stock.id)}
-                            className="p-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded-lg transition"
-                          >
-                            <Trash2 size={16} />
-                          </button>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button onClick={() => openModal(stock)} className="p-2 bg-blue-500/20 hover:bg-blue-500/30 rounded-lg">
+                              <Edit size={16} />
+                            </button>
+                            <button onClick={() => setDeleteConfirm(stock.id)} className="p-2 bg-red-500/20 hover:bg-red-500/30 rounded-lg">
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Pagination */}
-            {pagination.total_pages > 1 && (
-              <div className="bg-gray-700 px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div className="text-sm text-gray-400">
-                  Showing {(pagination.current_page - 1) * pagination.per_page + 1} to{' '}
-                  {Math.min(pagination.current_page * pagination.per_page, pagination.total_items)} of {pagination.total_items} entries
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => goToPage(pagination.current_page - 1)}
-                    disabled={pagination.current_page === 1}
-                    className="px-4 py-2 rounded-lg bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition"
-                  >
-                    <ChevronLeft size={16} /> Previous
-                  </button>
-
-                  <div className="flex gap-1">
-                    {Array.from({ length: pagination.total_pages }, (_, i) => i + 1)
-                      .filter(page =>
-                        page === 1 ||
-                        page === pagination.total_pages ||
-                        (page >= pagination.current_page - 2 && page <= pagination.current_page + 2)
-                      )
-                      .map((page, idx, arr) => (
-                        <React.Fragment key={page}>
-                          {idx > 0 && arr[idx - 1] !== page - 1 && (
-                            <span className="px-3 py-2 text-gray-400">...</span>
-                          )}
-                          <button
-                            onClick={() => goToPage(page)}
-                            className={`px-4 py-2 rounded-lg text-sm transition ${
-                              pagination.current_page === page
-                                ? 'bg-blue-600 text-white'
-                                : 'bg-gray-600 hover:bg-gray-500 text-gray-300'
-                            }`}
-                          >
-                            {page}
-                          </button>
-                        </React.Fragment>
-                      ))}
-                  </div>
-
-                  <button
-                    onClick={() => goToPage(pagination.current_page + 1)}
-                    disabled={pagination.current_page === pagination.total_pages}
-                    className="px-4 py-2 rounded-lg bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition"
-                  >
-                    Next <ChevronRight size={16} />
-                  </button>
-                </div>
-              </div>
-            )}
+                )}
+              </tbody>
+            </table>
           </div>
-        )}
 
-        {/* Modal */}
+          {pagination.last_page > 1 && (
+            <div className="px-6 py-4 border-t border-gray-700/30 flex flex-col sm:flex-row justify-between items-center gap-4">
+              <div className="text-sm text-gray-400">
+                Showing {(pagination.current_page - 1) * pagination.per_page + 1} to {Math.min(pagination.current_page * pagination.per_page, pagination.total_items)} of {pagination.total_items}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handlePageChange(pagination.current_page - 1)}
+                  disabled={pagination.current_page === 1}
+                  className="px-3 py-2 rounded-xl border border-gray-600 disabled:opacity-50 flex items-center gap-2"
+                >
+                  <ChevronLeft size={16} /> Prev
+                </button>
+                {Array.from({ length: pagination.last_page }, (_, i) => i + 1)
+                  .filter(p => p === 1 || p === pagination.last_page || Math.abs(p - pagination.current_page) <= 2)
+                  .map(p => (
+                    <button
+                      key={p}
+                      onClick={() => handlePageChange(p)}
+                      className={`px-4 py-2 rounded-xl border ${pagination.current_page === p ? 'bg-blue-600 border-blue-500' : 'border-gray-600'}`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                <button
+                  onClick={() => handlePageChange(pagination.current_page + 1)}
+                  disabled={pagination.current_page === pagination.last_page}
+                  className="px-3 py-2 rounded-xl border border-gray-600 disabled:opacity-50 flex items-center gap-2"
+                >
+                  Next <ChevronRight size={16} />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <AnimatePresence>
         {showModal && (
-          <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50" onClick={() => setShowModal(false)}>
-            <div className="bg-gray-800 rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-              <div className="flex justify-between items-center p-6 border-b border-gray-700">
-                <h2 className="text-2xl font-bold">{editingStock ? 'Edit Stock' : 'Add New Stock'}</h2>
-                <button onClick={() => setShowModal(false)} className="p-2 hover:bg-gray-700 rounded-lg transition"><X size={24} /></button>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            onClick={closeModal}
+          >
+            <motion.div
+              initial={{ scale: 0.9 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.9 }}
+              className="bg-gray-800 rounded-3xl p-8 max-w-4xl w-full border border-gray-700 max-h-[90vh] overflow-y-auto"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-cyan-500 bg-clip-text text-transparent">
+                  {editingStock ? 'Edit Stock' : 'Add New Stock'}
+                </h2>
+                <button onClick={closeModal} className="p-2 hover:bg-gray-700 rounded-lg"><X size={24} /></button>
               </div>
 
-              <form onSubmit={handleSubmit} className="p-6 space-y-6">
+              <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Product *</label>
-                    <select 
-                      value={formData.product_id} 
-                      onChange={e => setFormData(prev => ({...prev, product_id: e.target.value}))} 
+                    <label className="block text-sm font-semibold mb-2">Product *</label>
+                    <select
+                      name="product_id"
+                      value={formData.product_id}
+                      onChange={handleChange}
                       required
-                      className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      className={`w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none ${errors.product_id ? 'border-red-500' : ''}`}
                     >
                       <option value="">Select Product</option>
                       {products.map(p => (
@@ -533,154 +596,205 @@ const StocksManager = () => {
                     </select>
                     {errors.product_id && <p className="text-red-400 text-sm mt-1">{errors.product_id[0]}</p>}
                   </div>
-
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Vendor *</label>
-                    <select 
-                      value={formData.vendor_id} 
-                      onChange={e => setFormData(prev => ({...prev, vendor_id: e.target.value}))} 
-                      required
-                      className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    <label className="block text-sm font-semibold mb-2">Vendor</label>
+                    <select
+                      name="vendor_id"
+                      value={formData.vendor_id}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none border-gray-600/50"
                     >
                       <option value="">Select Vendor</option>
                       {vendors.map(v => (
                         <option key={v.id} value={v.id}>{v.name}</option>
                       ))}
                     </select>
-                    {errors.vendor_id && <p className="text-red-400 text-sm mt-1">{errors.vendor_id[0]}</p>}
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold mb-2">Warehouse</label>
+                  <select
+                    name="warehouse_id"
+                    value={formData.warehouse_id}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none border-gray-600/50"
+                  >
+                    <option value="">Select Warehouse</option>
+                    {warehouses.map(w => (
+                      <option key={w.id} value={w.id}>{w.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Quantity *</label>
-                    <input 
-                      type="number" 
-                      min="0" 
-                      value={formData.quantity} 
-                      onChange={e => setFormData(prev => ({...prev, quantity: e.target.value}))} 
+                    <label className="block text-sm font-semibold mb-2">Quantity *</label>
+                    <input
+                      type="number"
+                      name="quantity"
+                      value={formData.quantity}
+                      onChange={handleChange}
                       required
-                      className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500" 
+                      min="0"
+                      className={`w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none ${errors.quantity ? 'border-red-500' : ''}`}
                     />
                     {errors.quantity && <p className="text-red-400 text-sm mt-1">{errors.quantity[0]}</p>}
                   </div>
-
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Buying Price *</label>
-                    <input 
-                      type="number" 
-                      step="0.01" 
-                      min="0" 
-                      value={formData.buying_price} 
-                      onChange={e => setFormData(prev => ({...prev, buying_price: e.target.value}))} 
+                    <label className="block text-sm font-semibold mb-2">Buying Price *</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      name="buying_price"
+                      value={formData.buying_price}
+                      onChange={handleChange}
                       required
-                      className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500" 
+                      min="0"
+                      className={`w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none ${errors.buying_price ? 'border-red-500' : ''}`}
                     />
                     {errors.buying_price && <p className="text-red-400 text-sm mt-1">{errors.buying_price[0]}</p>}
                   </div>
-
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Selling Price *</label>
-                    <input 
-                      type="number" 
-                      step="0.01" 
-                      min="0" 
-                      value={formData.selling_price} 
-                      onChange={e => setFormData(prev => ({...prev, selling_price: e.target.value}))} 
+                    <label className="block text-sm font-semibold mb-2">Selling Price *</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      name="selling_price"
+                      value={formData.selling_price}
+                      onChange={handleChange}
                       required
-                      className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500" 
+                      min="0"
+                      className={`w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none ${errors.selling_price ? 'border-red-500' : ''}`}
                     />
                     {errors.selling_price && <p className="text-red-400 text-sm mt-1">{errors.selling_price[0]}</p>}
                   </div>
-
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Commission</label>
-                    <input 
-                      type="number" 
-                      step="0.01" 
-                      min="0" 
-                      value={formData.comission} 
-                      onChange={e => setFormData(prev => ({...prev, comission: e.target.value}))}
-                      className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500" 
+                    <label className="block text-sm font-semibold mb-2">Total Amount</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      name="total_amount"
+                      value={formData.total_amount}
+                      onChange={handleChange}
+                      min="0"
+                      className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none border-gray-600/50"
+                      placeholder="Total amount (optional)"
                     />
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">SKU</label>
-                    <input 
-                      type="text" 
-                      value={formData.sku} 
-                      onChange={e => setFormData(prev => ({...prev, sku: e.target.value}))}
-                      className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500" 
-                      placeholder="Optional" 
+                    <label className="block text-sm font-semibold mb-2">SKU</label>
+                    <input
+                      type="text"
+                      name="sku"
+                      value={formData.sku}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none border-gray-600/50"
+                      placeholder="Optional SKU"
                     />
                   </div>
-
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Due Amount</label>
-                    <input 
-                      type="number" 
-                      step="0.01" 
-                      min="0" 
-                      value={formData.due_amount} 
-                      onChange={e => setFormData(prev => ({...prev, due_amount: e.target.value}))}
-                      className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500" 
+                    <label className="block text-sm font-semibold mb-2">Due Amount</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      name="due_amount"
+                      value={formData.due_amount}
+                      onChange={handleChange}
+                      min="0"
+                      className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none border-gray-600/50"
                     />
                   </div>
-
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Stock Date</label>
-                    <input 
-                      type="date" 
-                      value={formData.stock_date} 
-                      onChange={e => setFormData(prev => ({...prev, stock_date: e.target.value}))}
-                      className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500" 
+                    <label className="block text-sm font-semibold mb-2">Stock Date</label>
+                    <input
+                      type="date"
+                      name="stock_date"
+                      value={formData.stock_date}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none border-gray-600/50"
                     />
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Total Amount (Auto)</label>
-                    <div className="text-2xl font-bold text-green-400">${formData.total_amount}</div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Status</label>
-                    <select 
-                      value={formData.status} 
-                      onChange={e => setFormData(prev => ({...prev, status: e.target.value}))}
-                      className="px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="active">Active</option>
-                      <option value="inactive">Inactive</option>
-                    </select>
+                <div>
+                  <label className="block text-sm font-semibold mb-3">Status</label>
+                  <div className="grid grid-cols-2 gap-4">
+                    {['active', 'inactive'].map(st => (
+                      <label
+                        key={st}
+                        onClick={() => setFormData(prev => ({ ...prev, status: st }))}
+                        className={`p-4 border-2 rounded-xl text-center cursor-pointer transition ${
+                          formData.status === st
+                            ? st === 'active'
+                              ? 'border-green-500 bg-green-500/10'
+                              : 'border-red-500 bg-red-500/10'
+                            : 'border-gray-600'
+                        }`}
+                      >
+                        {st === 'active' ? <CheckCircle size={20} className="mx-auto mb-2 text-green-400" /> : <XCircle size={20} className="mx-auto mb-2 text-red-400" />}
+                        <span className="capitalize font-medium">{st}</span>
+                      </label>
+                    ))}
                   </div>
                 </div>
 
-                <div className="flex gap-4 pt-4 border-t border-gray-700">
-                  <button 
-                    type="button" 
-                    onClick={() => setShowModal(false)}
-                    className="flex-1 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg font-medium transition"
+                <div className="flex justify-end gap-3 pt-6 border-t border-gray-700">
+                  <button type="button" onClick={closeModal} className="px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-xl">Cancel</button>
+                  <button
+                    type="submit"
+                    disabled={operationLoading === 'saving'}
+                    className="px-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-xl font-bold flex items-center gap-2 disabled:opacity-70"
                   >
-                    Cancel
-                  </button>
-                  <button 
-                    type="submit" 
-                    disabled={operationLoading}
-                    className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium flex items-center justify-center gap-2 transition"
-                  >
-                    {operationLoading ? 'Saving...' : <><Check size={20} /> {editingStock ? 'Update' : 'Create'} Stock</>}
+                    {operationLoading === 'saving' ? <Loader size={20} className="animate-spin" /> : <Check size={20} />}
+                    {editingStock ? 'Update Stock' : 'Create Stock'}
                   </button>
                 </div>
               </form>
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
         )}
-      </div>
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {deleteConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            onClick={() => setDeleteConfirm(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.9 }}
+              className="bg-gray-800 rounded-3xl p-8 max-w-md w-full border border-gray-700"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="text-center">
+                <Trash2 size={48} className="mx-auto text-red-500 mb-4" />
+                <h3 className="text-xl font-bold text-white mb-2">Delete Stock Entry</h3>
+                <p className="text-gray-400 mb-6">This action cannot be undone.</p>
+                <div className="flex gap-3">
+                  <button onClick={() => setDeleteConfirm(null)} className="flex-1 px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-xl">Cancel</button>
+                  <button
+                    onClick={() => handleDelete(deleteConfirm)}
+                    disabled={operationLoading === `delete-${deleteConfirm}`}
+                    className="flex-1 px-6 py-3 bg-red-600 hover:bg-red-700 rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-70"
+                  >
+                    {operationLoading === `delete-${deleteConfirm}` ? <Loader size={20} className="animate-spin" /> : <Trash2 size={20} />}
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

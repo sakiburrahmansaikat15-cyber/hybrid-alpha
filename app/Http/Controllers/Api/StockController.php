@@ -17,7 +17,7 @@ class StockController extends Controller
         $limit = (int) $request->query('limit', 10);
         $page = (int) $request->query('page', 1);
 
-        $query = Stocks::query();
+        $query = Stocks::with('product','vendor','warehouse');
 
         // 🔍 Apply search if keyword provided
           if ($keyword) {
@@ -44,13 +44,14 @@ class StockController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'product_id' => 'required|exists:prooducts,id',
-            'vendor_id' => 'required|exists:vendors,id',
+            'product_id' => 'nullable|exists:prooducts,id',
+            'vendor_id' => 'nullable|exists:vendors,id',
+            "warehouse_id" =>'nullable|exists:warehouses,id',
             'quantity' => 'required|integer|min:0',
             'buying_price' => 'required|numeric|min:0',
             'selling_price' => 'required|numeric|min:0',
             'total_amount' => 'nullable|numeric|min:0',
-            'due_amount' => 'nullable|numeric|min:0',
+            'due_amount' => 'nullable|numeric',
             'stock_date' => 'nullable|date',
             'comission' => 'nullable|numeric|min:0',
             'status' => 'required|in:active,inactive',
@@ -109,6 +110,7 @@ class StockController extends Controller
         $data = $request->validate([
             'product_id' => 'sometimes|exists:products,id',
             'vendor_id' => 'sometimes|exists:vendors,id',
+             "warehouse_id" =>'nullable|exists:warehouses,id',
             'quantity' => 'sometimes|integer|min:0',
             'buying_price' => 'sometimes|numeric|min:0',
             'selling_price' => 'sometimes|numeric|min:0',

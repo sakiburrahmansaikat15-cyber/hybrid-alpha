@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\SubItemController;
 use App\Http\Controllers\Api\VariantController;
 use App\Http\Controllers\Api\VendorController;
 use App\Http\Controllers\Api\RoleController;
+use App\Http\Controllers\Api\WarehouseController;
 
 
 
@@ -191,6 +192,15 @@ Route::prefix('payment-types')->group(function () {
     Route::delete('/{id}', [PaymentTypeController::class, 'destroy']);
 });
 
+
+
+Route::prefix('warehouses')->group(function () {
+    Route::get('/', [WarehouseController::class, 'index']);
+    Route::post('/', [WarehouseController::class, 'store']);
+    Route::get('{id}', [WarehouseController::class, 'show']);
+    Route::put('{id}', [WarehouseController::class, 'update']);
+    Route::delete('{id}', [WarehouseController::class, 'destroy']);
+});
 
 
 
@@ -439,170 +449,170 @@ Route::prefix('crm')->group(function () {
 Route::prefix('pos')->group(function () {
 
     Route::prefix('tax-groups')->group(function () {
-        Route::get('/', [TaxGroupController::class, 'index']);      
-        Route::post('/', [TaxGroupController::class, 'store']);     
-        Route::get('/{id}', [TaxGroupController::class, 'show']);    
-        Route::post('/{id}', [TaxGroupController::class, 'update']); 
-        Route::delete('/{id}', [TaxGroupController::class, 'destroy']); 
+        Route::get('/', [TaxGroupController::class, 'index']);
+        Route::post('/', [TaxGroupController::class, 'store']);
+        Route::get('/{id}', [TaxGroupController::class, 'show']);
+        Route::post('/{id}', [TaxGroupController::class, 'update']);
+        Route::delete('/{id}', [TaxGroupController::class, 'destroy']);
     });
 
     Route::prefix('tax-rates')->group(function () {
-        Route::get('/', [TaxRateController::class, 'index']);        
-        Route::post('/', [TaxRateController::class, 'store']);      
-        Route::get('/{id}', [TaxRateController::class, 'show']);     
-        Route::post('/{id}', [TaxRateController::class, 'update']);  
-        Route::delete('/{id}', [TaxRateController::class, 'destroy']); 
+        Route::get('/', [TaxRateController::class, 'index']);
+        Route::post('/', [TaxRateController::class, 'store']);
+        Route::get('/{id}', [TaxRateController::class, 'show']);
+        Route::post('/{id}', [TaxRateController::class, 'update']);
+        Route::delete('/{id}', [TaxRateController::class, 'destroy']);
     });
 
 
      Route::prefix('receipt-templates')->group(function () {
-        Route::get('/', [ReceiptTemplateController::class, 'index']);       
-        Route::post('/', [ReceiptTemplateController::class, 'store']);     
-        Route::get('/{id}', [ReceiptTemplateController::class, 'show']);    
-        Route::post('/{id}', [ReceiptTemplateController::class, 'update']); 
-        Route::delete('/{id}', [ReceiptTemplateController::class, 'destroy']); 
+        Route::get('/', [ReceiptTemplateController::class, 'index']);
+        Route::post('/', [ReceiptTemplateController::class, 'store']);
+        Route::get('/{id}', [ReceiptTemplateController::class, 'show']);
+        Route::post('/{id}', [ReceiptTemplateController::class, 'update']);
+        Route::delete('/{id}', [ReceiptTemplateController::class, 'destroy']);
     });
 
 
       Route::prefix('payment-gateways')->group(function () {
-        Route::get('/', [PaymentGatewayController::class, 'index']);       
-        Route::post('/', [PaymentGatewayController::class, 'store']);      
-        Route::get('/{id}', [PaymentGatewayController::class, 'show']);     
-        Route::post('/{id}', [PaymentGatewayController::class, 'update']); 
+        Route::get('/', [PaymentGatewayController::class, 'index']);
+        Route::post('/', [PaymentGatewayController::class, 'store']);
+        Route::get('/{id}', [PaymentGatewayController::class, 'show']);
+        Route::post('/{id}', [PaymentGatewayController::class, 'update']);
         Route::delete('/{id}', [PaymentGatewayController::class, 'destroy']);
     });
 
 
       Route::prefix('payment-methods')->group(function () {
-        Route::get('/', [PaymentMethodController::class, 'index']);       
-        Route::post('/', [PaymentMethodController::class, 'store']);      
-        Route::get('/{id}', [PaymentMethodController::class, 'show']);    
-        Route::post('/{id}', [PaymentMethodController::class, 'update']);  
-        Route::delete('/{id}', [PaymentMethodController::class, 'destroy']); 
+        Route::get('/', [PaymentMethodController::class, 'index']);
+        Route::post('/', [PaymentMethodController::class, 'store']);
+        Route::get('/{id}', [PaymentMethodController::class, 'show']);
+        Route::post('/{id}', [PaymentMethodController::class, 'update']);
+        Route::delete('/{id}', [PaymentMethodController::class, 'destroy']);
     });
 
 
      Route::prefix('vouchers')->group(function () {
-        Route::get('/', [VoucherController::class, 'index']);        
-        Route::post('/', [VoucherController::class, 'store']);       
-        Route::get('/{id}', [VoucherController::class, 'show']);    
-        Route::post('/{id}', [VoucherController::class, 'update']);  
-        Route::delete('/{id}', [VoucherController::class, 'destroy']); 
+        Route::get('/', [VoucherController::class, 'index']);
+        Route::post('/', [VoucherController::class, 'store']);
+        Route::get('/{id}', [VoucherController::class, 'show']);
+        Route::post('/{id}', [VoucherController::class, 'update']);
+        Route::delete('/{id}', [VoucherController::class, 'destroy']);
     });
 
 
      Route::prefix('gift-cards')->group(function () {
-        Route::get('/', [GiftCardController::class, 'index']);       
-        Route::post('/', [GiftCardController::class, 'store']);      
-        Route::get('/{id}', [GiftCardController::class, 'show']);   
-        Route::post('/{id}', [GiftCardController::class, 'update']);  
-        Route::delete('/{id}', [GiftCardController::class, 'destroy']); 
+        Route::get('/', [GiftCardController::class, 'index']);
+        Route::post('/', [GiftCardController::class, 'store']);
+        Route::get('/{id}', [GiftCardController::class, 'show']);
+        Route::post('/{id}', [GiftCardController::class, 'update']);
+        Route::delete('/{id}', [GiftCardController::class, 'destroy']);
     });
 
     Route::prefix('customer-groups')->group(function () {
-        Route::get('/', [CustomerGroupController::class, 'index']);       
-        Route::post('/', [CustomerGroupController::class, 'store']);      
-        Route::get('/{id}', [CustomerGroupController::class, 'show']);     
-        Route::post('/{id}', [CustomerGroupController::class, 'update']);  
-        Route::delete('/{id}', [CustomerGroupController::class, 'destroy']); 
+        Route::get('/', [CustomerGroupController::class, 'index']);
+        Route::post('/', [CustomerGroupController::class, 'store']);
+        Route::get('/{id}', [CustomerGroupController::class, 'show']);
+        Route::post('/{id}', [CustomerGroupController::class, 'update']);
+        Route::delete('/{id}', [CustomerGroupController::class, 'destroy']);
     });
 
       Route::prefix('customers')->group(function () {
-        Route::get('/', [CustomersController::class, 'index']);      
-        Route::post('/', [CustomersController::class, 'store']);      
-        Route::get('/{id}', [CustomersController::class, 'show']);     
+        Route::get('/', [CustomersController::class, 'index']);
+        Route::post('/', [CustomersController::class, 'store']);
+        Route::get('/{id}', [CustomersController::class, 'show']);
         Route::post('/{id}', [CustomersController::class, 'update']);
-        Route::delete('/{id}', [CustomersController::class, 'destroy']); 
+        Route::delete('/{id}', [CustomersController::class, 'destroy']);
     });
 
 
      Route::prefix('customer-addresses')->group(function () {
-        Route::get('/', [CustomerAddressController::class, 'index']);        
-        Route::post('/', [CustomerAddressController::class, 'store']);       
-        Route::get('/{id}', [CustomerAddressController::class, 'show']);     
-        Route::post('/{id}', [CustomerAddressController::class, 'update']);  
-        Route::delete('/{id}', [CustomerAddressController::class, 'destroy']); 
+        Route::get('/', [CustomerAddressController::class, 'index']);
+        Route::post('/', [CustomerAddressController::class, 'store']);
+        Route::get('/{id}', [CustomerAddressController::class, 'show']);
+        Route::post('/{id}', [CustomerAddressController::class, 'update']);
+        Route::delete('/{id}', [CustomerAddressController::class, 'destroy']);
     });
 
 
      Route::prefix('terminals')->group(function () {
-        Route::get('/', [PosTerminalController::class, 'index']);        
-        Route::post('/', [PosTerminalController::class, 'store']);       
-        Route::get('/{id}', [PosTerminalController::class, 'show']);    
-        Route::post('/{id}', [PosTerminalController::class, 'update']);  
-        Route::delete('/{id}', [PosTerminalController::class, 'destroy']); 
+        Route::get('/', [PosTerminalController::class, 'index']);
+        Route::post('/', [PosTerminalController::class, 'store']);
+        Route::get('/{id}', [PosTerminalController::class, 'show']);
+        Route::post('/{id}', [PosTerminalController::class, 'update']);
+        Route::delete('/{id}', [PosTerminalController::class, 'destroy']);
     });
 
 
     Route::prefix('sales')->group(function () {
-        Route::get('/', [SaleController::class, 'index']);       
-        Route::post('/', [SaleController::class, 'store']);       
-        Route::get('/{id}', [SaleController::class, 'show']);     
-        Route::post('/{id}', [SaleController::class, 'update']);  
-        Route::delete('/{id}', [SaleController::class, 'destroy']); 
+        Route::get('/', [SaleController::class, 'index']);
+        Route::post('/', [SaleController::class, 'store']);
+        Route::get('/{id}', [SaleController::class, 'show']);
+        Route::post('/{id}', [SaleController::class, 'update']);
+        Route::delete('/{id}', [SaleController::class, 'destroy']);
     });
 
 
     Route::prefix('sale-discounts')->group(function () {
-        Route::get('/', [SaleDiscountController::class, 'index']);        
-        Route::post('/', [SaleDiscountController::class, 'store']);      
-        Route::get('/{id}', [SaleDiscountController::class, 'show']);    
-        Route::post('/{id}', [SaleDiscountController::class, 'update']);  
-        Route::delete('/{id}', [SaleDiscountController::class, 'destroy']); 
+        Route::get('/', [SaleDiscountController::class, 'index']);
+        Route::post('/', [SaleDiscountController::class, 'store']);
+        Route::get('/{id}', [SaleDiscountController::class, 'show']);
+        Route::post('/{id}', [SaleDiscountController::class, 'update']);
+        Route::delete('/{id}', [SaleDiscountController::class, 'destroy']);
     });
 
 
      Route::prefix('sale-payments')->group(function () {
-        Route::get('/', [SalePaymentController::class, 'index']);        
-        Route::post('/', [SalePaymentController::class, 'store']);      
-        Route::get('/{id}', [SalePaymentController::class, 'show']);     
-        Route::post('/{id}', [SalePaymentController::class, 'update']);  
+        Route::get('/', [SalePaymentController::class, 'index']);
+        Route::post('/', [SalePaymentController::class, 'store']);
+        Route::get('/{id}', [SalePaymentController::class, 'show']);
+        Route::post('/{id}', [SalePaymentController::class, 'update']);
         Route::delete('/{id}', [SalePaymentController::class, 'destroy']);
     });
 
 
       Route::prefix('hold-carts')->group(function () {
-        Route::get('/', [HoldCartController::class, 'index']);        
-        Route::post('/', [HoldCartController::class, 'store']);       
-        Route::get('/{id}', [HoldCartController::class, 'show']);     
-        Route::post('/{id}', [HoldCartController::class, 'update']);  
-        Route::delete('/{id}', [HoldCartController::class, 'destroy']); 
+        Route::get('/', [HoldCartController::class, 'index']);
+        Route::post('/', [HoldCartController::class, 'store']);
+        Route::get('/{id}', [HoldCartController::class, 'show']);
+        Route::post('/{id}', [HoldCartController::class, 'update']);
+        Route::delete('/{id}', [HoldCartController::class, 'destroy']);
     });
 
 
      Route::prefix('sale-taxes')->group(function () {
-        Route::get('/', [SaleTaxController::class, 'index']);        
-        Route::post('/', [SaleTaxController::class, 'store']);       
-        Route::get('/{id}', [SaleTaxController::class, 'show']);     
-        Route::post('/{id}', [SaleTaxController::class, 'update']); 
-        Route::delete('/{id}', [SaleTaxController::class, 'destroy']); 
+        Route::get('/', [SaleTaxController::class, 'index']);
+        Route::post('/', [SaleTaxController::class, 'store']);
+        Route::get('/{id}', [SaleTaxController::class, 'show']);
+        Route::post('/{id}', [SaleTaxController::class, 'update']);
+        Route::delete('/{id}', [SaleTaxController::class, 'destroy']);
     });
 
 
     Route::prefix('sale-items')->group(function () {
-        Route::get('/', [SaleItemController::class, 'index']);      
-        Route::post('/', [SaleItemController::class, 'store']);     
-        Route::get('/{id}', [SaleItemController::class, 'show']);    
-        Route::post('/{id}', [SaleItemController::class, 'update']);  
+        Route::get('/', [SaleItemController::class, 'index']);
+        Route::post('/', [SaleItemController::class, 'store']);
+        Route::get('/{id}', [SaleItemController::class, 'show']);
+        Route::post('/{id}', [SaleItemController::class, 'update']);
         Route::delete('/{id}', [SaleItemController::class, 'destroy']);
     });
 
 
     Route::prefix('sessions')->group(function () {
-        Route::get('/', [PosSessionController::class, 'index']);        
-        Route::post('/', [PosSessionController::class, 'store']);       
-        Route::get('/{id}', [PosSessionController::class, 'show']);     
-        Route::post('/{id}', [PosSessionController::class, 'update']);  
-        Route::delete('/{id}', [PosSessionController::class, 'destroy']); 
+        Route::get('/', [PosSessionController::class, 'index']);
+        Route::post('/', [PosSessionController::class, 'store']);
+        Route::get('/{id}', [PosSessionController::class, 'show']);
+        Route::post('/{id}', [PosSessionController::class, 'update']);
+        Route::delete('/{id}', [PosSessionController::class, 'destroy']);
     });
 
 
      Route::prefix('receipts')->group(function () {
-        Route::get('/', [ReceiptsController::class, 'index']);        
-        Route::post('/', [ReceiptsController::class, 'store']);       
-        Route::get('/{id}', [ReceiptsController::class, 'show']);     
-        Route::post('/{id}', [ReceiptsController::class, 'update']);  
-        Route::delete('/{id}', [ReceiptsController::class, 'destroy']); 
+        Route::get('/', [ReceiptsController::class, 'index']);
+        Route::post('/', [ReceiptsController::class, 'store']);
+        Route::get('/{id}', [ReceiptsController::class, 'show']);
+        Route::post('/{id}', [ReceiptsController::class, 'update']);
+        Route::delete('/{id}', [ReceiptsController::class, 'destroy']);
     });
 
 

@@ -5,145 +5,154 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Warehouse;
 use Illuminate\Http\Request;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Validator;
 
 class WarehouseController extends Controller
 {
-    /* =============================================================
-       LIST
-       ============================================================= */
-    public function index(Request $request): JsonResponse
+    // ✅ List warehouses with search and pagination
+    public function index(Request $request)
     {
+        $keyword = $request->query('keyword', '');
+        $limit = $request->query('limit');
+
         $query = Warehouse::query();
 
-        if ($q = $request->get('q')) {
-            $query->search($q);
+        if ($keyword) {
+            $query->where('name', 'like', "%{$keyword}%")
+                  ->orWhere('code', 'like', "%{$keyword}%")
+                  ->orWhere('type', 'like', "%{$keyword}%");
         }
 
-        if ($request->filled('status')) {
-            $query->where('status', $request->boolean('status'));
+        if (!$limit) {
+            $data = $query->latest()->get();
+            return response()->json([
+                'message' => 'Warehouses fetched successfully',
+                'pagination' => [
+                    'current_page' => 1,
+                    'per_page' => $data->count(),
+                    'total_items' => $data->count(),
+                    'total_pages' => 1,
+                    'data' => $data,
+                ],
+            ]);
         }
 
-        $data = $query->latest()->paginate($request->get('per_page', 15));
+        $limit = (int)$limit ?: 10;
+        $warehouses = $query->latest()->paginate($limit);
 
         return response()->json([
-            'success' => true,
-            'data'    => $data,
+            'message' => 'Warehouses fetched successfully',
+            'pagination' => [
+                'current_page' => $warehouses->currentPage(),
+                'per_page' => $warehouses->perPage(),
+                'total_items' => $warehouses->total(),
+                'total_pages' => $warehouses->lastPage(),
+                'data' => $warehouses->items(),
+            ],
         ]);
     }
 
-    /* =============================================================
-       STORE
-       ============================================================= */
-    public function store(Request $request): JsonResponse
+    // ✅ Store a new warehouse
+    public function store(Request $request)
     {
-        $request->validate([
-            'name'    => 'required|string|max:255|unique:warehouses,name',
-            'address' => 'required|string',
-            'note'    => 'nullable|string',
-            'status'  => 'required|in:1,0,true,false', // ONLY true/false
+        $validator = Validator::make($request->all(), [
+            'name'           => 'required|string|max:255',
+            'code'           => 'required|string|max:50|unique:warehouses,code',
+            'type'           => 'nullable|string|max:50',
+            'contact_person' => 'nullable|string|max:255',
+            'phone'          => 'nullable|string|max:20',
+            'email'          => 'nullable|email|max:255',
+            'address'        => 'nullable|string',
+            'country'        => 'nullable|string|max:100',
+            'state'          => 'nullable|string|max:100',
+            'city'           => 'nullable|string|max:100',
+            'capacity'       => 'nullable|integer|min:0',
+            'is_default'     => 'nullable|boolean',
+            'status'         => 'required|in:active,inactive',
         ]);
 
-        return $this->transaction(function () use ($request) {
-            $warehouse = Warehouse::create([
-                'name'    => $request->name,
-                'address' => $request->address,
-                'note'    => $request->note,
-                'status'  => $request->boolean('status'), // → true/false
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Warehouse created',
-                'data'    => $warehouse,
-            ], 201);
-        });
-    }
-
-    /* =============================================================
-       SHOW
-       ============================================================= */
-    public function show(int $id): JsonResponse
-    {
-        $warehouse = Warehouse::findOrFail($id);
-
-        return response()->json([
-            'success' => true,
-            'data'    => $warehouse,
-        ]);
-    }
-
-    /* =============================================================
-       UPDATE
-       ============================================================= */
-    public function update(Request $request, int $id): JsonResponse
-    {
-        $warehouse = Warehouse::findOrFail($id);
-
-        $request->validate([
-            'name'    => ['sometimes', 'string', 'max:255', Rule::unique('warehouses')->ignore($id)],
-            'address' => 'sometimes|string',
-            'note'    => 'nullable|string',
-            'status'  => 'sometimes|in:1,0,true,false', // ONLY true/false
-        ]);
-
-        return $this->transaction(function () use ($request, $warehouse) {
-            $data = $request->only(['name', 'address', 'note']);
-
-            if ($request->has('status')) {
-                $data['status'] = $request->boolean('status'); // → true/false
-            }
-
-            $warehouse->update($data);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Warehouse updated',
-                'data'    => $warehouse,
-            ]);
-        });
-    }
-
-    /* =============================================================
-       DESTROY
-       ============================================================= */
-    public function destroy(int $id): JsonResponse
-    {
-        $warehouse = Warehouse::findOrFail($id);
-
-        return $this->transaction(function () use ($warehouse) {
-            $warehouse->delete();
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Warehouse deleted',
-            ]);
-        });
-    }
-
-    /* =============================================================
-       HELPERS
-       ============================================================= */
-
-    private function transaction(callable $callback): JsonResponse
-    {
-        try {
-            DB::beginTransaction();
-            $response = $callback();
-            DB::commit();
-            return $response;
-        } catch (\Throwable $e) {
-            DB::rollBack();
-            Log::error('Warehouse error: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
-
+        if ($validator->fails()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Operation failed',
-                'error'   => app()->environment('local') ? $e->getMessage() : null,
-            ], 500);
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
         }
+
+        $warehouse = Warehouse::create($validator->validated());
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Warehouse created successfully',
+            'data' => $warehouse
+        ], 201);
+    }
+
+    // ✅ Show single warehouse
+    public function show($id)
+    {
+        $warehouse = Warehouse::find($id);
+
+        if (!$warehouse) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Warehouse not found'
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $warehouse
+        ], 200);
+    }
+
+    // ✅ Update warehouse
+    public function update(Request $request, $id)
+    {
+        $warehouse = Warehouse::findOrFail($id);
+
+        $data = $request->validate([
+            'name'           => 'sometimes|string|max:255',
+            'code'           => 'sometimes|string|max:50|unique:warehouses,code,' . $warehouse->id,
+            'type'           => 'sometimes|string|max:50',
+            'contact_person' => 'sometimes|string|max:255',
+            'phone'          => 'sometimes|string|max:20',
+            'email'          => 'sometimes|email|max:255',
+            'address'        => 'sometimes|string',
+            'country'        => 'sometimes|string|max:100',
+            'state'          => 'sometimes|string|max:100',
+            'city'           => 'sometimes|string|max:100',
+            'capacity'       => 'sometimes|integer|min:0',
+            'is_default'     => 'sometimes|boolean',
+            'status'         => 'sometimes|in:active,inactive',
+        ]);
+
+        $warehouse->update($data);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Warehouse updated successfully',
+            'data' => $warehouse
+        ], 200);
+    }
+
+    // ✅ Delete warehouse
+    public function destroy($id)
+    {
+        $warehouse = Warehouse::find($id);
+
+        if (!$warehouse) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Warehouse not found'
+            ], 404);
+        }
+
+        $warehouse->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Warehouse deleted successfully'
+        ], 200);
     }
 }
