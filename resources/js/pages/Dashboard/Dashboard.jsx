@@ -105,7 +105,7 @@ const Dashboard = () => {
      Main UI
   -------------------------------------------------------------- */
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-14">
 
       {/* Header */}
       <motion.div
@@ -515,7 +515,7 @@ const AccountsOverview = ({ stats }) => (
    Skeleton
 ----------------------------------------------------------------- */
 const DashboardSkeleton = () => (
-  <div className="space-y-6 animate-pulse">
+  <div className="space-y-6 animate-pulse p-14">
     <div className="h-12 bg-gray-200 dark:bg-gray-700 rounded"></div>
     <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
       {Array.from({ length: 5 }).map((_, i) => (

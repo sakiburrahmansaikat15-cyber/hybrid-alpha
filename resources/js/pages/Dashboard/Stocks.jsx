@@ -2,25 +2,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Plus,
-  Search,
-  Edit,
-  Trash2,
-  X,
-  Check,
-  AlertCircle,
-  Package,
-  DollarSign,
-  BarChart3,
-  Calendar,
-  Barcode,
-  Hash,
-  Loader,
-  ChevronLeft,
-  ChevronRight,
-  CheckCircle,
-  XCircle,
-  Building,
+  Plus, Search, Edit, Trash2, X, Check, AlertCircle, Package, DollarSign,
+  BarChart3, Calendar, Barcode, Hash, Loader, ChevronLeft, ChevronRight,
+  CheckCircle, XCircle, Building,
 } from 'lucide-react';
 
 const API_URL = '/api/stocks';
@@ -38,15 +22,11 @@ const StocksManager = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [deleteConfirm, setDeleteConfirm] = useState(null);
 
-  // Initialized as empty arrays to prevent .map() errors
   const [products, setProducts] = useState([]);
   const [vendors, setVendors] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
 
-  // Track if the selected product is electronic
   const [isElectronicProduct, setIsElectronicProduct] = useState(false);
-
-  // Dynamic SKU inputs for electronic products
   const [skuInputs, setSkuInputs] = useState([]);
 
   const [formData, setFormData] = useState({
@@ -60,9 +40,11 @@ const StocksManager = () => {
     due_amount: '',
     stock_date: new Date().toISOString().split('T')[0],
     comission: '',
-    sku: '', // used only for non-electronic
+    sku: '',
     status: 'active',
   });
+
+  const [calculatedTotalAmount, setCalculatedTotalAmount] = useState('');
 
   const [errors, setErrors] = useState({});
   const [notification, setNotification] = useState({ show: false, message: '', type: '' });
@@ -79,69 +61,55 @@ const StocksManager = () => {
     setTimeout(() => setNotification({ show: false, message: '', type: '' }), 4000);
   }, []);
 
-  const handleApiError = useCallback(
-    (error, defaultMessage) => {
-      if (error.response?.status === 422) {
-        const validationErrors = error.response.data.errors || {};
-        setErrors(validationErrors);
-        const firstError = Object.values(validationErrors)[0]?.[0];
-        showNotification(firstError || 'Validation error', 'error');
-      } else if (error.response?.data?.message) {
-        showNotification(error.response.data.message, 'error');
-        setErrors({ _general: error.response.data.message });
-      } else {
-        showNotification(defaultMessage || 'Something went wrong', 'error');
-        setErrors({ _general: defaultMessage });
-      }
-    },
-    [showNotification]
-  );
+  const handleApiError = useCallback((error, defaultMessage) => {
+    if (error.response?.status === 422) {
+      const validationErrors = error.response.data.errors || {};
+      setErrors(validationErrors);
+      const firstError = Object.values(validationErrors)[0]?.[0];
+      showNotification(firstError || 'Validation error', 'error');
+    } else {
+      showNotification(error.response?.data?.message || defaultMessage || 'Something went wrong', 'error');
+    }
+  }, [showNotification]);
 
-  const fetchStocks = useCallback(
-    async (page = 1, perPage = 10, keyword = '') => {
-      setLoading(true);
-      try {
-        const params = { page, limit: perPage };
-        if (keyword.trim()) params.keyword = keyword.trim();
+  const fetchStocks = useCallback(async (page = 1, perPage = 10, keyword = '') => {
+    setLoading(true);
+    try {
+      const params = { page, limit: perPage };
+      if (keyword.trim()) params.keyword = keyword.trim();
 
-        const response = await axios.get(API_URL, { params });
-        const res = response.data;
+      const response = await axios.get(API_URL, { params });
+      const res = response.data;
 
-        const stockData = res.data || [];
-        const formatted = stockData.map((item) => ({
-          id: item.id,
-          product: item.product || {},
-          vendor: item.vendor || {},
-          warehouse: item.warehouse || {},
-          quantity: item.quantity ?? 0,
-          buying_price: item.buying_price ?? '0.00',
-          selling_price: item.selling_price ?? '0.00',
-          total_amount: item.total_amount ?? null,
-          due_amount: item.due_amount ?? null,
-          comission: item.comission ?? null,
-          stock_date: item.stock_date ?? null,
-          sku: item.sku || '',
-          status: item.status || 'active',
-          created_at: item.created_at,
-          updated_at: item.updated_at,
-        }));
+      setStocks(res.data.map(item => ({
+        id: item.id,
+        product: item.product || {},
+        vendor: item.vendor || {},
+        warehouse: item.warehouse || {},
+        quantity: item.quantity ?? 0,
+        buying_price: item.buying_price ?? '0.00',
+        selling_price: item.selling_price ?? '0.00',
+        total_amount: item.total_amount ?? null,
+        due_amount: item.due_amount ?? null,
+        comission: item.comission ?? null,
+        stock_date: item.stock_date ?? null,
+        sku: item.sku || '',
+        status: item.status || 'active',
+      })));
 
-        setStocks(formatted);
-        setPagination({
-          current_page: res.current_page || 1,
-          last_page: res.total_pages || 1,
-          per_page: res.per_page || 10,
-          total_items: res.total_items || 0,
-        });
-      } catch (error) {
-        handleApiError(error, 'Failed to fetch stocks');
-        setStocks([]);
-      } finally {
-        setLoading(false);
-      }
-    },
-    [handleApiError]
-  );
+      setPagination({
+        current_page: res.current_page || 1,
+        last_page: res.total_pages || 1,
+        per_page: res.per_page || 10,
+        total_items: res.total_items || 0,
+      });
+    } catch (error) {
+      handleApiError(error, 'Failed to fetch stocks');
+      setStocks([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [handleApiError]);
 
   const fetchRelatedData = useCallback(async () => {
     try {
@@ -151,52 +119,41 @@ const StocksManager = () => {
         axios.get(WAREHOUSES_URL),
       ]);
 
-      const extractItems = (response) => {
-        const data = response.data;
-        if (Array.isArray(data)) return data;
-        if (data?.data && Array.isArray(data.data)) return data.data;
-        if (data?.pagination?.data && Array.isArray(data.pagination.data)) return data.pagination.data;
-        return [];
+      const extractItems = (res) => {
+        const data = res.data;
+        return Array.isArray(data) ? data : data?.data || data?.pagination?.data || [];
       };
 
-      const prods = extractItems(prodRes);
-      setProducts(prods);
+      setProducts(extractItems(prodRes));
       setVendors(extractItems(vendRes));
       setWarehouses(extractItems(wareRes));
-
-      if (editingStock && editingStock.product?.id) {
-        const selectedProduct = prods.find(p => p.id === editingStock.product.id);
-        if (selectedProduct?.product_type?.name || selectedProduct?.productType?.name) {
-          const typeName = (selectedProduct.product_type?.name || selectedProduct.productType?.name || '').toLowerCase();
-          setIsElectronicProduct(typeName === 'electronic');
-        }
-      }
     } catch (error) {
-      console.error('Failed to load related data', error);
-      showNotification('Failed to load products, vendors, or warehouses', 'error');
-      setProducts([]);
-      setVendors([]);
-      setWarehouses([]);
+      showNotification('Failed to load related data', 'error');
     }
-  }, [showNotification, editingStock]);
+  }, [showNotification]);
 
   useEffect(() => {
-    fetchStocks(1, 10);
+    fetchStocks();
     fetchRelatedData();
   }, []);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchStocks(1, pagination.per_page, searchTerm);
-    }, 500);
+    const timer = setTimeout(() => fetchStocks(1, pagination.per_page, searchTerm), 500);
     return () => clearTimeout(timer);
   }, [searchTerm, pagination.per_page, fetchStocks]);
 
-  // Update isElectronicProduct when product changes
+  // Auto-calculate total_amount only when creating or when inputs change (not when editing)
+  useEffect(() => {
+    const qty = parseFloat(formData.quantity) || 0;
+    const price = parseFloat(formData.buying_price) || 0;
+    const total = qty * price;
+    setCalculatedTotalAmount(total.toFixed(2));
+  }, [formData.quantity, formData.buying_price]);
+
   useEffect(() => {
     if (formData.product_id) {
-      const selectedProduct = products.find(p => p.id === parseInt(formData.product_id));
-      const typeName = (selectedProduct?.product_type?.name || selectedProduct?.productType?.name || '').toLowerCase();
+      const product = products.find(p => p.id === parseInt(formData.product_id));
+      const typeName = (product?.product_type?.name || product?.productType?.name || '').toLowerCase();
       const isElectronic = typeName === 'electronic';
       setIsElectronicProduct(isElectronic);
 
@@ -213,17 +170,14 @@ const StocksManager = () => {
     }
   }, [formData.product_id, products]);
 
-  // Adjust skuInputs length when quantity changes (electronic only)
   useEffect(() => {
     if (isElectronicProduct) {
       const qty = parseInt(formData.quantity) || 0;
       setSkuInputs(prev => {
         const newArr = [...prev];
         newArr.length = qty;
-        for (let i = prev.length; i < qty; i++) {
-          newArr[i] = '';
-        }
-        return newArr.filter(s => s !== undefined);
+        for (let i = prev.length; i < qty; i++) newArr[i] = '';
+        return newArr;
       });
     }
   }, [formData.quantity, isElectronicProduct]);
@@ -235,7 +189,7 @@ const StocksManager = () => {
 
   const handleLimitChange = (newLimit) => {
     const limit = parseInt(newLimit);
-    setPagination((prev) => ({ ...prev, per_page: limit }));
+    setPagination(prev => ({ ...prev, per_page: limit }));
     fetchStocks(1, limit, searchTerm);
   };
 
@@ -254,6 +208,7 @@ const StocksManager = () => {
       sku: '',
       status: 'active',
     });
+    setCalculatedTotalAmount('');
     setErrors({});
     setEditingStock(null);
     setIsElectronicProduct(false);
@@ -278,17 +233,15 @@ const StocksManager = () => {
         status: stock.status || 'active',
       });
 
-      const selectedProduct = products.find(p => p.id === stock.product?.id);
-      const typeName = (selectedProduct?.product_type?.name || selectedProduct?.productType?.name || '').toLowerCase();
-      const isElec = typeName === 'electronic';
+      const qty = parseFloat(stock.quantity) || 0;
+      const price = parseFloat(stock.buying_price) || 0;
+      setCalculatedTotalAmount((qty * price).toFixed(2)); // initial calculation
 
-      if (isElec && stock.sku) {
-        const skuList = stock.sku.split(',').map(s => s.trim());
-        setSkuInputs(skuList);
-      } else {
-        setSkuInputs([]);
-      }
+      const product = products.find(p => p.id === stock.product?.id);
+      const isElec = (product?.product_type?.name || product?.productType?.name || '').toLowerCase() === 'electronic';
+
       setIsElectronicProduct(isElec);
+      setSkuInputs(isElec && stock.sku ? stock.sku.split(',').map(s => s.trim()) : []);
     } else {
       resetForm();
     }
@@ -302,8 +255,8 @@ const StocksManager = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-    if (errors[name]) setErrors((prev) => ({ ...prev, [name]: undefined }));
+    setFormData(prev => ({ ...prev, [name]: value }));
+    if (errors[name]) setErrors(prev => ({ ...prev, [name]: undefined }));
   };
 
   const handleSubmit = async (e) => {
@@ -314,26 +267,28 @@ const StocksManager = () => {
     let finalSku = '';
 
     if (isElectronicProduct) {
-      const filledSkus = skuInputs.filter(s => s.trim() !== '');
-      if (filledSkus.length !== skuInputs.length || skuInputs.length === 0) {
+      const filledSkus = skuInputs.map(s => s.trim());
+      if (filledSkus.length !== parseInt(formData.quantity) || filledSkus.some(s => !s)) {
         setErrors({ sku: ['All SKU fields must be filled for electronic products.'] });
         showNotification('Please fill all SKU fields for electronic products.', 'error');
         setOperationLoading(null);
         return;
       }
-      finalSku = skuInputs.map(s => s.trim()).join(',');
+      finalSku = filledSkus.join(',');
     } else {
-      finalSku = formData.sku.trim();
+      finalSku = formData.sku.trim() || '';
     }
 
     const payload = {
       product_id: formData.product_id ? parseInt(formData.product_id) : null,
       vendor_id: formData.vendor_id ? parseInt(formData.vendor_id) : null,
       warehouse_id: formData.warehouse_id ? parseInt(formData.warehouse_id) : null,
-      quantity: formData.quantity ? parseInt(formData.quantity) : 0,
+      quantity: parseInt(formData.quantity) || 0,
       buying_price: parseFloat(formData.buying_price) || 0,
       selling_price: parseFloat(formData.selling_price) || 0,
-      total_amount: formData.total_amount ? parseFloat(formData.total_amount) : null,
+      total_amount: editingStock
+        ? (formData.total_amount ? parseFloat(formData.total_amount) : parseFloat(calculatedTotalAmount))
+        : parseFloat(calculatedTotalAmount), // use input value when editing, calculated when creating
       due_amount: formData.due_amount ? parseFloat(formData.due_amount) : null,
       comission: formData.comission ? parseFloat(formData.comission) : null,
       stock_date: formData.stock_date || null,
@@ -366,8 +321,7 @@ const StocksManager = () => {
       showNotification('Stock deleted successfully');
       const remaining = pagination.total_items - 1;
       const maxPage = Math.ceil(remaining / pagination.per_page);
-      const targetPage = pagination.current_page > maxPage ? maxPage : pagination.current_page;
-      fetchStocks(targetPage || 1, pagination.per_page, searchTerm);
+      fetchStocks(pagination.current_page > maxPage ? maxPage : pagination.current_page, pagination.per_page, searchTerm);
     } catch (error) {
       handleApiError(error, 'Delete failed');
     } finally {
@@ -393,24 +347,15 @@ const StocksManager = () => {
   const stats = {
     total: pagination.total_items,
     quantity: stocks.reduce((acc, s) => acc + (parseInt(s.quantity) || 0), 0),
-    value: stocks.reduce(
-      (acc, s) => acc + ((parseInt(s.quantity) || 0) * (parseFloat(s.buying_price) || 0)),
-      0
-    ),
-    active: stocks.filter((s) => s.status === 'active').length,
+    value: stocks.reduce((acc, s) => acc + ((parseInt(s.quantity) || 0) * (parseFloat(s.buying_price) || 0)), 0),
+    active: stocks.filter(s => s.status === 'active').length,
   };
 
-  const formatCurrency = (value) => {
-    if (value === null || value === undefined || value === '') return '—';
-    return `$${parseFloat(value).toFixed(2)}`;
-  };
-
-  const formatDate = (date) =>
-    date ? new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
+  const formatCurrency = (value) => value == null ? '—' : `$${parseFloat(value).toFixed(2)}`;
+  const formatDate = (date) => date ? new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-gray-100 py-8">
-      {/* Notification */}
       <AnimatePresence>
         {notification.show && (
           <motion.div
@@ -428,7 +373,6 @@ const StocksManager = () => {
       </AnimatePresence>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -448,7 +392,6 @@ const StocksManager = () => {
           </button>
         </motion.div>
 
-        {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           {[
             { label: 'Total Stocks', value: stats.total, icon: Package, color: 'blue' },
@@ -470,7 +413,6 @@ const StocksManager = () => {
           ))}
         </div>
 
-        {/* Filters */}
         <div className="bg-gray-800/30 backdrop-blur-sm rounded-2xl p-6 mb-8 border border-gray-700/30">
           <div className="flex flex-col lg:flex-row gap-6">
             <div className="flex-1 relative">
@@ -510,7 +452,6 @@ const StocksManager = () => {
           </div>
         </div>
 
-        {/* Table */}
         <div className="bg-gray-800/30 backdrop-blur-sm rounded-2xl border border-gray-700/30 overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-700/30 bg-gray-800/20">
             <div className="flex items-center justify-between">
@@ -568,8 +509,8 @@ const StocksManager = () => {
                   </tr>
                 ) : (
                   stocks
-                    .filter((s) => statusFilter === 'all' || s.status === statusFilter)
-                    .map((stock) => (
+                    .filter(s => statusFilter === 'all' || s.status === statusFilter)
+                    .map(stock => (
                       <tr key={stock.id} className="hover:bg-gray-700/20 transition-colors">
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
@@ -590,9 +531,7 @@ const StocksManager = () => {
                               <Barcode size={16} />
                               <span className="font-mono">{stock.sku}</span>
                             </div>
-                          ) : (
-                            '-'
-                          )}
+                          ) : '-'}
                         </td>
                         <td className="px-6 py-4 font-bold text-blue-400">{stock.quantity}</td>
                         <td className="px-6 py-4 text-green-400">{formatCurrency(stock.buying_price)}</td>
@@ -614,9 +553,7 @@ const StocksManager = () => {
                                 : 'bg-red-500/20 text-red-400 border border-red-500/30'
                             }`}
                           >
-                            {operationLoading === `status-${stock.id}` ? (
-                              <Loader size={12} className="animate-spin" />
-                            ) : null}
+                            {operationLoading === `status-${stock.id}` && <Loader size={12} className="animate-spin" />}
                             {stock.status === 'active' ? 'Active' : 'Inactive'}
                           </button>
                         </td>
@@ -643,7 +580,6 @@ const StocksManager = () => {
             </table>
           </div>
 
-          {/* Pagination */}
           {pagination.last_page > 1 && (
             <div className="px-6 py-4 border-t border-gray-700/30 flex flex-col sm:flex-row justify-between items-center gap-4">
               <div className="text-sm text-gray-400">
@@ -675,7 +611,6 @@ const StocksManager = () => {
         </div>
       </div>
 
-      {/* Modal Form */}
       <AnimatePresence>
         {showModal && (
           <motion.div
@@ -702,21 +637,19 @@ const StocksManager = () => {
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-6">
-                {/* Product & Vendor */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-sm font-semibold mb-2">Product</label>
+                    <label className="block text-sm font-semibold mb-2">Product *</label>
                     <select
                       name="product_id"
                       value={formData.product_id}
                       onChange={handleChange}
                       className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                      required
                     >
-                      <option value="">No Product (Optional)</option>
-                      {products.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name}
-                        </option>
+                      <option value="">Select Product</option>
+                      {products.map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
                       ))}
                     </select>
                     {errors.product_id && <p className="text-red-400 text-sm mt-1">{errors.product_id[0]}</p>}
@@ -729,17 +662,14 @@ const StocksManager = () => {
                       onChange={handleChange}
                       className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
                     >
-                      <option value="">No Vendor (Optional)</option>
-                      {vendors.map((v) => (
-                        <option key={v.id} value={v.id}>
-                          {v.name}
-                        </option>
+                      <option value="">No Vendor</option>
+                      {vendors.map(v => (
+                        <option key={v.id} value={v.id}>{v.name}</option>
                       ))}
                     </select>
                   </div>
                 </div>
 
-                {/* Warehouse */}
                 <div>
                   <label className="block text-sm font-semibold mb-2">Warehouse</label>
                   <select
@@ -748,16 +678,13 @@ const StocksManager = () => {
                     onChange={handleChange}
                     className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
                   >
-                    <option value="">No Warehouse (Optional)</option>
-                    {warehouses.map((w) => (
-                      <option key={w.id} value={w.id}>
-                        {w.name}
-                      </option>
+                    <option value="">No Warehouse</option>
+                    {warehouses.map(w => (
+                      <option key={w.id} value={w.id}>{w.name}</option>
                     ))}
                   </select>
                 </div>
 
-                {/* Required Fields */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div>
                     <label className="block text-sm font-semibold mb-2">Quantity *</label>
@@ -767,7 +694,7 @@ const StocksManager = () => {
                       value={formData.quantity}
                       onChange={handleChange}
                       required
-                      min="0"
+                      min="1"
                       className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
                     />
                   </div>
@@ -799,19 +726,26 @@ const StocksManager = () => {
                   </div>
                 </div>
 
-                {/* Optional Fields */}
+                {/* Total Amount Section */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                   <div>
                     <label className="block text-sm font-semibold mb-2">Total Amount</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      name="total_amount"
-                      value={formData.total_amount}
-                      onChange={handleChange}
-                      placeholder="Optional"
-                      className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-                    />
+                    {editingStock ? (
+                      // Editable when editing
+                      <input
+                        type="number"
+                        step="0.01"
+                        name="total_amount"
+                        value={formData.total_amount}
+                        onChange={handleChange}
+                        className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                      />
+                    ) : (
+                      // Read-only calculated display when creating
+                      <div className="w-full px-4 py-3 bg-gray-600/50 rounded-xl border border-gray-600 text-cyan-400 font-semibold">
+                        {calculatedTotalAmount ? formatCurrency(calculatedTotalAmount) : '—'}
+                      </div>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-semibold mb-2">Due Amount</label>
@@ -821,7 +755,6 @@ const StocksManager = () => {
                       name="due_amount"
                       value={formData.due_amount}
                       onChange={handleChange}
-                      placeholder="0.00"
                       className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
                     />
                   </div>
@@ -833,7 +766,6 @@ const StocksManager = () => {
                       name="comission"
                       value={formData.comission}
                       onChange={handleChange}
-                      placeholder="0.00"
                       className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
                     />
                   </div>
@@ -849,7 +781,6 @@ const StocksManager = () => {
                   </div>
                 </div>
 
-                {/* SKU Field - Dynamic for Electronic */}
                 <div>
                   <label className="block text-sm font-semibold mb-2">
                     SKU {isElectronicProduct && <span className="text-red-400">*</span>}
@@ -875,7 +806,7 @@ const StocksManager = () => {
                         </div>
                       ))}
                       <p className="text-xs text-gray-400 mt-2">
-                        Provide exactly <strong>{formData.quantity || 0}</strong> unique SKU(s) – one per item.
+                        Provide exactly <strong>{formData.quantity || 0}</strong> unique SKU(s).
                       </p>
                     </div>
                   ) : (
@@ -885,27 +816,25 @@ const StocksManager = () => {
                         name="sku"
                         value={formData.sku}
                         onChange={handleChange}
-                        placeholder="Optional – will be auto-generated if left empty"
+                        placeholder="Optional – auto-generated if empty"
                         className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
                       />
                       <p className="text-xs text-gray-400 mt-2">
-                        Leave empty for auto-generated single SKU (non-electronic products).
+                        Leave empty for auto-generated single SKU (non-electronic).
                       </p>
                     </>
                   )}
 
                   {errors.sku && <p className="text-red-400 text-sm mt-1">{errors.sku[0]}</p>}
-                  {errors._general && <p className="text-red-400 text-sm mt-1">{errors._general}</p>}
                 </div>
 
-                {/* Status */}
                 <div>
                   <label className="block text-sm font-semibold mb-3">Status</label>
                   <div className="grid grid-cols-2 gap-4">
-                    {['active', 'inactive'].map((st) => (
+                    {['active', 'inactive'].map(st => (
                       <label
                         key={st}
-                        onClick={() => setFormData((prev) => ({ ...prev, status: st }))}
+                        onClick={() => setFormData(prev => ({ ...prev, status: st }))}
                         className={`p-4 border-2 rounded-xl text-center cursor-pointer transition ${
                           formData.status === st
                             ? st === 'active'
@@ -952,7 +881,6 @@ const StocksManager = () => {
         )}
       </AnimatePresence>
 
-      {/* Delete Confirmation */}
       <AnimatePresence>
         {deleteConfirm && (
           <motion.div

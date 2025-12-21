@@ -24,6 +24,10 @@ return new class extends Migration
             $table->decimal('total_amount', 15, 2)->nullable();
             $table->decimal('due_amount', 15, 2)->nullable();
             $table->date('stock_date')->nullable();
+            $table->date('expire_date')->nullable();
+            $table->decimal('paid_amount', 15, 2)->nullable();
+            $table->decimal('color', 15, 2)->nullable();
+            $table->decimal('ber-code', 15, 2)->nullable();
             $table->decimal('comission', 10, 2)->nullable();
             $table->enum('status', ['active', 'inactive'])->default('active');
             $table->string('sku')->nullable();
