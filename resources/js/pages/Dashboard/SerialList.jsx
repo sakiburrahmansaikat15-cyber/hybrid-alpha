@@ -4,10 +4,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus, Search, Edit, Trash2, X, Check, MoreVertical,
   Eye, EyeOff, Image as ImageIcon, Package, Upload,
-  ChevronLeft, ChevronRight, Loader, Hash, Palette, StickyNote
+  ChevronLeft, ChevronRight, Loader, Hash, Palette, StickyNote,
+  Barcode, AlertCircle // <-- FIXED: Added missing imports
 } from 'lucide-react';
 
-const API_URL = 'http://localhost:8000/api/serial-list';
+const API_URL = 'http://localhost:8000/api/stocks'; // Your real endpoint
 
 const SerialList = () => {
   const [serials, setSerials] = useState([]);
@@ -63,14 +64,43 @@ const SerialList = () => {
       if (keyword.trim()) params.keyword = keyword.trim();
 
       const response = await axios.get(API_URL, { params });
-      const paginated = response.data.pagination;
+      const rawStocks = response.data.data || [];
 
-      setSerials(paginated.data || []);
+      // Transform each stock into multiple serial entries
+      const allSerials = [];
+      rawStocks.forEach(stock => {
+        const skus = stock.sku ? stock.sku.split(',').map(s => s.trim()) : [];
+        const colors = stock.color ? stock.color.split(',').map(c => c.trim()) : [];
+        const barcodes = stock.bar_code ? stock.bar_code.split(',').map(b => b.trim()) : [];
+        const notes = stock.note ? stock.note.split(',').map(n => n.trim()) : [];
+
+        const maxLength = Math.max(skus.length, colors.length, barcodes.length, notes.length);
+
+        for (let i = 0; i < maxLength; i++) {
+          allSerials.push({
+            id: `${stock.id}-${i}`, // Unique ID for each serial row
+            stock_id: stock.id,
+            product_name: stock.product?.name || 'N/A',
+            vendor_name: stock.vendor?.name || 'N/A',
+            warehouse_name: stock.warehouse?.name || 'N/A',
+            sku: skus[i] || '',
+            color: colors[i] || '',
+            barcode: barcodes[i] || '',
+            notes: notes[i] || '',
+            image: stock.image,
+            status: stock.status,
+            created_at: stock.created_at,
+            updated_at: stock.updated_at
+          });
+        }
+      });
+
+      setSerials(allSerials);
       setPagination({
-        current_page: paginated.current_page,
-        per_page: paginated.per_page,
-        total_items: paginated.total_items,
-        total_pages: paginated.total_pages
+        current_page: response.data.current_page,
+        per_page: response.data.per_page,
+        total_items: response.data.total_items,
+        total_pages: response.data.total_pages
       });
     } catch (error) {
       handleApiError(error, 'Failed to fetch serials');
@@ -104,7 +134,13 @@ const SerialList = () => {
 
   const resetForm = () => {
     setFormData({
-      stock_id: '', sku: '', barcode: '', color: '', notes: '', image: null, status: 'active'
+      stock_id: '',
+      sku: '',
+      barcode: '',
+      color: '',
+      notes: '',
+      image: null,
+      status: 'active'
     });
     setImagePreview(null);
     setEditingSerial(null);
@@ -160,7 +196,6 @@ const SerialList = () => {
     if (errors.image) setErrors(prev => ({ ...prev, image: undefined }));
   };
 
-  // FULLY FIXED: CREATE & UPDATE
   const handleSubmit = async (e) => {
     e.preventDefault();
     setOperationLoading('saving');
@@ -286,8 +321,11 @@ const SerialList = () => {
             initial={{ opacity: 0, x: 300 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 300 }}
-            className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-xl shadow-2xl ${notification.type === 'error' ? 'bg-red-600' : 'bg-green-600'} text-white font-medium`}
+            className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-xl shadow-2xl ${
+              notification.type === 'error' ? 'bg-red-600' : 'bg-green-600'
+            } text-white font-medium flex items-center gap-2`}
           >
+            {notification.type === 'error' ? <AlertCircle size={20} /> : <Check size={20} />}
             {notification.message}
           </motion.div>
         )}
@@ -338,7 +376,7 @@ const SerialList = () => {
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
               <input
                 type="text"
-                placeholder="Search by color..."
+                placeholder="Search by SKU, color, barcode..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-12 pr-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500/50 outline-none transition-all"
@@ -371,172 +409,165 @@ const SerialList = () => {
           </div>
         </div>
 
-        {/* Serials Grid */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1, transition: { staggerChildren: 0.1 } }}
-          className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mb-8"
-        >
-          {serials
-            .filter(s => filterStatus === 'all' || s.status === filterStatus)
-            .map(serial => (
-              <motion.div
-                key={serial.id}
-                whileHover={{ y: -8, scale: 1.02 }}
-                className="group bg-gray-800/30 backdrop-blur-sm rounded-2xl border border-gray-700/30 hover:border-blue-500/50 transition-all overflow-hidden relative"
-              >
-                <div className="p-6">
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-purple-500/10 rounded-lg">
-                        <Package size={20} className="text-purple-400" />
-                      </div>
-                      <div>
-                        <h3 className="text-xl font-bold">{serial.sku}</h3>
-                        <p className="text-sm text-gray-400">Stock ID: #{serial.stock_id}</p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setActionMenu(actionMenu === serial.id ? null : serial.id); }}
-                      className="p-2 hover:bg-gray-700/50 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <MoreVertical size={18} />
-                    </button>
-                  </div>
-
-                  <div className="mb-4">
-                    {serial.image ? (
-                      <img src={getImageUrl(serial.image)} alt={serial.sku} className="w-full h-32 object-cover rounded-lg border border-gray-600" />
-                    ) : (
-                      <div className="w-full h-32 bg-gray-700/50 rounded-lg flex items-center justify-center">
-                        <ImageIcon size={32} className="text-gray-500" />
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="space-y-2 text-sm">
-                    {serial.barcode && (
-                      <div className="flex items-center gap-2 text-gray-300">
-                        <Hash size={16} /> {serial.barcode}
-                      </div>
-                    )}
-                    {serial.color && (
-                      <div className="flex items-center gap-2">
-                        <Palette size={16} className="text-purple-400" /> {serial.color}
-                      </div>
-                    )}
-                    <button
-                      onClick={() => toggleStatus(serial)}
-                      disabled={operationLoading === `status-${serial.id}`}
-                      className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold ${serial.status === 'active' ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'}`}
-                    >
-                      {operationLoading === `status-${serial.id}` ? <Loader size={12} className="animate-spin" /> : null}
-                      {serial.status === 'active' ? 'Active' : 'Inactive'}
-                    </button>
-                  </div>
-
-                  {serial.notes && (
-                    <div className="mt-3 p-3 bg-gray-700/30 rounded-lg text-xs text-gray-400 flex items-start gap-2">
-                      <StickyNote size={14} className="mt-0.5 flex-shrink-0" />
-                      <span>{serial.notes}</span>
-                    </div>
-                  )}
-
-                  <div className="flex justify-between items-center mt-6 pt-4 border-t border-gray-700/30">
-                    <span className="text-xs text-gray-500">ID: #{serial.id}</span>
-                    <div className="flex gap-2">
-                      <button onClick={() => openModal(serial)} className="p-2 bg-blue-500/20 hover:bg-blue-500/40 rounded-lg transition-colors">
-                        <Edit size={14} />
-                      </button>
-                      <button onClick={() => handleDelete(serial.id)} className="p-2 bg-red-500/20 hover:bg-red-500/40 rounded-lg transition-colors">
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <AnimatePresence>
-                  {actionMenu === serial.id && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      className="absolute right-4 top-16 bg-gray-800 border border-gray-600 rounded-xl shadow-2xl py-2 z-50 min-w-[160px]"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <button onClick={() => { openModal(serial); setActionMenu(null); }} className="w-full text-left px-4 py-2 hover:bg-gray-700 flex items-center gap-3 text-sm">
-                        <Edit size={16} /> Edit
-                      </button>
-                      <button onClick={() => { toggleStatus(serial); setActionMenu(null); }} className="w-full text-left px-4 py-2 hover:bg-gray-700 flex items-center gap-3 text-sm">
-                        {serial.status === 'active' ? <EyeOff size={16} /> : <Eye size={16} />}
-                        {serial.status === 'active' ? 'Deactivate' : 'Activate'}
-                      </button>
-                      <button onClick={() => { handleDelete(serial.id); setActionMenu(null); }} className="w-full text-left px-4 py-2 hover:bg-red-500/20 text-red-400 flex items-center gap-3 text-sm">
-                        <Trash2 size={16} /> Delete
-                      </button>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </motion.div>
-            ))}
-        </motion.div>
-
-        {/* Pagination */}
-        {pagination.total_pages > 1 && (
-          <div className="flex flex-col sm:flex-row justify-between items-center py-6 border-t border-gray-700/30 gap-4">
-            <div className="text-sm text-gray-400">
-              Showing {(pagination.current_page - 1) * pagination.per_page + 1} to{' '}
-              {Math.min(pagination.current_page * pagination.per_page, pagination.total_items)} of {pagination.total_items} serials
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => handlePageChange(pagination.current_page - 1)}
-                disabled={pagination.current_page === 1}
-                className="px-4 py-2 rounded-xl border border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 hover:bg-gray-800 transition-colors"
-              >
-                <ChevronLeft size={16} /> Previous
-              </button>
-              {Array.from({ length: Math.min(5, pagination.total_pages) }, (_, i) => {
-                let pageNum;
-                if (pagination.total_pages <= 5) pageNum = i + 1;
-                else if (pagination.current_page <= 3) pageNum = i + 1;
-                else if (pagination.current_page >= pagination.total_pages - 2) pageNum = pagination.total_pages - 4 + i;
-                else pageNum = pagination.current_page - 2 + i;
-
-                return pageNum >= 1 && pageNum <= pagination.total_pages ? (
-                  <button
-                    key={pageNum}
-                    onClick={() => handlePageChange(pageNum)}
-                    className={`px-4 py-2 rounded-xl border ${pagination.current_page === pageNum ? 'bg-blue-600 border-blue-500' : 'border-gray-600 hover:bg-gray-800'}`}
-                  >
-                    {pageNum}
-                  </button>
-                ) : null;
-              })}
-              <button
-                onClick={() => handlePageChange(pagination.current_page + 1)}
-                disabled={pagination.current_page === pagination.total_pages}
-                className="px-4 py-2 rounded-xl border border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 hover:bg-gray-800 transition-colors"
-              >
-                Next <ChevronRight size={16} />
-              </button>
+        {/* Serials Table */}
+        <div className="bg-gray-800/30 backdrop-blur-sm rounded-2xl border border-gray-700/30 overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-700/30 bg-gray-800/20">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-white">Serialized Products</h3>
+              <span className="text-sm text-gray-400">{serials.length} serial entries</span>
             </div>
           </div>
-        )}
-
-        {/* Empty State */}
-        {serials.length === 0 && !loading && (
-          <div className="text-center py-20">
-            <Package size={64} className="mx-auto text-gray-600 mb-6" />
-            <h3 className="text-2xl font-bold mb-3">{searchTerm ? 'No serials found' : 'No serials yet'}</h3>
-            <p className="text-gray-400 mb-8">{searchTerm ? 'Try searching with different color' : 'Start by adding your first serial'}</p>
-            {!searchTerm && (
-              <button onClick={() => openModal()} className="bg-gradient-to-r from-blue-600 to-cyan-600 px-8 py-3 rounded-xl font-bold hover:from-blue-700 hover:to-cyan-700 transition-all">
-                <Plus className="inline mr-2" /> Add First Serial
-              </button>
-            )}
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-max">
+              <thead>
+                <tr className="border-b border-gray-700/30">
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Image</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Stock ID</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Product</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">SKU</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Color</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Barcode</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Notes</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-4 text-right text-sm font-semibold text-gray-300 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-700/30">
+                {loading ? (
+                  <tr>
+                    <td colSpan="9" className="px-6 py-12 text-center">
+                      <Loader size={32} className="animate-spin mx-auto text-blue-400" />
+                      <p className="text-gray-400 mt-3">Loading serials...</p>
+                    </td>
+                  </tr>
+                ) : serials.length === 0 ? (
+                  <tr>
+                    <td colSpan="9" className="px-6 py-16 text-center">
+                      <Package size={64} className="mx-auto text-gray-500 mb-4" />
+                      <h3 className="text-2xl font-bold text-white mb-2">
+                        {searchTerm ? 'No serials found' : 'No serial entries yet'}
+                      </h3>
+                      <p className="text-gray-400 mb-6">
+                        {searchTerm ? 'Try different search terms' : 'Add your first serial entry to get started'}
+                      </p>
+                      {!searchTerm && (
+                        <button
+                          onClick={() => openModal()}
+                          className="bg-gradient-to-r from-blue-600 to-cyan-600 px-8 py-3 rounded-xl font-bold flex items-center gap-2 mx-auto"
+                        >
+                          <Plus size={20} /> Add First Serial
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ) : (
+                  serials
+                    .filter(s => filterStatus === 'all' || s.status === filterStatus)
+                    .map(serial => (
+                      <tr key={serial.id} className="hover:bg-gray-700/20 transition-colors">
+                        <td className="px-6 py-4">
+                          {serial.image ? (
+                            <img
+                              src={getImageUrl(serial.image)}
+                              alt={serial.sku}
+                              className="w-12 h-12 object-cover rounded"
+                            />
+                          ) : (
+                            <span className="text-gray-400">—</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 font-medium text-blue-400">#{serial.stock_id}</td>
+                        <td className="px-6 py-4">
+                          <div className="font-medium">{serial.product_name}</div>
+                          <div className="text-sm text-gray-400">{serial.vendor_name} • {serial.warehouse_name}</div>
+                        </td>
+                        <td className="px-6 py-4">
+                          {serial.sku ? (
+                            <div className="flex items-center gap-2">
+                              <Barcode size={16} /> {/* <-- Now works because imported */}
+                              <span className="font-mono">{serial.sku}</span>
+                            </div>
+                          ) : '-'}
+                        </td>
+                        <td className="px-6 py-4">
+                          {serial.color ? (
+                            <span className="font-mono text-sm">{serial.color}</span>
+                          ) : '-'}
+                        </td>
+                        <td className="px-6 py-4">
+                          {serial.barcode ? (
+                            <span className="font-mono text-sm">{serial.barcode}</span>
+                          ) : '-'}
+                        </td>
+                        <td className="px-6 py-4">
+                          {serial.notes ? (
+                            <span className="text-sm">{serial.notes}</span>
+                          ) : '-'}
+                        </td>
+                        <td className="px-6 py-4">
+                          <button
+                            onClick={() => toggleStatus(serial)}
+                            disabled={operationLoading === `status-${serial.id}`}
+                            className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold ${
+                              serial.status === 'active'
+                                ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                                : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                            }`}
+                          >
+                            {operationLoading === `status-${serial.id}` && <Loader size={12} className="animate-spin" />}
+                            {serial.status === 'active' ? 'Active' : 'Inactive'}
+                          </button>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => openModal(serial)}
+                              className="p-2 bg-blue-500/20 hover:bg-blue-500/30 rounded-lg"
+                            >
+                              <Edit size={16} />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(serial.id)}
+                              className="p-2 bg-red-500/20 hover:bg-red-500/30 rounded-lg"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                )}
+              </tbody>
+            </table>
           </div>
-        )}
+          {pagination.total_pages > 1 && (
+            <div className="px-6 py-4 border-t border-gray-700/30 flex flex-col sm:flex-row justify-between items-center gap-4">
+              <div className="text-sm text-gray-400">
+                Showing {(pagination.current_page - 1) * pagination.per_page + 1} to{' '}
+                {Math.min(pagination.current_page * pagination.per_page, serials.length)} of {serials.length} serials
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handlePageChange(pagination.current_page - 1)}
+                  disabled={pagination.current_page === 1}
+                  className="px-3 py-2 rounded-xl border border-gray-600 disabled:opacity-50 flex items-center gap-2"
+                >
+                  <ChevronLeft size={16} /> Prev
+                </button>
+                <button className="px-4 py-2 rounded-xl bg-blue-600 border-blue-500">
+                  {pagination.current_page}
+                </button>
+                <button
+                  onClick={() => handlePageChange(pagination.current_page + 1)}
+                  disabled={pagination.current_page === pagination.total_pages}
+                  className="px-3 py-2 rounded-xl border border-gray-600 disabled:opacity-50 flex items-center gap-2"
+                >
+                  Next <ChevronRight size={16} />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Modal */}

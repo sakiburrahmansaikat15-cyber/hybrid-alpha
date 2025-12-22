@@ -21,16 +21,14 @@ const StocksManager = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [deleteConfirm, setDeleteConfirm] = useState(null);
-
   const [products, setProducts] = useState([]);
   const [vendors, setVendors] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
-
   const [isElectronicProduct, setIsElectronicProduct] = useState(false);
   const [skuInputs, setSkuInputs] = useState([]);
   const [colorInputs, setColorInputs] = useState([]);
   const [barCodeInputs, setBarCodeInputs] = useState([]);
-
+  const [noteInputs, setNoteInputs] = useState([]);
   const [formData, setFormData] = useState({
     product_id: '',
     vendor_id: '',
@@ -47,15 +45,15 @@ const StocksManager = () => {
     sku: '',
     color: '',
     bar_code: '',
+    note: '',
+    image: null,
+    existingImage: '',
     status: 'active',
   });
-
   const [calculatedTotalAmount, setCalculatedTotalAmount] = useState('');
   const [calculatedDueAmount, setCalculatedDueAmount] = useState('');
-
   const [errors, setErrors] = useState({});
   const [notification, setNotification] = useState({ show: false, message: '', type: '' });
-
   const [pagination, setPagination] = useState({
     current_page: 1,
     last_page: 1,
@@ -84,10 +82,8 @@ const StocksManager = () => {
     try {
       const params = { page, limit: perPage };
       if (keyword.trim()) params.keyword = keyword.trim();
-
       const response = await axios.get(API_URL, { params });
       const res = response.data;
-
       setStocks(res.data.map(item => ({
         id: item.id,
         product: item.product || {},
@@ -105,9 +101,10 @@ const StocksManager = () => {
         sku: item.sku || '',
         color: item.color || '',
         bar_code: item.bar_code || '',
+        note: item.note || '',
+        image: item.image || '',
         status: item.status || 'active',
       })));
-
       setPagination({
         current_page: res.current_page || 1,
         last_page: res.total_pages || 1,
@@ -129,12 +126,10 @@ const StocksManager = () => {
         axios.get(VENDORS_URL),
         axios.get(WAREHOUSES_URL),
       ]);
-
       const extractItems = (res) => {
         const data = res.data;
         return Array.isArray(data) ? data : data?.data || data?.pagination?.data || [];
       };
-
       setProducts(extractItems(prodRes));
       setVendors(extractItems(vendRes));
       setWarehouses(extractItems(wareRes));
@@ -174,36 +169,46 @@ const StocksManager = () => {
     if (formData.product_id) {
       const product = products.find(p => p.id === parseInt(formData.product_id));
       const typeName = (product?.product_type?.name || product?.productType?.name || '').toLowerCase();
-      const isElectronic = typeName === 'electronic';
-      setIsElectronicProduct(isElectronic);
+      setIsElectronicProduct(typeName === 'electronic');
     }
   }, [formData.product_id, products]);
 
   useEffect(() => {
+    const qty = parseInt(formData.quantity) || 0;
     if (isElectronicProduct) {
-      const qty = parseInt(formData.quantity) || 0;
       setSkuInputs(prev => {
-        const newArr = [...prev];
-        newArr.length = qty;
-        for (let i = prev.length; i < qty; i++) newArr[i] = '';
+        const newArr = Array(qty).fill('');
+        for (let i = 0; i < Math.min(prev.length, qty); i++) {
+          newArr[i] = prev[i] || '';
+        }
         return newArr;
       });
       setColorInputs(prev => {
-        const newArr = [...prev];
-        newArr.length = qty;
-        for (let i = prev.length; i < qty; i++) newArr[i] = '';
+        const newArr = Array(qty).fill('');
+        for (let i = 0; i < Math.min(prev.length, qty); i++) {
+          newArr[i] = prev[i] || '';
+        }
         return newArr;
       });
       setBarCodeInputs(prev => {
-        const newArr = [...prev];
-        newArr.length = qty;
-        for (let i = prev.length; i < qty; i++) newArr[i] = '';
+        const newArr = Array(qty).fill('');
+        for (let i = 0; i < Math.min(prev.length, qty); i++) {
+          newArr[i] = prev[i] || '';
+        }
+        return newArr;
+      });
+      setNoteInputs(prev => {
+        const newArr = Array(qty).fill('');
+        for (let i = 0; i < Math.min(prev.length, qty); i++) {
+          newArr[i] = prev[i] || '';
+        }
         return newArr;
       });
     } else {
       setSkuInputs([]);
       setColorInputs([]);
       setBarCodeInputs([]);
+      setNoteInputs([]);
     }
   }, [formData.quantity, isElectronicProduct]);
 
@@ -235,6 +240,9 @@ const StocksManager = () => {
       sku: '',
       color: '',
       bar_code: '',
+      note: '',
+      image: null,
+      existingImage: '',
       status: 'active',
     });
     setCalculatedTotalAmount('');
@@ -245,41 +253,26 @@ const StocksManager = () => {
     setSkuInputs([]);
     setColorInputs([]);
     setBarCodeInputs([]);
+    setNoteInputs([]);
   };
 
   const openModal = (stock = null) => {
     if (stock) {
       setEditingStock(stock);
-
       const product = products.find(p => p.id === stock.product?.id);
       const isElec = (product?.product_type?.name || product?.productType?.name || '').toLowerCase() === 'electronic';
-
       const qty = parseInt(stock.quantity) || 0;
-
-      // Split existing data into arrays for electronic products
       const skuArr = stock.sku ? stock.sku.split(',').map(s => s.trim()) : Array(qty).fill('');
       const colorArr = stock.color ? stock.color.split(',').map(c => c.trim()) : Array(qty).fill('');
       const barCodeArr = stock.bar_code ? stock.bar_code.split(',').map(b => b.trim()) : Array(qty).fill('');
-
+      const noteArr = stock.note ? stock.note.split(',').map(n => n.trim()) : Array(qty).fill('');
       setIsElectronicProduct(isElec);
-
       if (isElec) {
         setSkuInputs(skuArr);
         setColorInputs(colorArr);
         setBarCodeInputs(barCodeArr);
-      } else {
-        // For non-electronic, set single values into formData
-        setSkuInputs([]);
-        setColorInputs([]);
-        setBarCodeInputs([]);
-        setFormData(prev => ({
-          ...prev,
-          sku: stock.sku || '',
-          color: stock.color || '',
-          bar_code: stock.bar_code || '',
-        }));
+        setNoteInputs(noteArr);
       }
-
       setFormData(prev => ({
         ...prev,
         product_id: stock.product?.id?.toString() || '',
@@ -294,9 +287,9 @@ const StocksManager = () => {
         stock_date: stock.stock_date || new Date().toISOString().split('T')[0],
         expire_date: stock.expire_date || '',
         comission: stock.comission || '',
+        existingImage: stock.image || '',
         status: stock.status || 'active',
       }));
-
       const price = parseFloat(stock.buying_price) || 0;
       setCalculatedTotalAmount((qty * price).toFixed(2));
     } else {
@@ -316,6 +309,13 @@ const StocksManager = () => {
     if (errors[name]) setErrors(prev => ({ ...prev, [name]: undefined }));
   };
 
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setFormData(prev => ({ ...prev, image: file }));
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setOperationLoading('saving');
@@ -324,76 +324,104 @@ const StocksManager = () => {
     let finalSku = '';
     let finalColor = '';
     let finalBarCode = '';
-
+    let finalNote = '';
     const qty = parseInt(formData.quantity) || 0;
 
     if (isElectronicProduct) {
-      const filledSkus = skuInputs.map(s => s.trim());
-      if (filledSkus.length !== qty || filledSkus.some(s => !s)) {
-        setErrors({ sku: ['All SKU fields must be filled for electronic products.'] });
-        showNotification('Please fill all SKU fields for electronic products.', 'error');
+      // 1. Check length matches quantity
+      if (skuInputs.length !== qty) {
+        showNotification(`Please provide exactly ${qty} SKUs.`, 'error');
         setOperationLoading(null);
         return;
       }
-      finalSku = filledSkus.join(',');
 
-      if (colorInputs.some(c => c.trim())) {
-        const filledColors = colorInputs.map(c => c.trim());
-        if (filledColors.length !== qty) {
-          setErrors({ color: [`Number of colors must match quantity (${qty}).`] });
-          showNotification(`Number of colors must match quantity (${qty}).`, 'error');
+      // 2. All SKUs must be filled (required)
+      const trimmedSkus = skuInputs.map(s => s.trim());
+      if (trimmedSkus.some(s => !s)) {
+        showNotification('All SKU fields are required for electronic products.', 'error');
+        setErrors({ sku: ['All SKU fields are required.'] });
+        setOperationLoading(null);
+        return;
+      }
+      finalSku = trimmedSkus.join(',');
+
+      // Colors: optional but must match count if any filled
+      const trimmedColors = colorInputs.map(c => c.trim());
+      if (trimmedColors.some(c => c)) {
+        if (trimmedColors.length !== qty) {
+          showNotification(`Colors must match quantity (${qty}).`, 'error');
+          setErrors({ color: [`Colors must match quantity (${qty}).`] });
           setOperationLoading(null);
           return;
         }
-        finalColor = filledColors.join(',');
+        finalColor = trimmedColors.join(',');
       }
 
-      if (barCodeInputs.some(b => b.trim())) {
-        const filledBarCodes = barCodeInputs.map(b => b.trim());
-        if (filledBarCodes.length !== qty) {
-          setErrors({ bar_code: [`Number of bar codes must match quantity (${qty}).`] });
-          showNotification(`Number of bar codes must match quantity (${qty}).`, 'error');
+      // Bar codes: same logic
+      const trimmedBarCodes = barCodeInputs.map(b => b.trim());
+      if (trimmedBarCodes.some(b => b)) {
+        if (trimmedBarCodes.length !== qty) {
+          showNotification(`Bar codes must match quantity (${qty}).`, 'error');
+          setErrors({ bar_code: [`Bar codes must match quantity (${qty}).`] });
           setOperationLoading(null);
           return;
         }
-        finalBarCode = filledBarCodes.join(',');
+        finalBarCode = trimmedBarCodes.join(',');
+      }
+
+      // Notes: same logic
+      const trimmedNotes = noteInputs.map(n => n.trim());
+      if (trimmedNotes.some(n => n)) {
+        if (trimmedNotes.length !== qty) {
+          showNotification(`Notes must match quantity (${qty}).`, 'error');
+          setErrors({ note: [`Notes must match quantity (${qty}).`] });
+          setOperationLoading(null);
+          return;
+        }
+        finalNote = trimmedNotes.join(',');
       }
     } else {
-      finalSku = formData.sku.trim() || null;
-      finalColor = formData.color.trim() || null;
-      finalBarCode = formData.bar_code.trim() || null;
+      finalSku = formData.sku.trim() || '';
+      finalColor = formData.color.trim() || '';
+      finalBarCode = formData.bar_code.trim() || '';
+      finalNote = formData.note.trim() || '';
     }
 
-    const payload = {
-      product_id: formData.product_id ? parseInt(formData.product_id) : null,
-      vendor_id: formData.vendor_id ? parseInt(formData.vendor_id) : null,
-      warehouse_id: formData.warehouse_id ? parseInt(formData.warehouse_id) : null,
-      quantity: qty,
-      buying_price: parseFloat(formData.buying_price) || 0,
-      selling_price: parseFloat(formData.selling_price) || 0,
-      total_amount: editingStock
-        ? (formData.total_amount ? parseFloat(formData.total_amount) : parseFloat(calculatedTotalAmount))
-        : parseFloat(calculatedTotalAmount),
-      due_amount: parseFloat(formData.due_amount) || 0,
-      paid_amount: formData.paid_amount ? parseFloat(formData.paid_amount) : null,
-      stock_date: formData.stock_date || null,
-      expire_date: formData.expire_date || null,
-      comission: formData.comission ? parseFloat(formData.comission) : null,
-      sku: finalSku,
-      color: finalColor,
-      bar_code: finalBarCode,
-      status: formData.status,
-    };
+    const formDataToSend = new FormData();
+    formDataToSend.append('product_id', formData.product_id ? parseInt(formData.product_id) : '');
+    formDataToSend.append('vendor_id', formData.vendor_id ? parseInt(formData.vendor_id) : '');
+    formDataToSend.append('warehouse_id', formData.warehouse_id ? parseInt(formData.warehouse_id) : '');
+    formDataToSend.append('quantity', qty);
+    formDataToSend.append('buying_price', parseFloat(formData.buying_price) || 0);
+    formDataToSend.append('selling_price', parseFloat(formData.selling_price) || 0);
+    formDataToSend.append('total_amount', editingStock ? (formData.total_amount ? parseFloat(formData.total_amount) : parseFloat(calculatedTotalAmount)) : parseFloat(calculatedTotalAmount));
+    formDataToSend.append('due_amount', parseFloat(formData.due_amount) || 0);
+    formDataToSend.append('paid_amount', formData.paid_amount ? parseFloat(formData.paid_amount) : '');
+    formDataToSend.append('stock_date', formData.stock_date || '');
+    formDataToSend.append('expire_date', formData.expire_date || '');
+    formDataToSend.append('comission', formData.comission ? parseFloat(formData.comission) : '');
+    formDataToSend.append('sku', finalSku);
+    formDataToSend.append('color', finalColor);
+    formDataToSend.append('bar_code', finalBarCode);
+    formDataToSend.append('note', finalNote);
+    formDataToSend.append('status', formData.status);
+
+    if (formData.image) {
+      formDataToSend.append('image', formData.image);
+    }
 
     try {
       if (editingStock) {
-        await axios.post(`${API_URL}/${editingStock.id}`, payload);
+        await axios.post(`${API_URL}/${editingStock.id}`, formDataToSend, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
         showNotification('Stock updated successfully!');
       } else {
-        await axios.post(API_URL, payload);
+        await axios.post(API_URL, formDataToSend, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
         showNotification('Stock created successfully!');
       }
-
       fetchStocks(pagination.current_page, pagination.per_page, searchTerm);
       closeModal();
     } catch (error) {
@@ -460,7 +488,6 @@ const StocksManager = () => {
           </motion.div>
         )}
       </AnimatePresence>
-
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -480,7 +507,6 @@ const StocksManager = () => {
             <Plus size={22} /> Add New Stock
           </button>
         </motion.div>
-
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           {[
             { label: 'Total Stocks', value: stats.total, icon: Package, color: 'blue' },
@@ -501,7 +527,6 @@ const StocksManager = () => {
             </div>
           ))}
         </div>
-
         <div className="bg-gray-800/30 backdrop-blur-sm rounded-2xl p-6 mb-8 border border-gray-700/30">
           <div className="flex flex-col lg:flex-row gap-6">
             <div className="flex-1 relative">
@@ -540,7 +565,6 @@ const StocksManager = () => {
             </div>
           </div>
         </div>
-
         <div className="bg-gray-800/30 backdrop-blur-sm rounded-2xl border border-gray-700/30 overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-700/30 bg-gray-800/20">
             <div className="flex items-center justify-between">
@@ -548,17 +572,18 @@ const StocksManager = () => {
               <span className="text-sm text-gray-400">{pagination.total_items} entries</span>
             </div>
           </div>
-
           <div className="overflow-x-auto">
             <table className="w-full min-w-max">
               <thead>
                 <tr className="border-b border-gray-700/30">
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Image</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Product</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Vendor</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Warehouse</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">SKU</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Color</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Bar Code</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Note</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Qty</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Buy Price</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Sell Price</th>
@@ -575,14 +600,14 @@ const StocksManager = () => {
               <tbody className="divide-y divide-gray-700/30">
                 {loading ? (
                   <tr>
-                    <td colSpan="17" className="px-6 py-12 text-center">
+                    <td colSpan="18" className="px-6 py-12 text-center">
                       <Loader size={32} className="animate-spin mx-auto text-blue-400" />
                       <p className="text-gray-400 mt-3">Loading stocks...</p>
                     </td>
                   </tr>
                 ) : stocks.length === 0 ? (
                   <tr>
-                    <td colSpan="17" className="px-6 py-16 text-center">
+                    <td colSpan="18" className="px-6 py-16 text-center">
                       <Package size={64} className="mx-auto text-gray-500 mb-4" />
                       <h3 className="text-2xl font-bold text-white mb-2">
                         {searchTerm ? 'No stocks found' : 'No stock entries yet'}
@@ -605,6 +630,17 @@ const StocksManager = () => {
                     .filter(s => statusFilter === 'all' || s.status === statusFilter)
                     .map(stock => (
                       <tr key={stock.id} className="hover:bg-gray-700/20 transition-colors">
+                        <td className="px-6 py-4">
+                          {stock.image ? (
+                            <img
+                              src={`/${stock.image}`}
+                              alt="Stock"
+                              className="w-12 h-12 object-cover rounded"
+                            />
+                          ) : (
+                            <span className="text-gray-400">—</span>
+                          )}
+                        </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
                             <Package size={20} className="text-blue-400" />
@@ -634,6 +670,11 @@ const StocksManager = () => {
                         <td className="px-6 py-4">
                           {stock.bar_code ? (
                             <span className="font-mono text-sm">{stock.bar_code}</span>
+                          ) : '-'}
+                        </td>
+                        <td className="px-6 py-4">
+                          {stock.note ? (
+                            <span className="text-sm">{stock.note}</span>
                           ) : '-'}
                         </td>
                         <td className="px-6 py-4 font-bold text-blue-400">{stock.quantity}</td>
@@ -686,7 +727,6 @@ const StocksManager = () => {
               </tbody>
             </table>
           </div>
-
           {pagination.last_page > 1 && (
             <div className="px-6 py-4 border-t border-gray-700/30 flex flex-col sm:flex-row justify-between items-center gap-4">
               <div className="text-sm text-gray-400">
@@ -717,7 +757,6 @@ const StocksManager = () => {
           )}
         </div>
       </div>
-
       <AnimatePresence>
         {showModal && (
           <motion.div
@@ -742,7 +781,6 @@ const StocksManager = () => {
                   <X size={24} />
                 </button>
               </div>
-
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
@@ -776,7 +814,6 @@ const StocksManager = () => {
                     </select>
                   </div>
                 </div>
-
                 <div>
                   <label className="block text-sm font-semibold mb-2">Warehouse</label>
                   <select
@@ -791,7 +828,6 @@ const StocksManager = () => {
                     ))}
                   </select>
                 </div>
-
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div>
                     <label className="block text-sm font-semibold mb-2">Quantity *</label>
@@ -832,7 +868,6 @@ const StocksManager = () => {
                     />
                   </div>
                 </div>
-
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                   <div>
                     <label className="block text-sm font-semibold mb-2">Total Amount</label>
@@ -888,7 +923,6 @@ const StocksManager = () => {
                     />
                   </div>
                 </div>
-
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-semibold mb-2">Stock Date</label>
@@ -911,16 +945,15 @@ const StocksManager = () => {
                     />
                   </div>
                 </div>
-
                 <div className="space-y-6">
                   {isElectronicProduct ? (
                     <div>
                       <label className="block text-sm font-semibold mb-2">
-                        SKU, Color & Bar Code <span className="text-red-400">*</span>
+                        SKU, Color, Bar Code & Note <span className="text-red-400">*</span>
                       </label>
                       <div className="space-y-4">
                         {skuInputs.map((_, index) => (
-                          <div key={index} className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-center bg-gray-800/40 p-4 rounded-xl border border-gray-700">
+                          <div key={index} className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-center bg-gray-800/40 p-4 rounded-xl border border-gray-700">
                             <div>
                               <span className="text-gray-400 text-sm block mb-1">#{index + 1} SKU *</span>
                               <input
@@ -964,6 +997,20 @@ const StocksManager = () => {
                                 className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
                               />
                             </div>
+                            <div>
+                              <span className="text-gray-400 text-sm block mb-1">Note (optional)</span>
+                              <input
+                                type="text"
+                                value={noteInputs[index] || ''}
+                                onChange={(e) => {
+                                  const newNotes = [...noteInputs];
+                                  newNotes[index] = e.target.value;
+                                  setNoteInputs(newNotes);
+                                }}
+                                placeholder="Enter note"
+                                className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                              />
+                            </div>
                           </div>
                         ))}
                         <p className="text-xs text-gray-400 mt-2">
@@ -972,7 +1019,7 @@ const StocksManager = () => {
                       </div>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div>
                         <label className="block text-sm font-semibold mb-2">
                           SKU <span className="text-gray-400">(optional)</span>
@@ -1012,14 +1059,53 @@ const StocksManager = () => {
                           className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
                         />
                       </div>
+                      <div>
+                        <label className="block text-sm font-semibold mb-2">
+                          Note <span className="text-gray-400">(optional)</span>
+                        </label>
+                        <textarea
+                          name="note"
+                          value={formData.note}
+                          onChange={handleChange}
+                          placeholder="Enter note"
+                          className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                          rows={2}
+                        />
+                      </div>
                     </div>
                   )}
                 </div>
-
+                <div>
+                  <label className="block text-sm font-semibold mb-2">
+                    Image <span className="text-gray-400">(optional)</span>
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileChange}
+                    className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                  {formData.existingImage && !formData.image && (
+                    <div className="mt-2">
+                      <p className="text-sm text-gray-400">Current Image:</p>
+                      <img src={`/${formData.existingImage}`} alt="Current" className="w-32 h-32 object-cover rounded mt-2" />
+                    </div>
+                  )}
+                  {formData.image && (
+                    <div className="mt-2">
+                      <p className="text-sm text-gray-400">New Image Preview:</p>
+                      <img
+                        src={URL.createObjectURL(formData.image)}
+                        alt="Preview"
+                        className="w-32 h-32 object-cover rounded mt-2"
+                      />
+                    </div>
+                  )}
+                </div>
                 {errors.sku && <p className="text-red-400 text-sm mt-1">{errors.sku[0]}</p>}
                 {errors.color && <p className="text-red-400 text-sm mt-1">{errors.color[0]}</p>}
                 {errors.bar_code && <p className="text-red-400 text-sm mt-1">{errors.bar_code[0]}</p>}
-
+                {errors.note && <p className="text-red-400 text-sm mt-1">{errors.note[0]}</p>}
                 <div>
                   <label className="block text-sm font-semibold mb-3">Status</label>
                   <div className="grid grid-cols-2 gap-4">
@@ -1045,7 +1131,6 @@ const StocksManager = () => {
                     ))}
                   </div>
                 </div>
-
                 <div className="flex justify-end gap-3 pt-6 border-t border-gray-700">
                   <button
                     type="button"
@@ -1072,7 +1157,6 @@ const StocksManager = () => {
           </motion.div>
         )}
       </AnimatePresence>
-
       <AnimatePresence>
         {deleteConfirm && (
           <motion.div
