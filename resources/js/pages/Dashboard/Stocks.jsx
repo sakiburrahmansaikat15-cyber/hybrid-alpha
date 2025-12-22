@@ -28,6 +28,8 @@ const StocksManager = () => {
 
   const [isElectronicProduct, setIsElectronicProduct] = useState(false);
   const [skuInputs, setSkuInputs] = useState([]);
+  const [colorInputs, setColorInputs] = useState([]);
+  const [barCodeInputs, setBarCodeInputs] = useState([]);
 
   const [formData, setFormData] = useState({
     product_id: '',
@@ -38,13 +40,18 @@ const StocksManager = () => {
     selling_price: '',
     total_amount: '',
     due_amount: '',
+    paid_amount: '',
     stock_date: new Date().toISOString().split('T')[0],
+    expire_date: '',
     comission: '',
     sku: '',
+    color: '',
+    bar_code: '',
     status: 'active',
   });
 
   const [calculatedTotalAmount, setCalculatedTotalAmount] = useState('');
+  const [calculatedDueAmount, setCalculatedDueAmount] = useState('');
 
   const [errors, setErrors] = useState({});
   const [notification, setNotification] = useState({ show: false, message: '', type: '' });
@@ -91,9 +98,13 @@ const StocksManager = () => {
         selling_price: item.selling_price ?? '0.00',
         total_amount: item.total_amount ?? null,
         due_amount: item.due_amount ?? null,
+        paid_amount: item.paid_amount ?? null,
         comission: item.comission ?? null,
         stock_date: item.stock_date ?? null,
+        expire_date: item.expire_date ?? null,
         sku: item.sku || '',
+        color: item.color || '',
+        bar_code: item.bar_code || '',
         status: item.status || 'active',
       })));
 
@@ -135,14 +146,13 @@ const StocksManager = () => {
   useEffect(() => {
     fetchStocks();
     fetchRelatedData();
-  }, []);
+  }, [fetchStocks, fetchRelatedData]);
 
   useEffect(() => {
     const timer = setTimeout(() => fetchStocks(1, pagination.per_page, searchTerm), 500);
     return () => clearTimeout(timer);
   }, [searchTerm, pagination.per_page, fetchStocks]);
 
-  // Auto-calculate total_amount only when creating or when inputs change (not when editing)
   useEffect(() => {
     const qty = parseFloat(formData.quantity) || 0;
     const price = parseFloat(formData.buying_price) || 0;
@@ -151,22 +161,21 @@ const StocksManager = () => {
   }, [formData.quantity, formData.buying_price]);
 
   useEffect(() => {
+    const total = editingStock
+      ? (parseFloat(formData.total_amount) || parseFloat(calculatedTotalAmount))
+      : parseFloat(calculatedTotalAmount);
+    const paid = parseFloat(formData.paid_amount) || 0;
+    const due = total - paid;
+    setCalculatedDueAmount(due.toFixed(2));
+    setFormData(prev => ({ ...prev, due_amount: due.toFixed(2) }));
+  }, [formData.paid_amount, formData.total_amount, calculatedTotalAmount, editingStock]);
+
+  useEffect(() => {
     if (formData.product_id) {
       const product = products.find(p => p.id === parseInt(formData.product_id));
       const typeName = (product?.product_type?.name || product?.productType?.name || '').toLowerCase();
       const isElectronic = typeName === 'electronic';
       setIsElectronicProduct(isElectronic);
-
-      if (isElectronic) {
-        const qty = parseInt(formData.quantity) || 0;
-        setSkuInputs(Array(qty).fill(''));
-        setFormData(prev => ({ ...prev, sku: '' }));
-      } else {
-        setSkuInputs([]);
-      }
-    } else {
-      setIsElectronicProduct(false);
-      setSkuInputs([]);
     }
   }, [formData.product_id, products]);
 
@@ -179,6 +188,22 @@ const StocksManager = () => {
         for (let i = prev.length; i < qty; i++) newArr[i] = '';
         return newArr;
       });
+      setColorInputs(prev => {
+        const newArr = [...prev];
+        newArr.length = qty;
+        for (let i = prev.length; i < qty; i++) newArr[i] = '';
+        return newArr;
+      });
+      setBarCodeInputs(prev => {
+        const newArr = [...prev];
+        newArr.length = qty;
+        for (let i = prev.length; i < qty; i++) newArr[i] = '';
+        return newArr;
+      });
+    } else {
+      setSkuInputs([]);
+      setColorInputs([]);
+      setBarCodeInputs([]);
     }
   }, [formData.quantity, isElectronicProduct]);
 
@@ -203,22 +228,60 @@ const StocksManager = () => {
       selling_price: '',
       total_amount: '',
       due_amount: '',
+      paid_amount: '',
       stock_date: new Date().toISOString().split('T')[0],
+      expire_date: '',
       comission: '',
       sku: '',
+      color: '',
+      bar_code: '',
       status: 'active',
     });
     setCalculatedTotalAmount('');
+    setCalculatedDueAmount('');
     setErrors({});
     setEditingStock(null);
     setIsElectronicProduct(false);
     setSkuInputs([]);
+    setColorInputs([]);
+    setBarCodeInputs([]);
   };
 
   const openModal = (stock = null) => {
     if (stock) {
       setEditingStock(stock);
-      setFormData({
+
+      const product = products.find(p => p.id === stock.product?.id);
+      const isElec = (product?.product_type?.name || product?.productType?.name || '').toLowerCase() === 'electronic';
+
+      const qty = parseInt(stock.quantity) || 0;
+
+      // Split existing data into arrays for electronic products
+      const skuArr = stock.sku ? stock.sku.split(',').map(s => s.trim()) : Array(qty).fill('');
+      const colorArr = stock.color ? stock.color.split(',').map(c => c.trim()) : Array(qty).fill('');
+      const barCodeArr = stock.bar_code ? stock.bar_code.split(',').map(b => b.trim()) : Array(qty).fill('');
+
+      setIsElectronicProduct(isElec);
+
+      if (isElec) {
+        setSkuInputs(skuArr);
+        setColorInputs(colorArr);
+        setBarCodeInputs(barCodeArr);
+      } else {
+        // For non-electronic, set single values into formData
+        setSkuInputs([]);
+        setColorInputs([]);
+        setBarCodeInputs([]);
+        setFormData(prev => ({
+          ...prev,
+          sku: stock.sku || '',
+          color: stock.color || '',
+          bar_code: stock.bar_code || '',
+        }));
+      }
+
+      setFormData(prev => ({
+        ...prev,
         product_id: stock.product?.id?.toString() || '',
         vendor_id: stock.vendor?.id?.toString() || '',
         warehouse_id: stock.warehouse?.id?.toString() || '',
@@ -227,21 +290,15 @@ const StocksManager = () => {
         selling_price: stock.selling_price || '',
         total_amount: stock.total_amount || '',
         due_amount: stock.due_amount || '',
-        comission: stock.comission || '',
+        paid_amount: stock.paid_amount || '',
         stock_date: stock.stock_date || new Date().toISOString().split('T')[0],
-        sku: stock.sku || '',
+        expire_date: stock.expire_date || '',
+        comission: stock.comission || '',
         status: stock.status || 'active',
-      });
+      }));
 
-      const qty = parseFloat(stock.quantity) || 0;
       const price = parseFloat(stock.buying_price) || 0;
-      setCalculatedTotalAmount((qty * price).toFixed(2)); // initial calculation
-
-      const product = products.find(p => p.id === stock.product?.id);
-      const isElec = (product?.product_type?.name || product?.productType?.name || '').toLowerCase() === 'electronic';
-
-      setIsElectronicProduct(isElec);
-      setSkuInputs(isElec && stock.sku ? stock.sku.split(',').map(s => s.trim()) : []);
+      setCalculatedTotalAmount((qty * price).toFixed(2));
     } else {
       resetForm();
     }
@@ -265,34 +322,66 @@ const StocksManager = () => {
     setErrors({});
 
     let finalSku = '';
+    let finalColor = '';
+    let finalBarCode = '';
+
+    const qty = parseInt(formData.quantity) || 0;
 
     if (isElectronicProduct) {
       const filledSkus = skuInputs.map(s => s.trim());
-      if (filledSkus.length !== parseInt(formData.quantity) || filledSkus.some(s => !s)) {
+      if (filledSkus.length !== qty || filledSkus.some(s => !s)) {
         setErrors({ sku: ['All SKU fields must be filled for electronic products.'] });
         showNotification('Please fill all SKU fields for electronic products.', 'error');
         setOperationLoading(null);
         return;
       }
       finalSku = filledSkus.join(',');
+
+      if (colorInputs.some(c => c.trim())) {
+        const filledColors = colorInputs.map(c => c.trim());
+        if (filledColors.length !== qty) {
+          setErrors({ color: [`Number of colors must match quantity (${qty}).`] });
+          showNotification(`Number of colors must match quantity (${qty}).`, 'error');
+          setOperationLoading(null);
+          return;
+        }
+        finalColor = filledColors.join(',');
+      }
+
+      if (barCodeInputs.some(b => b.trim())) {
+        const filledBarCodes = barCodeInputs.map(b => b.trim());
+        if (filledBarCodes.length !== qty) {
+          setErrors({ bar_code: [`Number of bar codes must match quantity (${qty}).`] });
+          showNotification(`Number of bar codes must match quantity (${qty}).`, 'error');
+          setOperationLoading(null);
+          return;
+        }
+        finalBarCode = filledBarCodes.join(',');
+      }
     } else {
-      finalSku = formData.sku.trim() || '';
+      finalSku = formData.sku.trim() || null;
+      finalColor = formData.color.trim() || null;
+      finalBarCode = formData.bar_code.trim() || null;
     }
 
     const payload = {
       product_id: formData.product_id ? parseInt(formData.product_id) : null,
       vendor_id: formData.vendor_id ? parseInt(formData.vendor_id) : null,
       warehouse_id: formData.warehouse_id ? parseInt(formData.warehouse_id) : null,
-      quantity: parseInt(formData.quantity) || 0,
+      quantity: qty,
       buying_price: parseFloat(formData.buying_price) || 0,
       selling_price: parseFloat(formData.selling_price) || 0,
       total_amount: editingStock
         ? (formData.total_amount ? parseFloat(formData.total_amount) : parseFloat(calculatedTotalAmount))
-        : parseFloat(calculatedTotalAmount), // use input value when editing, calculated when creating
-      due_amount: formData.due_amount ? parseFloat(formData.due_amount) : null,
-      comission: formData.comission ? parseFloat(formData.comission) : null,
+        : parseFloat(calculatedTotalAmount),
+      due_amount: parseFloat(formData.due_amount) || 0,
+      paid_amount: formData.paid_amount ? parseFloat(formData.paid_amount) : null,
       stock_date: formData.stock_date || null,
-      sku: finalSku || null,
+      expire_date: formData.expire_date || null,
+      comission: formData.comission ? parseFloat(formData.comission) : null,
+      sku: finalSku,
+      color: finalColor,
+      bar_code: finalBarCode,
       status: formData.status,
     };
 
@@ -468,13 +557,17 @@ const StocksManager = () => {
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Vendor</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Warehouse</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">SKU</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Color</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Bar Code</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Qty</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Buy Price</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Sell Price</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Total Amt</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Due Amt</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Paid Amt</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Commission</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Date</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Stock Date</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Expire Date</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Status</th>
                   <th className="px-6 py-4 text-right text-sm font-semibold text-gray-300 uppercase tracking-wider">Actions</th>
                 </tr>
@@ -482,14 +575,14 @@ const StocksManager = () => {
               <tbody className="divide-y divide-gray-700/30">
                 {loading ? (
                   <tr>
-                    <td colSpan="13" className="px-6 py-12 text-center">
+                    <td colSpan="17" className="px-6 py-12 text-center">
                       <Loader size={32} className="animate-spin mx-auto text-blue-400" />
                       <p className="text-gray-400 mt-3">Loading stocks...</p>
                     </td>
                   </tr>
                 ) : stocks.length === 0 ? (
                   <tr>
-                    <td colSpan="13" className="px-6 py-16 text-center">
+                    <td colSpan="17" className="px-6 py-16 text-center">
                       <Package size={64} className="mx-auto text-gray-500 mb-4" />
                       <h3 className="text-2xl font-bold text-white mb-2">
                         {searchTerm ? 'No stocks found' : 'No stock entries yet'}
@@ -533,15 +626,29 @@ const StocksManager = () => {
                             </div>
                           ) : '-'}
                         </td>
+                        <td className="px-6 py-4">
+                          {stock.color ? (
+                            <span className="font-mono text-sm">{stock.color}</span>
+                          ) : '-'}
+                        </td>
+                        <td className="px-6 py-4">
+                          {stock.bar_code ? (
+                            <span className="font-mono text-sm">{stock.bar_code}</span>
+                          ) : '-'}
+                        </td>
                         <td className="px-6 py-4 font-bold text-blue-400">{stock.quantity}</td>
                         <td className="px-6 py-4 text-green-400">{formatCurrency(stock.buying_price)}</td>
                         <td className="px-6 py-4 text-yellow-400">{formatCurrency(stock.selling_price)}</td>
                         <td className="px-6 py-4 font-bold text-purple-400">{formatCurrency(stock.total_amount)}</td>
                         <td className="px-6 py-4 text-orange-400 font-medium">{formatCurrency(stock.due_amount)}</td>
+                        <td className="px-6 py-4 text-cyan-400 font-medium">{formatCurrency(stock.paid_amount)}</td>
                         <td className="px-6 py-4 text-cyan-400 font-medium">{formatCurrency(stock.comission)}</td>
                         <td className="px-6 py-4 text-sm text-gray-300">
                           <Calendar size={16} className="inline mr-2" />
                           {formatDate(stock.stock_date)}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-300">
+                          {formatDate(stock.expire_date)}
                         </td>
                         <td className="px-6 py-4">
                           <button
@@ -726,12 +833,10 @@ const StocksManager = () => {
                   </div>
                 </div>
 
-                {/* Total Amount Section */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                   <div>
                     <label className="block text-sm font-semibold mb-2">Total Amount</label>
                     {editingStock ? (
-                      // Editable when editing
                       <input
                         type="number"
                         step="0.01"
@@ -741,7 +846,6 @@ const StocksManager = () => {
                         className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
                       />
                     ) : (
-                      // Read-only calculated display when creating
                       <div className="w-full px-4 py-3 bg-gray-600/50 rounded-xl border border-gray-600 text-cyan-400 font-semibold">
                         {calculatedTotalAmount ? formatCurrency(calculatedTotalAmount) : '—'}
                       </div>
@@ -753,7 +857,21 @@ const StocksManager = () => {
                       type="number"
                       step="0.01"
                       name="due_amount"
-                      value={formData.due_amount}
+                      value={editingStock ? formData.due_amount : calculatedDueAmount}
+                      onChange={handleChange}
+                      disabled={!editingStock}
+                      className={`w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none ${
+                        !editingStock ? 'cursor-not-allowed opacity-70' : ''
+                      }`}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold mb-2">Paid Amount</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      name="paid_amount"
+                      value={formData.paid_amount}
                       onChange={handleChange}
                       className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
                     />
@@ -769,6 +887,9 @@ const StocksManager = () => {
                       className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
                     />
                   </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-semibold mb-2">Stock Date</label>
                     <input
@@ -779,54 +900,125 @@ const StocksManager = () => {
                       className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
                     />
                   </div>
+                  <div>
+                    <label className="block text-sm font-semibold mb-2">Expire Date</label>
+                    <input
+                      type="date"
+                      name="expire_date"
+                      value={formData.expire_date}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                    />
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-semibold mb-2">
-                    SKU {isElectronicProduct && <span className="text-red-400">*</span>}
-                  </label>
-
+                <div className="space-y-6">
                   {isElectronicProduct ? (
-                    <div className="space-y-3">
-                      {skuInputs.map((sku, index) => (
-                        <div key={index} className="flex items-center gap-3">
-                          <span className="text-gray-400 w-12 text-sm">#{index + 1}</span>
-                          <input
-                            type="text"
-                            value={sku}
-                            onChange={(e) => {
-                              const newSkus = [...skuInputs];
-                              newSkus[index] = e.target.value;
-                              setSkuInputs(newSkus);
-                            }}
-                            placeholder={`SKU for item ${index + 1}`}
-                            className="flex-1 px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-                            required
-                          />
-                        </div>
-                      ))}
-                      <p className="text-xs text-gray-400 mt-2">
-                        Provide exactly <strong>{formData.quantity || 0}</strong> unique SKU(s).
-                      </p>
+                    <div>
+                      <label className="block text-sm font-semibold mb-2">
+                        SKU, Color & Bar Code <span className="text-red-400">*</span>
+                      </label>
+                      <div className="space-y-4">
+                        {skuInputs.map((_, index) => (
+                          <div key={index} className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-center bg-gray-800/40 p-4 rounded-xl border border-gray-700">
+                            <div>
+                              <span className="text-gray-400 text-sm block mb-1">#{index + 1} SKU *</span>
+                              <input
+                                type="text"
+                                value={skuInputs[index] || ''}
+                                onChange={(e) => {
+                                  const newSkus = [...skuInputs];
+                                  newSkus[index] = e.target.value;
+                                  setSkuInputs(newSkus);
+                                }}
+                                placeholder="Enter SKU"
+                                className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                                required
+                              />
+                            </div>
+                            <div>
+                              <span className="text-gray-400 text-sm block mb-1">Color (optional)</span>
+                              <input
+                                type="text"
+                                value={colorInputs[index] || ''}
+                                onChange={(e) => {
+                                  const newColors = [...colorInputs];
+                                  newColors[index] = e.target.value;
+                                  setColorInputs(newColors);
+                                }}
+                                placeholder="e.g. Black"
+                                className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                              />
+                            </div>
+                            <div>
+                              <span className="text-gray-400 text-sm block mb-1">Bar Code (optional)</span>
+                              <input
+                                type="text"
+                                value={barCodeInputs[index] || ''}
+                                onChange={(e) => {
+                                  const newBarCodes = [...barCodeInputs];
+                                  newBarCodes[index] = e.target.value;
+                                  setBarCodeInputs(newBarCodes);
+                                }}
+                                placeholder="Enter Bar Code"
+                                className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                              />
+                            </div>
+                          </div>
+                        ))}
+                        <p className="text-xs text-gray-400 mt-2">
+                          Provide exactly <strong>{formData.quantity || 0}</strong> items.
+                        </p>
+                      </div>
                     </div>
                   ) : (
-                    <>
-                      <input
-                        type="text"
-                        name="sku"
-                        value={formData.sku}
-                        onChange={handleChange}
-                        placeholder="Optional – auto-generated if empty"
-                        className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-                      />
-                      <p className="text-xs text-gray-400 mt-2">
-                        Leave empty for auto-generated single SKU (non-electronic).
-                      </p>
-                    </>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      <div>
+                        <label className="block text-sm font-semibold mb-2">
+                          SKU <span className="text-gray-400">(optional)</span>
+                        </label>
+                        <input
+                          type="text"
+                          name="sku"
+                          value={formData.sku}
+                          onChange={handleChange}
+                          placeholder="Enter SKU (optional)"
+                          className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold mb-2">
+                          Color <span className="text-gray-400">(optional)</span>
+                        </label>
+                        <input
+                          type="text"
+                          name="color"
+                          value={formData.color}
+                          onChange={handleChange}
+                          placeholder="e.g. Black"
+                          className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold mb-2">
+                          Bar Code <span className="text-gray-400">(optional)</span>
+                        </label>
+                        <input
+                          type="text"
+                          name="bar_code"
+                          value={formData.bar_code}
+                          onChange={handleChange}
+                          placeholder="Enter Bar Code"
+                          className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                        />
+                      </div>
+                    </div>
                   )}
-
-                  {errors.sku && <p className="text-red-400 text-sm mt-1">{errors.sku[0]}</p>}
                 </div>
+
+                {errors.sku && <p className="text-red-400 text-sm mt-1">{errors.sku[0]}</p>}
+                {errors.color && <p className="text-red-400 text-sm mt-1">{errors.color[0]}</p>}
+                {errors.bar_code && <p className="text-red-400 text-sm mt-1">{errors.bar_code[0]}</p>}
 
                 <div>
                   <label className="block text-sm font-semibold mb-3">Status</label>
