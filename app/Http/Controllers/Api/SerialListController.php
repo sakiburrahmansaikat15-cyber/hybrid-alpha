@@ -22,9 +22,14 @@ class SerialListController extends Controller
         $query = SerialList::query();
 
         // 🔍 Apply search if keyword provided
-      if ($keyword) {
-        $query->where('color', 'like', "%{$keyword}%"); 
-    }
+       if ($keyword) {
+            $query->where(function ($q) use ($keyword) {
+                $q->where('color', 'like', "%{$keyword}%")
+                  ->orWhere('sku', 'like', "%{$keyword}%")
+                  ->orWhere('barcode', 'like', "%{$keyword}%")
+                  ->orWhere('notes', 'like', "%{$keyword}%");
+            });
+        }
 
         // 📄 Paginate results
         $serials = $query->latest()->paginate($limit);

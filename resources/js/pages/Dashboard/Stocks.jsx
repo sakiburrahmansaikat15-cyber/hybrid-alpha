@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 
 const API_URL = '/api/stocks';
+const SERIALS_BY_STOCK_URL = (stockId) => `/api/serial-list/stock/${stockId}`;
 const PRODUCTS_URL = '/api/products';
 const VENDORS_URL = '/api/vendors';
 const WAREHOUSES_URL = '/api/warehouses';
@@ -24,10 +25,14 @@ const StocksManager = () => {
   const [products, setProducts] = useState([]);
   const [vendors, setVendors] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
-  const [skuInputs, setSkuInputs] = useState([]);
-  const [colorInputs, setColorInputs] = useState([]);
-  const [barCodeInputs, setBarCodeInputs] = useState([]);
-  const [noteInputs, setNoteInputs] = useState([]);
+  
+  const [skuInputs, setSkuInputs] = useState(['']);
+  const [colorInputs, setColorInputs] = useState(['']);
+  const [barCodeInputs, setBarCodeInputs] = useState(['']);
+  const [noteInputs, setNoteInputs] = useState(['']);
+  
+  const [isElectronic, setIsElectronic] = useState(false);
+
   const [formData, setFormData] = useState({
     product_id: '',
     vendor_id: '',
@@ -43,8 +48,7 @@ const StocksManager = () => {
     comission: '',
     status: 'active',
   });
-  const [calculatedTotalAmount, setCalculatedTotalAmount] = useState('');
-  const [calculatedDueAmount, setCalculatedDueAmount] = useState('');
+
   const [errors, setErrors] = useState({});
   const [notification, setNotification] = useState({ show: false, message: '', type: '' });
   const [pagination, setPagination] = useState({
@@ -136,30 +140,52 @@ const StocksManager = () => {
     return () => clearTimeout(timer);
   }, [searchTerm, pagination.per_page, fetchStocks]);
 
+  // Auto-calculate Total Amount only when creating new stock
   useEffect(() => {
-    const qty = parseFloat(formData.quantity) || 0;
-    const price = parseFloat(formData.buying_price) || 0;
-    const total = qty * price;
-    setCalculatedTotalAmount(total.toFixed(2));
-  }, [formData.quantity, formData.buying_price]);
+    if (!editingStock) {
+      const qty = parseFloat(formData.quantity) || 0;
+      const price = parseFloat(formData.buying_price) || 0;
+      const total = (qty * price).toFixed(2);
+      setFormData(prev => ({ ...prev, total_amount: total }));
+    }
+  }, [formData.quantity, formData.buying_price, editingStock]);
 
+  // Auto-calculate Due Amount only when creating new stock
   useEffect(() => {
-    const total = editingStock
-      ? (parseFloat(formData.total_amount) || parseFloat(calculatedTotalAmount))
-      : parseFloat(calculatedTotalAmount);
-    const paid = parseFloat(formData.paid_amount) || 0;
-    const due = total - paid;
-    setCalculatedDueAmount(due.toFixed(2));
-    setFormData(prev => ({ ...prev, due_amount: due.toFixed(2) }));
-  }, [formData.paid_amount, formData.total_amount, calculatedTotalAmount, editingStock]);
+    if (!editingStock) {
+      const total = parseFloat(formData.total_amount) || 0;
+      const paid = parseFloat(formData.paid_amount) || 0;
+      const due = total - paid >= 0 ? (total - paid).toFixed(2) : '0.00';
+      setFormData(prev => ({ ...prev, due_amount: due }));
+    }
+  }, [formData.total_amount, formData.paid_amount, editingStock]);
 
   useEffect(() => {
     const qty = parseInt(formData.quantity) || 0;
-    setSkuInputs(Array(qty).fill(''));
-    setColorInputs(Array(qty).fill(''));
-    setBarCodeInputs(Array(qty).fill(''));
-    setNoteInputs(Array(qty).fill(''));
-  }, [formData.quantity]);
+    if (isElectronic && qty > 0 && formData.product_id && !editingStock) {
+      setSkuInputs(prev => Array(qty).fill('').map((_, i) => prev[i] || ''));
+      setColorInputs(prev => Array(qty).fill('').map((_, i) => prev[i] || ''));
+      setBarCodeInputs(prev => Array(qty).fill('').map((_, i) => prev[i] || ''));
+      setNoteInputs(prev => Array(qty).fill('').map((_, i) => prev[i] || ''));
+    }
+  }, [formData.quantity, isElectronic, formData.product_id, editingStock]);
+
+  const handleProductChange = (e) => {
+    const productId = e.target.value;
+    setFormData(prev => ({ ...prev, product_id: productId }));
+
+    const selectedProduct = products.find(p => p.id == productId);
+    const typeName = selectedProduct?.product_type?.name || selectedProduct?.productType?.name || '';
+    const electronic = typeName.toLowerCase() === 'electronic';
+    setIsElectronic(electronic);
+
+    if (!editingStock) {
+      setSkuInputs(['']);
+      setColorInputs(['']);
+      setBarCodeInputs(['']);
+      setNoteInputs(['']);
+    }
+  };
 
   const handlePageChange = (newPage) => {
     if (newPage < 1 || newPage > pagination.last_page) return;
@@ -188,17 +214,18 @@ const StocksManager = () => {
       comission: '',
       status: 'active',
     });
-    setCalculatedTotalAmount('');
-    setCalculatedDueAmount('');
     setErrors({});
     setEditingStock(null);
-    setSkuInputs([]);
-    setColorInputs([]);
-    setBarCodeInputs([]);
-    setNoteInputs([]);
+    setIsElectronic(false);
+    setSkuInputs(['']);
+    setColorInputs(['']);
+    setBarCodeInputs(['']);
+    setNoteInputs(['']);
   };
 
-  const openModal = (stock = null) => {
+  const openModal = async (stock = null) => {
+    resetForm();
+
     if (stock) {
       setEditingStock(stock);
       setFormData({
@@ -216,12 +243,12 @@ const StocksManager = () => {
         comission: stock.comission || '',
         status: stock.status || 'active',
       });
-      const price = parseFloat(stock.buying_price) || 0;
-      const qty = parseInt(stock.quantity) || 0;
-      setCalculatedTotalAmount((qty * price).toFixed(2));
-    } else {
-      resetForm();
+
+      const typeName = stock.product?.product_type?.name || stock.product?.productType?.name || '';
+      const electronic = typeName.toLowerCase() === 'electronic';
+      setIsElectronic(electronic);
     }
+
     setShowModal(true);
   };
 
@@ -245,71 +272,52 @@ const StocksManager = () => {
     let finalColor = '';
     let finalBarCode = '';
     let finalNote = '';
-    const qty = parseInt(formData.quantity) || 0;
 
-    if (skuInputs.length !== qty) {
-      showNotification(`Please provide exactly ${qty} SKUs.`, 'error');
-      setOperationLoading(null);
-      return;
-    }
-
-    const trimmedSkus = skuInputs.map(s => s.trim());
-    if (trimmedSkus.some(s => !s)) {
-      showNotification('All SKU fields are required.', 'error');
-      setErrors({ sku: ['All SKU fields are required.'] });
-      setOperationLoading(null);
-      return;
-    }
-    finalSku = trimmedSkus.join(',');
-
-    const trimmedColors = colorInputs.map(c => c.trim());
-    if (trimmedColors.some(c => c)) {
-      if (trimmedColors.length !== qty) {
-        showNotification(`Colors must match quantity (${qty}).`, 'error');
+    if (!editingStock && isElectronic) {
+      const trimmedSkus = skuInputs.map(s => s.trim());
+      if (trimmedSkus.some(s => !s)) {
+        showNotification('All SKU fields are required for electronic products.', 'error');
+        setErrors({ sku: ['All SKU fields are required.'] });
         setOperationLoading(null);
         return;
       }
-      finalColor = trimmedColors.join(',');
-    }
-
-    const trimmedBarCodes = barCodeInputs.map(b => b.trim());
-    if (trimmedBarCodes.some(b => b)) {
-      if (trimmedBarCodes.length !== qty) {
-        showNotification(`Bar codes must match quantity (${qty}).`, 'error');
-        setOperationLoading(null);
-        return;
-      }
-      finalBarCode = trimmedBarCodes.join(',');
-    }
-
-    const trimmedNotes = noteInputs.map(n => n.trim());
-    if (trimmedNotes.some(n => n)) {
-      if (trimmedNotes.length !== qty) {
-        showNotification(`Notes must match quantity (${qty}).`, 'error');
-        setOperationLoading(null);
-        return;
-      }
-      finalNote = trimmedNotes.join(',');
+      finalSku = trimmedSkus.join(',');
+      finalColor = colorInputs.map(c => c.trim()).join(',');
+      finalBarCode = barCodeInputs.map(b => b.trim()).join(',');
+      finalNote = noteInputs.map(n => n.trim()).join(',');
+    } else if (!editingStock && !isElectronic) {
+      finalSku = skuInputs[0]?.trim() || '';
+      finalColor = colorInputs[0]?.trim() || '';
+      finalBarCode = barCodeInputs[0]?.trim() || '';
+      finalNote = noteInputs[0]?.trim() || '';
     }
 
     const formDataToSend = new FormData();
-    formDataToSend.append('product_id', formData.product_id ? parseInt(formData.product_id) : '');
-    formDataToSend.append('vendor_id', formData.vendor_id ? parseInt(formData.vendor_id) : '');
-    formDataToSend.append('warehouse_id', formData.warehouse_id ? parseInt(formData.warehouse_id) : '');
-    formDataToSend.append('quantity', qty);
+    formDataToSend.append('product_id', formData.product_id);
+    formDataToSend.append('vendor_id', formData.vendor_id || '');
+    formDataToSend.append('warehouse_id', formData.warehouse_id || '');
+    formDataToSend.append('quantity', parseInt(formData.quantity) || 0);
     formDataToSend.append('buying_price', parseFloat(formData.buying_price) || 0);
     formDataToSend.append('selling_price', parseFloat(formData.selling_price) || 0);
-    formDataToSend.append('total_amount', editingStock ? (formData.total_amount ? parseFloat(formData.total_amount) : parseFloat(calculatedTotalAmount)) : parseFloat(calculatedTotalAmount));
+    formDataToSend.append('total_amount', parseFloat(formData.total_amount) || 0);
     formDataToSend.append('due_amount', parseFloat(formData.due_amount) || 0);
-    formDataToSend.append('paid_amount', formData.paid_amount ? parseFloat(formData.paid_amount) : '');
+    formDataToSend.append('paid_amount', parseFloat(formData.paid_amount) || 0);
     formDataToSend.append('stock_date', formData.stock_date || '');
     formDataToSend.append('expire_date', formData.expire_date || '');
-    formDataToSend.append('comission', formData.comission ? parseFloat(formData.comission) : '');
-    formDataToSend.append('sku', finalSku);
-    formDataToSend.append('color', finalColor);
-    formDataToSend.append('bar_code', finalBarCode);
-    formDataToSend.append('note', finalNote);
+    formDataToSend.append('comission', formData.comission || 0);
     formDataToSend.append('status', formData.status);
+
+    if (!editingStock) {
+      formDataToSend.append('sku', finalSku);
+      formDataToSend.append('color', finalColor);
+      formDataToSend.append('bar_code', finalBarCode);
+      formDataToSend.append('note', finalNote);
+
+      const imageInput = document.querySelector('input[type="file"]');
+      if (imageInput?.files[0]) {
+        formDataToSend.append('image', imageInput.files[0]);
+      }
+    }
 
     try {
       if (editingStock) {
@@ -619,6 +627,7 @@ const StocksManager = () => {
           )}
         </div>
       </div>
+
       <AnimatePresence>
         {showModal && (
           <motion.div
@@ -643,6 +652,7 @@ const StocksManager = () => {
                   <X size={24} />
                 </button>
               </div>
+
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
@@ -650,13 +660,15 @@ const StocksManager = () => {
                     <select
                       name="product_id"
                       value={formData.product_id}
-                      onChange={handleChange}
+                      onChange={handleProductChange}
                       className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
                       required
                     >
                       <option value="">Select Product</option>
                       {products.map(p => (
-                        <option key={p.id} value={p.id}>{p.name}</option>
+                        <option key={p.id} value={p.id}>
+                          {p.name} {p.product_type?.name ? `(${p.product_type.name})` : p.productType?.name ? `(${p.productType.name})` : ''}
+                        </option>
                       ))}
                     </select>
                     {errors.product_id && <p className="text-red-400 text-sm mt-1">{errors.product_id[0]}</p>}
@@ -676,6 +688,7 @@ const StocksManager = () => {
                     </select>
                   </div>
                 </div>
+
                 <div>
                   <label className="block text-sm font-semibold mb-2">Warehouse</label>
                   <select
@@ -690,6 +703,7 @@ const StocksManager = () => {
                     ))}
                   </select>
                 </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div>
                     <label className="block text-sm font-semibold mb-2">Quantity *</label>
@@ -730,36 +744,18 @@ const StocksManager = () => {
                     />
                   </div>
                 </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                   <div>
-                    <label className="block text-sm font-semibold mb-2">Total Amount</label>
-                    {editingStock ? (
-                      <input
-                        type="number"
-                        step="0.01"
-                        name="total_amount"
-                        value={formData.total_amount}
-                        onChange={handleChange}
-                        className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-                      />
-                    ) : (
-                      <div className="w-full px-4 py-3 bg-gray-600/50 rounded-xl border border-gray-600 text-cyan-400 font-semibold">
-                        {calculatedTotalAmount ? formatCurrency(calculatedTotalAmount) : '—'}
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold mb-2">Due Amount</label>
+                    <label className="block text-sm font-semibold mb-2">Total Amount *</label>
                     <input
                       type="number"
                       step="0.01"
-                      name="due_amount"
-                      value={editingStock ? formData.due_amount : calculatedDueAmount}
+                      name="total_amount"
+                      value={formData.total_amount}
                       onChange={handleChange}
-                      disabled={!editingStock}
-                      className={`w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none ${
-                        !editingStock ? 'cursor-not-allowed opacity-70' : ''
-                      }`}
+                      required
+                      className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
                     />
                   </div>
                   <div>
@@ -770,6 +766,18 @@ const StocksManager = () => {
                       name="paid_amount"
                       value={formData.paid_amount}
                       onChange={handleChange}
+                      className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold mb-2">Due Amount *</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      name="due_amount"
+                      value={formData.due_amount}
+                      onChange={handleChange}
+                      required
                       className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
                     />
                   </div>
@@ -785,6 +793,7 @@ const StocksManager = () => {
                     />
                   </div>
                 </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-semibold mb-2">Stock Date</label>
@@ -807,79 +816,155 @@ const StocksManager = () => {
                     />
                   </div>
                 </div>
-                <div className="space-y-6">
-                  <div>
-                    <label className="block text-sm font-semibold mb-2">
-                      Item Details <span className="text-red-400">(SKU required for each item)</span>
-                    </label>
-                    <div className="space-y-4">
-                      {skuInputs.map((_, index) => (
-                        <div key={index} className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-center bg-gray-800/40 p-4 rounded-xl border border-gray-700">
-                          <div>
-                            <span className="text-gray-400 text-sm block mb-1">#{index + 1} SKU *</span>
-                            <input
-                              type="text"
-                              value={skuInputs[index] || ''}
-                              onChange={(e) => {
-                                const newSkus = [...skuInputs];
-                                newSkus[index] = e.target.value;
-                                setSkuInputs(newSkus);
-                              }}
-                              placeholder="Enter SKU"
-                              className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-                              required
-                            />
-                          </div>
-                          <div>
-                            <span className="text-gray-400 text-sm block mb-1">Color (optional)</span>
-                            <input
-                              type="text"
-                              value={colorInputs[index] || ''}
-                              onChange={(e) => {
-                                const newColors = [...colorInputs];
-                                newColors[index] = e.target.value;
-                                setColorInputs(newColors);
-                              }}
-                              placeholder="e.g. Black"
-                              className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-                            />
-                          </div>
-                          <div>
-                            <span className="text-gray-400 text-sm block mb-1">Bar Code (optional)</span>
-                            <input
-                              type="text"
-                              value={barCodeInputs[index] || ''}
-                              onChange={(e) => {
-                                const newBarCodes = [...barCodeInputs];
-                                newBarCodes[index] = e.target.value;
-                                setBarCodeInputs(newBarCodes);
-                              }}
-                              placeholder="Enter Bar Code"
-                              className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-                            />
-                          </div>
-                          <div>
-                            <span className="text-gray-400 text-sm block mb-1">Note (optional)</span>
-                            <input
-                              type="text"
-                              value={noteInputs[index] || ''}
-                              onChange={(e) => {
-                                const newNotes = [...noteInputs];
-                                newNotes[index] = e.target.value;
-                                setNoteInputs(newNotes);
-                              }}
-                              placeholder="Enter note"
-                              className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-                            />
+
+                {!editingStock && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-semibold mb-2">Product Image (optional)</label>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-blue-600 file:text-white hover:file:bg-blue-700"
+                      />
+                    </div>
+
+                    {formData.product_id && isElectronic && (
+                      <div className="space-y-6">
+                        <div>
+                          <label className="block text-sm font-semibold mb-2">
+                            Item Details
+                            <span className="text-red-400"> (SKU required for each item)</span>
+                          </label>
+                          <div className="space-y-4">
+                            {skuInputs.map((_, index) => (
+                              <div key={index} className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-center bg-gray-800/40 p-4 rounded-xl border border-gray-700">
+                                <div>
+                                  <span className="text-gray-400 text-sm block mb-1">#{index + 1} SKU *</span>
+                                  <input
+                                    type="text"
+                                    value={skuInputs[index] || ''}
+                                    onChange={(e) => {
+                                      const newSkus = [...skuInputs];
+                                      newSkus[index] = e.target.value;
+                                      setSkuInputs(newSkus);
+                                    }}
+                                    placeholder="Enter SKU"
+                                    className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                                    required
+                                  />
+                                </div>
+                                <div>
+                                  <span className="text-gray-400 text-sm block mb-1">Color (optional)</span>
+                                  <input
+                                    type="text"
+                                    value={colorInputs[index] || ''}
+                                    onChange={(e) => {
+                                      const newColors = [...colorInputs];
+                                      newColors[index] = e.target.value;
+                                      setColorInputs(newColors);
+                                    }}
+                                    placeholder="e.g. Black"
+                                    className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                                  />
+                                </div>
+                                <div>
+                                  <span className="text-gray-400 text-sm block mb-1">Bar Code (optional)</span>
+                                  <input
+                                    type="text"
+                                    value={barCodeInputs[index] || ''}
+                                    onChange={(e) => {
+                                      const newBarCodes = [...barCodeInputs];
+                                      newBarCodes[index] = e.target.value;
+                                      setBarCodeInputs(newBarCodes);
+                                    }}
+                                    placeholder="Enter Bar Code"
+                                    className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                                  />
+                                </div>
+                                <div>
+                                  <span className="text-gray-400 text-sm block mb-1">Note (optional)</span>
+                                  <input
+                                    type="text"
+                                    value={noteInputs[index] || ''}
+                                    onChange={(e) => {
+                                      const newNotes = [...noteInputs];
+                                      newNotes[index] = e.target.value;
+                                      setNoteInputs(newNotes);
+                                    }}
+                                    placeholder="Enter note"
+                                    className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                                  />
+                                </div>
+                              </div>
+                            ))}
+                            <p className="text-xs text-gray-400 mt-2">
+                              Provide unique details for {formData.quantity || 0} items.
+                            </p>
                           </div>
                         </div>
-                      ))}
-                      <p className="text-xs text-gray-400 mt-2">
-                        Provide details for <strong>{formData.quantity || 0}</strong> items.
-                      </p>
-                    </div>
-                  </div>
-                </div>
+                      </div>
+                    )}
+
+                    {formData.product_id && !isElectronic && (
+                      <div className="space-y-6">
+                        <div>
+                          <label className="block text-sm font-semibold mb-2">
+                            Item Details
+                            <span className="text-gray-400"> (Optional - applies to all items)</span>
+                          </label>
+                          <div className="space-y-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-center bg-gray-800/40 p-4 rounded-xl border border-gray-700">
+                              <div>
+                                <span className="text-gray-400 text-sm block mb-1">SKU (optional)</span>
+                                <input
+                                  type="text"
+                                  value={skuInputs[0] || ''}
+                                  onChange={(e) => setSkuInputs([e.target.value])}
+                                  placeholder="Enter SKU"
+                                  className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                                />
+                              </div>
+                              <div>
+                                <span className="text-gray-400 text-sm block mb-1">Color (optional)</span>
+                                <input
+                                  type="text"
+                                  value={colorInputs[0] || ''}
+                                  onChange={(e) => setColorInputs([e.target.value])}
+                                  placeholder="e.g. Black"
+                                  className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                                />
+                              </div>
+                              <div>
+                                <span className="text-gray-400 text-sm block mb-1">Bar Code (optional)</span>
+                                <input
+                                  type="text"
+                                  value={barCodeInputs[0] || ''}
+                                  onChange={(e) => setBarCodeInputs([e.target.value])}
+                                  placeholder="Enter Bar Code"
+                                  className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                                />
+                              </div>
+                              <div>
+                                <span className="text-gray-400 text-sm block mb-1">Note (optional)</span>
+                                <input
+                                  type="text"
+                                  value={noteInputs[0] || ''}
+                                  onChange={(e) => setNoteInputs([e.target.value])}
+                                  placeholder="Enter note"
+                                  className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                                />
+                              </div>
+                            </div>
+                            <p className="text-xs text-gray-400 mt-2">
+                              These details apply to all {formData.quantity || 0} items.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
                 <div>
                   <label className="block text-sm font-semibold mb-3">Status</label>
                   <div className="grid grid-cols-2 gap-4">
@@ -905,6 +990,7 @@ const StocksManager = () => {
                     ))}
                   </div>
                 </div>
+
                 <div className="flex justify-end gap-3 pt-6 border-t border-gray-700">
                   <button
                     type="button"
@@ -931,6 +1017,7 @@ const StocksManager = () => {
           </motion.div>
         )}
       </AnimatePresence>
+
       <AnimatePresence>
         {deleteConfirm && (
           <motion.div

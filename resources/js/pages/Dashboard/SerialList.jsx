@@ -364,7 +364,7 @@ const SerialList = () => {
                 <tr className="border-b border-gray-700/30">
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Image</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Stock ID</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Product • Vendor • Warehouse</th>
+                  {/* <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Product • Vendor • Warehouse</th> */}
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">SKU</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Color</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Barcode</th>
@@ -420,16 +420,16 @@ const SerialList = () => {
                           )}
                         </td>
                         <td className="px-6 py-4 font-medium text-blue-400">#{serial.stock_id}</td>
-                        <td className="px-6 py-4">
+                        {/* <td className="px-6 py-4">
                           <div className="font-medium text-white">{serial.product_name}</div>
                           <div className="text-sm text-gray-400">
                             {serial.vendor_name} • {serial.warehouse_name}
                           </div>
-                        </td>
+                        </td> */}
                         <td className="px-6 py-4">
                           {serial.sku ? (
                             <div className="flex items-center gap-2 font-mono text-sm">
-                              <Barcode size={16} className="text-gray-400" />
+                              {/* <Barcode size={16} className="text-gray-400" /> */}
                               <span className="text-blue-300 font-medium">{serial.sku}</span>
                             </div>
                           ) : (
@@ -437,7 +437,16 @@ const SerialList = () => {
                           )}
                         </td>
                         <td className="px-6 py-4 text-sm">{serial.color || '—'}</td>
-                        <td className="px-6 py-4 text-sm font-mono">{serial.barcode || '—'}</td>
+                          <td className="px-6 py-4">
+                          {serial.barcode ? (
+                            <div className="flex items-center gap-2 font-mono text-sm">
+                              <Barcode size={16} className="text-gray-400" />
+                              <span className="text-blue-300 font-medium">{serial.barcode}</span>
+                            </div>
+                          ) : (
+                            <span className="text-gray-500">—</span>
+                          )}
+                        </td>
                         <td className="px-6 py-4 text-sm max-w-xs">
                           <div className="truncate" title={serial.notes}>
                             {serial.notes || '—'}
