@@ -2,13 +2,12 @@ import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Plus, Search, Edit, Trash2, X, Check, MoreVertical,
-  Eye, EyeOff, Image as ImageIcon, Package, Upload,
-  ChevronLeft, ChevronRight, Loader, Hash, Palette, StickyNote,
-  Barcode, AlertCircle // <-- FIXED: Added missing imports
+  Plus, Search, Edit, Trash2, X, Check,
+  Eye, EyeOff, Package, Upload,
+  ChevronLeft, ChevronRight, Loader, Barcode, AlertCircle
 } from 'lucide-react';
 
-const API_URL = 'http://localhost:8000/api/stocks'; // Your real endpoint
+const API_URL = '/api/serial-list'; // Correct endpoint
 
 const SerialList = () => {
   const [serials, setSerials] = useState([]);
@@ -18,7 +17,6 @@ const SerialList = () => {
   const [editingSerial, setEditingSerial] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
-  const [actionMenu, setActionMenu] = useState(null);
   const [formData, setFormData] = useState({
     stock_id: '',
     sku: '',
@@ -64,43 +62,30 @@ const SerialList = () => {
       if (keyword.trim()) params.keyword = keyword.trim();
 
       const response = await axios.get(API_URL, { params });
-      const rawStocks = response.data.data || [];
+      const res = response.data;
 
-      // Transform each stock into multiple serial entries
-      const allSerials = [];
-      rawStocks.forEach(stock => {
-        const skus = stock.sku ? stock.sku.split(',').map(s => s.trim()) : [];
-        const colors = stock.color ? stock.color.split(',').map(c => c.trim()) : [];
-        const barcodes = stock.bar_code ? stock.bar_code.split(',').map(b => b.trim()) : [];
-        const notes = stock.note ? stock.note.split(',').map(n => n.trim()) : [];
+      const serialData = res.pagination?.data || res.data || [];
 
-        const maxLength = Math.max(skus.length, colors.length, barcodes.length, notes.length);
+      const mappedSerials = serialData.map(item => ({
+        id: item.id,
+        stock_id: item.stock_id,
+        product_name: item.stock?.product?.name || 'N/A',
+        vendor_name: item.stock?.vendor?.name || 'N/A',
+        warehouse_name: item.stock?.warehouse?.name || 'N/A',
+        sku: item.sku || '',
+        color: item.color || '',
+        barcode: item.barcode || '',
+        notes: item.notes || '',
+        image: item.image || null,
+        status: item.status || 'active',
+      }));
 
-        for (let i = 0; i < maxLength; i++) {
-          allSerials.push({
-            id: `${stock.id}-${i}`, // Unique ID for each serial row
-            stock_id: stock.id,
-            product_name: stock.product?.name || 'N/A',
-            vendor_name: stock.vendor?.name || 'N/A',
-            warehouse_name: stock.warehouse?.name || 'N/A',
-            sku: skus[i] || '',
-            color: colors[i] || '',
-            barcode: barcodes[i] || '',
-            notes: notes[i] || '',
-            image: stock.image,
-            status: stock.status,
-            created_at: stock.created_at,
-            updated_at: stock.updated_at
-          });
-        }
-      });
-
-      setSerials(allSerials);
+      setSerials(mappedSerials);
       setPagination({
-        current_page: response.data.current_page,
-        per_page: response.data.per_page,
-        total_items: response.data.total_items,
-        total_pages: response.data.total_pages
+        current_page: res.pagination?.current_page || res.current_page || 1,
+        per_page: res.pagination?.per_page || res.per_page || 10,
+        total_items: res.pagination?.total_items || res.total_items || 0,
+        total_pages: res.pagination?.total_pages || res.total_pages || 1
       });
     } catch (error) {
       handleApiError(error, 'Failed to fetch serials');
@@ -111,18 +96,11 @@ const SerialList = () => {
   }, [handleApiError]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchSerials(1, pagination.per_page, searchTerm);
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [searchTerm, pagination.per_page, fetchSerials]);
-
-  useEffect(() => {
-    fetchSerials();
-  }, []);
+    fetchSerials(pagination.current_page, pagination.per_page, searchTerm);
+  }, [fetchSerials, pagination.current_page, pagination.per_page, searchTerm]);
 
   const handlePageChange = (newPage) => {
-    if (newPage < 1 || newPage > pagination.total_pages || newPage === pagination.current_page) return;
+    if (newPage < 1 || newPage > pagination.total_pages) return;
     fetchSerials(newPage, pagination.per_page, searchTerm);
   };
 
@@ -151,7 +129,7 @@ const SerialList = () => {
     if (serial) {
       setEditingSerial(serial);
       setFormData({
-        stock_id: serial.stock_id || '',
+        stock_id: serial.stock_id?.toString() || '',
         sku: serial.sku || '',
         barcode: serial.barcode || '',
         color: serial.color || '',
@@ -159,7 +137,7 @@ const SerialList = () => {
         image: null,
         status: serial.status || 'active'
       });
-      setImagePreview(serial.image ? `http://localhost:8000/${serial.image}` : null);
+      setImagePreview(serial.image ? `/${serial.image}` : null);
     } else {
       resetForm();
     }
@@ -201,31 +179,33 @@ const SerialList = () => {
     setOperationLoading('saving');
     setErrors({});
 
-    try {
-      const submitData = new FormData();
-      submitData.append('stock_id', formData.stock_id);
-      submitData.append('sku', formData.sku);
-      if (formData.barcode) submitData.append('barcode', formData.barcode);
-      if (formData.color) submitData.append('color', formData.color);
-      if (formData.notes) submitData.append('notes', formData.notes);
-      submitData.append('status', formData.status);
-      if (formData.image instanceof File) {
-        submitData.append('image', formData.image);
-      }
+    const submitData = new FormData();
+    submitData.append('stock_id', formData.stock_id);
+    submitData.append('sku', formData.sku.trim());
+    if (formData.barcode) submitData.append('barcode', formData.barcode.trim());
+    if (formData.color) submitData.append('color', formData.color.trim());
+    if (formData.notes) submitData.append('notes', formData.notes.trim());
+    submitData.append('status', formData.status);
+    if (formData.image instanceof File) {
+      submitData.append('image', formData.image);
+    }
 
+    try {
       let response;
       if (editingSerial) {
-        submitData.append('_method', 'POST');
-        response = await axios.post(`${API_URL}/${editingSerial.id}`, submitData);
+        response = await axios.post(`${API_URL}/${editingSerial.id}`, submitData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
       } else {
-        response = await axios.post(API_URL, submitData);
+        response = await axios.post(API_URL, submitData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
       }
 
       showNotification(response.data.message || `Serial ${editingSerial ? 'updated' : 'created'} successfully!`);
       fetchSerials(pagination.current_page, pagination.per_page, searchTerm);
       closeModal();
     } catch (error) {
-      console.error('Submit error:', error.response || error);
       handleApiError(error, 'Failed to save serial');
     } finally {
       setOperationLoading(null);
@@ -238,16 +218,11 @@ const SerialList = () => {
     try {
       await axios.delete(`${API_URL}/${id}`);
       showNotification('Serial deleted successfully');
-      if (serials.length === 1 && pagination.current_page > 1) {
-        fetchSerials(pagination.current_page - 1, pagination.per_page, searchTerm);
-      } else {
-        fetchSerials(pagination.current_page, pagination.per_page, searchTerm);
-      }
+      fetchSerials(pagination.current_page, pagination.per_page, searchTerm);
     } catch (error) {
       handleApiError(error, 'Delete failed');
     } finally {
       setOperationLoading(null);
-      setActionMenu(null);
     }
   };
 
@@ -257,9 +232,10 @@ const SerialList = () => {
     try {
       const form = new FormData();
       form.append('status', newStatus);
-      form.append('_method', 'PUT');
 
-      await axios.post(`${API_URL}/${serial.id}`, form);
+      await axios.post(`${API_URL}/${serial.id}`, form, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
 
       showNotification(`Serial ${newStatus === 'active' ? 'activated' : 'deactivated'}`);
       fetchSerials(pagination.current_page, pagination.per_page, searchTerm);
@@ -267,7 +243,6 @@ const SerialList = () => {
       handleApiError(error, 'Failed to update status');
     } finally {
       setOperationLoading(null);
-      setActionMenu(null);
     }
   };
 
@@ -277,41 +252,7 @@ const SerialList = () => {
     inactive: serials.filter(s => s.status === 'inactive').length
   };
 
-  const getImageUrl = (path) => path ? `http://localhost:8000/${path}` : null;
-
-  useEffect(() => {
-    const handler = () => setActionMenu(null);
-    document.addEventListener('click', handler);
-    return () => document.removeEventListener('click', handler);
-  }, []);
-
-  if (loading && serials.length === 0) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="mb-8 flex justify-between">
-            <div className="h-10 bg-gray-800 rounded w-64 animate-pulse"></div>
-            <div className="h-12 bg-gray-800 rounded-xl w-40 animate-pulse"></div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="bg-gray-800/40 rounded-2xl p-6 animate-pulse">
-                <div className="h-12 bg-gray-700 rounded"></div>
-              </div>
-            ))}
-          </div>
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="bg-gray-800/30 rounded-2xl p-6 animate-pulse space-y-4">
-                <div className="h-32 bg-gray-700/50 rounded-lg"></div>
-                <div className="h-8 bg-gray-700 rounded"></div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const getImageUrl = (path) => path ? `/${path}` : null;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-gray-100 py-8">
@@ -332,23 +273,25 @@ const SerialList = () => {
       </AnimatePresence>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-8 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-8 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6"
+        >
           <div>
             <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-cyan-500 bg-clip-text text-transparent">
               Serial List Management
             </h1>
-            <p className="text-gray-400 mt-2">Manage product serial numbers and tracking details</p>
+            <p className="text-gray-400 mt-2">Manage individual product serials with SKU, color, barcode, notes, and image</p>
           </div>
           <button
             onClick={() => openModal()}
-            className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 px-6 py-3 rounded-xl font-bold flex items-center gap-3 shadow-lg transition-all"
+            className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 px-6 py-3 rounded-xl font-bold flex items-center gap-3 shadow-lg"
           >
             <Plus size={22} /> Add New Serial
           </button>
-        </div>
+        </motion.div>
 
-        {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           {[
             { label: 'Total Serials', value: stats.total, icon: Package, color: 'blue' },
@@ -369,17 +312,16 @@ const SerialList = () => {
           ))}
         </div>
 
-        {/* Search & Filters */}
         <div className="bg-gray-800/30 backdrop-blur-sm rounded-2xl p-6 mb-8 border border-gray-700/30">
           <div className="flex flex-col lg:flex-row gap-6">
             <div className="flex-1 relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
               <input
                 type="text"
-                placeholder="Search by SKU, color, barcode..."
+                placeholder="Search by SKU, color, barcode, notes..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500/50 outline-none transition-all"
+                className="w-full pl-12 pr-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500/50 outline-none"
               />
             </div>
             <div className="flex flex-col sm:flex-row gap-4">
@@ -390,16 +332,16 @@ const SerialList = () => {
                   onChange={(e) => handleLimitChange(e.target.value)}
                   className="bg-transparent border-0 text-white text-sm focus:ring-0 focus:outline-none"
                 >
-                  <option value="5">5</option>
                   <option value="10">10</option>
                   <option value="25">25</option>
                   <option value="50">50</option>
+                  <option value="100">100</option>
                 </select>
               </div>
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
-                className="px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 backdrop-blur-sm min-w-[140px]"
+                className="px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
               >
                 <option value="all">All Status</option>
                 <option value="active">Active</option>
@@ -409,12 +351,11 @@ const SerialList = () => {
           </div>
         </div>
 
-        {/* Serials Table */}
         <div className="bg-gray-800/30 backdrop-blur-sm rounded-2xl border border-gray-700/30 overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-700/30 bg-gray-800/20">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-white">Serialized Products</h3>
-              <span className="text-sm text-gray-400">{serials.length} serial entries</span>
+              <h3 className="text-lg font-semibold text-white">Individual Serial Entries</h3>
+              <span className="text-sm text-gray-400">{pagination.total_items} entries</span>
             </div>
           </div>
           <div className="overflow-x-auto">
@@ -423,7 +364,7 @@ const SerialList = () => {
                 <tr className="border-b border-gray-700/30">
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Image</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Stock ID</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Product</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Product • Vendor • Warehouse</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">SKU</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Color</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Barcode</th>
@@ -448,7 +389,7 @@ const SerialList = () => {
                         {searchTerm ? 'No serials found' : 'No serial entries yet'}
                       </h3>
                       <p className="text-gray-400 mb-6">
-                        {searchTerm ? 'Try different search terms' : 'Add your first serial entry to get started'}
+                        {searchTerm ? 'Try different search terms' : 'Add your first serial to get started'}
                       </p>
                       {!searchTerm && (
                         <button
@@ -470,65 +411,63 @@ const SerialList = () => {
                             <img
                               src={getImageUrl(serial.image)}
                               alt={serial.sku}
-                              className="w-12 h-12 object-cover rounded"
+                              className="w-16 h-16 object-cover rounded-lg shadow-md border border-gray-600"
                             />
                           ) : (
-                            <span className="text-gray-400">—</span>
+                            <div className="w-16 h-16 bg-gray-700 rounded-lg flex items-center justify-center">
+                              <Package size={28} className="text-gray-500" />
+                            </div>
                           )}
                         </td>
                         <td className="px-6 py-4 font-medium text-blue-400">#{serial.stock_id}</td>
                         <td className="px-6 py-4">
-                          <div className="font-medium">{serial.product_name}</div>
-                          <div className="text-sm text-gray-400">{serial.vendor_name} • {serial.warehouse_name}</div>
+                          <div className="font-medium text-white">{serial.product_name}</div>
+                          <div className="text-sm text-gray-400">
+                            {serial.vendor_name} • {serial.warehouse_name}
+                          </div>
                         </td>
                         <td className="px-6 py-4">
                           {serial.sku ? (
-                            <div className="flex items-center gap-2">
-                              <Barcode size={16} /> {/* <-- Now works because imported */}
-                              <span className="font-mono">{serial.sku}</span>
+                            <div className="flex items-center gap-2 font-mono text-sm">
+                              <Barcode size={16} className="text-gray-400" />
+                              <span className="text-blue-300 font-medium">{serial.sku}</span>
                             </div>
-                          ) : '-'}
+                          ) : (
+                            <span className="text-gray-500">—</span>
+                          )}
                         </td>
-                        <td className="px-6 py-4">
-                          {serial.color ? (
-                            <span className="font-mono text-sm">{serial.color}</span>
-                          ) : '-'}
-                        </td>
-                        <td className="px-6 py-4">
-                          {serial.barcode ? (
-                            <span className="font-mono text-sm">{serial.barcode}</span>
-                          ) : '-'}
-                        </td>
-                        <td className="px-6 py-4">
-                          {serial.notes ? (
-                            <span className="text-sm">{serial.notes}</span>
-                          ) : '-'}
+                        <td className="px-6 py-4 text-sm">{serial.color || '—'}</td>
+                        <td className="px-6 py-4 text-sm font-mono">{serial.barcode || '—'}</td>
+                        <td className="px-6 py-4 text-sm max-w-xs">
+                          <div className="truncate" title={serial.notes}>
+                            {serial.notes || '—'}
+                          </div>
                         </td>
                         <td className="px-6 py-4">
                           <button
                             onClick={() => toggleStatus(serial)}
                             disabled={operationLoading === `status-${serial.id}`}
-                            className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold ${
+                            className={`px-3 py-1 rounded-full text-xs font-semibold ${
                               serial.status === 'active'
                                 ? 'bg-green-500/20 text-green-400 border border-green-500/30'
                                 : 'bg-red-500/20 text-red-400 border border-red-500/30'
                             }`}
                           >
-                            {operationLoading === `status-${serial.id}` && <Loader size={12} className="animate-spin" />}
-                            {serial.status === 'active' ? 'Active' : 'Inactive'}
+                            {operationLoading === `status-${serial.id}` && <Loader size={12} className="animate-spin inline mr-1" />}
+                            {serial.status}
                           </button>
                         </td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex items-center justify-end gap-2">
                             <button
                               onClick={() => openModal(serial)}
-                              className="p-2 bg-blue-500/20 hover:bg-blue-500/30 rounded-lg"
+                              className="p-2 bg-blue-500/20 hover:bg-blue-500/30 rounded-lg transition"
                             >
                               <Edit size={16} />
                             </button>
                             <button
                               onClick={() => handleDelete(serial.id)}
-                              className="p-2 bg-red-500/20 hover:bg-red-500/30 rounded-lg"
+                              className="p-2 bg-red-500/20 hover:bg-red-500/30 rounded-lg transition"
                             >
                               <Trash2 size={16} />
                             </button>
@@ -540,11 +479,12 @@ const SerialList = () => {
               </tbody>
             </table>
           </div>
+
           {pagination.total_pages > 1 && (
             <div className="px-6 py-4 border-t border-gray-700/30 flex flex-col sm:flex-row justify-between items-center gap-4">
               <div className="text-sm text-gray-400">
                 Showing {(pagination.current_page - 1) * pagination.per_page + 1} to{' '}
-                {Math.min(pagination.current_page * pagination.per_page, serials.length)} of {serials.length} serials
+                {Math.min(pagination.current_page * pagination.per_page, pagination.total_items)} of {pagination.total_items} serials
               </div>
               <div className="flex gap-2">
                 <button
@@ -554,7 +494,7 @@ const SerialList = () => {
                 >
                   <ChevronLeft size={16} /> Prev
                 </button>
-                <button className="px-4 py-2 rounded-xl bg-blue-600 border-blue-500">
+                <button className="px-4 py-2 rounded-xl bg-blue-600">
                   {pagination.current_page}
                 </button>
                 <button
@@ -570,7 +510,7 @@ const SerialList = () => {
         </div>
       </div>
 
-      {/* Modal */}
+      {/* Modal remains exactly as before */}
       <AnimatePresence>
         {showModal && (
           <motion.div
@@ -585,7 +525,7 @@ const SerialList = () => {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
               className="bg-gray-800 rounded-3xl p-8 max-w-3xl w-full max-h-[90vh] overflow-y-auto border border-gray-700"
-              onClick={e => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
             >
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-cyan-500 bg-clip-text text-transparent">
@@ -601,13 +541,13 @@ const SerialList = () => {
                   <div>
                     <label className="block text-sm font-semibold mb-2">Stock ID *</label>
                     <input
-                      type="text"
+                      type="number"
                       name="stock_id"
                       value={formData.stock_id}
                       onChange={handleInputChange}
                       required
-                      className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                      placeholder="e.g., 1001"
+                      className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                      placeholder="Enter stock ID"
                     />
                     {errors.stock_id && <p className="text-red-400 text-sm mt-1">{errors.stock_id[0]}</p>}
                   </div>
@@ -620,8 +560,8 @@ const SerialList = () => {
                       value={formData.sku}
                       onChange={handleInputChange}
                       required
-                      className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                      placeholder="e.g., ABC123"
+                      className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                      placeholder="e.g., SAMSUNG-S21-001"
                     />
                     {errors.sku && <p className="text-red-400 text-sm mt-1">{errors.sku[0]}</p>}
                   </div>
@@ -633,7 +573,7 @@ const SerialList = () => {
                       name="barcode"
                       value={formData.barcode}
                       onChange={handleInputChange}
-                      className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                      className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
                       placeholder="Optional barcode"
                     />
                   </div>
@@ -645,8 +585,8 @@ const SerialList = () => {
                       name="color"
                       value={formData.color}
                       onChange={handleInputChange}
-                      className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                      placeholder="e.g., Black, Red"
+                      className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                      placeholder="e.g., Phantom Black"
                     />
                   </div>
 
@@ -656,9 +596,9 @@ const SerialList = () => {
                       name="notes"
                       value={formData.notes}
                       onChange={handleInputChange}
-                      rows="3"
-                      className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all resize-none"
-                      placeholder="Additional information..."
+                      rows="4"
+                      className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                      placeholder="Any additional information..."
                     />
                   </div>
 
@@ -669,9 +609,15 @@ const SerialList = () => {
                         <label
                           key={st}
                           onClick={() => setFormData(prev => ({ ...prev, status: st }))}
-                          className={`p-4 border-2 rounded-xl text-center cursor-pointer transition-all ${formData.status === st ? (st === 'active' ? 'border-green-500 bg-green-500/10' : 'border-red-500 bg-red-500/10') : 'border-gray-600'}`}
+                          className={`p-4 border-2 rounded-xl text-center cursor-pointer transition-all ${
+                            formData.status === st
+                              ? st === 'active'
+                                ? 'border-green-500 bg-green-500/10'
+                                : 'border-red-500 bg-red-500/10'
+                              : 'border-gray-600'
+                          }`}
                         >
-                          {st === 'active' ? <Eye size={20} className="mx-auto mb-2" /> : <EyeOff size={20} className="mx-auto mb-2" />}
+                          {st === 'active' ? <Eye size={20} className="mx-auto mb-2 text-green-400" /> : <EyeOff size={20} className="mx-auto mb-2 text-red-400" />}
                           <span className="capitalize font-medium">{st}</span>
                         </label>
                       ))}
@@ -679,29 +625,35 @@ const SerialList = () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-semibold mb-3">Product Image</label>
+                    <label className="block text-sm font-semibold mb-3">Serial Image</label>
                     <div className="border-2 border-dashed border-gray-600 rounded-xl p-8 text-center hover:border-blue-500 cursor-pointer transition-colors">
-                      <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" id="serial-img" />
-                      <label htmlFor="serial-img" className="cursor-pointer">
+                      <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" id="serial-img-upload" />
+                      <label htmlFor="serial-img-upload" className="cursor-pointer block">
                         <Upload size={36} className="mx-auto mb-3 text-gray-400" />
                         <p className="text-sm text-gray-400">Click to upload (Max 2MB)</p>
                       </label>
                     </div>
+
                     {imagePreview && (
                       <div className="mt-4 relative inline-block">
-                        <img src={imagePreview} alt="Preview" className="w-32 h-32 object-cover rounded-lg border border-gray-600" />
+                        <img
+                          src={imagePreview}
+                          alt="Preview"
+                          className="w-40 h-40 object-cover rounded-lg border-2 border-gray-600 shadow-xl"
+                        />
                         <button
                           type="button"
                           onClick={() => {
                             setImagePreview(null);
                             setFormData(prev => ({ ...prev, image: null }));
                           }}
-                          className="absolute -top-2 -right-2 bg-red-500 p-1.5 rounded-full hover:bg-red-600 transition-colors"
+                          className="absolute -top-3 -right-3 bg-red-600 hover:bg-red-700 p-2 rounded-full transition"
                         >
-                          <X size={14} />
+                          <X size={16} className="text-white" />
                         </button>
                       </div>
                     )}
+
                     {errors.image && <p className="text-red-400 text-sm mt-2">{errors.image}</p>}
                   </div>
                 </div>
@@ -710,16 +662,20 @@ const SerialList = () => {
                   <button
                     type="button"
                     onClick={closeModal}
-                    className="px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-xl font-medium transition-colors"
+                    className="px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-xl font-medium transition"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={operationLoading === 'saving'}
-                    className="px-8 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 rounded-xl font-bold flex items-center gap-3 disabled:opacity-70 transition-all"
+                    className="px-8 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 rounded-xl font-bold flex items-center gap-3 disabled:opacity-70 transition"
                   >
-                    {operationLoading === 'saving' ? <Loader size={20} className="animate-spin" /> : <Check size={20} />}
+                    {operationLoading === 'saving' ? (
+                      <Loader size={20} className="animate-spin" />
+                    ) : (
+                      <Check size={20} />
+                    )}
                     {editingSerial ? 'Update Serial' : 'Create Serial'}
                   </button>
                 </div>

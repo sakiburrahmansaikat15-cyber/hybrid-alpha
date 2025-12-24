@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\StocksResource;
 use App\Models\Stocks;
 use App\Models\Prooducts;
+use App\Models\SerialList;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Validator;
@@ -47,30 +49,34 @@ class StockController extends Controller
             'quantity'      => 'required|integer|min:1',
             'buying_price'  => 'required|numeric|min:0',
             'selling_price' => 'required|numeric|min:0',
-            'total_amount'  => 'nullable|numeric|min:0',
+            'total_amount'  => 'required|numeric|min:0',
             'due_amount'    => 'nullable|numeric|min:0',
+            'paid_amount'   => 'nullable|numeric|min:0',
             'stock_date'    => 'nullable|date',
             'expire_date'   => 'nullable|date',
-            'color'         => 'nullable|string|max:1000',
-            'bar_code'      => 'nullable|string|max:1000',
-            'paid_amount'   => 'nullable|numeric|min:0',
-            'image'         => 'nullable|file|mimes:jpg,jpeg,png,gif|max:2048',
-            'note'          => 'nullable|string|max:1000',
             'comission'     => 'nullable|numeric|min:0',
+            'image'         => 'nullable|file|mimes:jpg,jpeg,png,gif|max:2048',
             'status'        => 'required|in:active,inactive',
-            'sku'           => 'nullable|string|max:1000',
+
+            // serial inputs
+            'sku'       => 'nullable|string',
+            'bar_code'  => 'nullable|string',
+            'color'     => 'nullable|string',
+            'note'      => 'nullable|string',
         ]);
 
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Validation failed',
                 'errors'  => $validator->errors(),
             ], 422);
         }
 
         $data = $validator->validated();
+        $quantity = (int) $data['quantity'];
 
+        // Handle image upload
+        $imagePath = null;
         if ($request->hasFile('image')) {
             $folder = public_path('stock');
             if (!File::exists($folder)) {
@@ -80,73 +86,81 @@ class StockController extends Controller
             $image = $request->file('image');
             $imageName = time() . '_' . $image->getClientOriginalName();
             $image->move($folder, $imageName);
-            $data['image'] = 'stock/' . $imageName;
+            $imagePath = 'stock/' . $imageName;
         }
 
+        // 🔎 Check product type
         $product = Prooducts::with('productType')->find($data['product_id']);
         $isElectronic = strtolower(optional($product->productType)->name ?? '') === 'electronic';
 
-        // For create, quantity always comes from request
-        $quantity = (int) $data['quantity'];
+        // Determine if we need to create serial lists
+        $hasSerialData = $isElectronic || isset($data['sku']) || isset($data['bar_code']) || isset($data['color']) || isset($data['note']) || $imagePath;
+
+        if ($isElectronic && (!isset($data['sku']) || empty($data['sku']))) {
+            return response()->json([
+                'success' => false,
+                'message' => 'SKU is required for electronic products',
+            ], 422);
+        }
+
+        $skus = $isElectronic ? array_map('trim', explode(',', $data['sku'] ?? '')) : array_fill(0, $quantity, $data['sku'] ?? null);
+        $barcodes = $isElectronic ? (isset($data['bar_code']) ? array_map('trim', explode(',', $data['bar_code'])) : array_fill(0, $quantity, null)) : array_fill(0, $quantity, $data['bar_code'] ?? null);
+        $colors = $isElectronic ? (isset($data['color']) ? array_map('trim', explode(',', $data['color'])) : array_fill(0, $quantity, null)) : array_fill(0, $quantity, $data['color'] ?? null);
+        $notes = $isElectronic ? (isset($data['note']) ? array_map('trim', explode(',', $data['note'])) : array_fill(0, $quantity, null)) : array_fill(0, $quantity, $data['note'] ?? null);
 
         if ($isElectronic) {
-            if (empty($data['sku'])) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Electronic products require SKUs.',
-                ], 422);
-            }
-
-            $skus = array_map('trim', explode(',', $data['sku']));
             if (count($skus) !== $quantity) {
                 return response()->json([
                     'success' => false,
-                    'message' => "SKU count must match quantity. Expected: $quantity, Got: " . count($skus),
+                    'message' => 'SKU count must match quantity',
                 ], 422);
             }
-            $data['sku'] = implode(',', $skus);
 
-            // Same for colors, bar_codes, notes
-            if (!empty($data['color'])) {
-                $colors = array_map('trim', explode(',', $data['color']));
-                if (count($colors) !== $quantity) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => "Color count must match quantity. Expected: $quantity, Got: " . count($colors),
-                    ], 422);
-                }
-                $data['color'] = implode(',', $colors);
+            // Check optional fields count if provided
+            if (!empty($data['color']) && count($colors) !== $quantity) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Color count must match quantity',
+                ], 422);
             }
-
-            if (!empty($data['bar_code'])) {
-                $codes = array_map('trim', explode(',', $data['bar_code']));
-                if (count($codes) !== $quantity) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => "Bar code count must match quantity. Expected: $quantity, Got: " . count($codes),
-                    ], 422);
-                }
-                $data['bar_code'] = implode(',', $codes);
+            if (!empty($data['bar_code']) && count($barcodes) !== $quantity) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Bar code count must match quantity',
+                ], 422);
             }
-
-            if (!empty($data['note'])) {
-                $notes = array_map('trim', explode(',', $data['note']));
-                if (count($notes) !== $quantity) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => "Note count must match quantity. Expected: $quantity, Got: " . count($notes),
-                    ], 422);
-                }
-                $data['note'] = implode(',', $notes);
+            if (!empty($data['note']) && count($notes) !== $quantity) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Note count must match quantity',
+                ], 422);
             }
         }
 
-        $stock = Stocks::create($data);
+        DB::transaction(function () use ($data, $quantity, $skus, $barcodes, $colors, $notes, $hasSerialData, $imagePath) {
+            // ✅ create stock (without serial fields)
+            unset($data['sku'], $data['bar_code'], $data['color'], $data['note'], $data['image']);
+            $stock = Stocks::create($data);
+
+            // ✅ create serials if needed
+            if ($hasSerialData) {
+                for ($i = 0; $i < $quantity; $i++) {
+                    SerialList::create([
+                        'stock_id' => $stock->id,
+                        'sku'      => $skus[$i],
+                        'barcode'  => $barcodes[$i],
+                        'color'    => $colors[$i],
+                        'notes'    => $notes[$i],
+                        'image'    => $imagePath,
+                        'status'   => 'active',
+                    ]);
+                }
+            }
+        });
 
         return response()->json([
             'success' => true,
-            'message' => 'Stock created successfully',
-            'data'    => new StocksResource($stock),
+            'message' => 'Stock and serials created successfully',
         ], 201);
     }
 
@@ -187,16 +201,16 @@ class StockController extends Controller
             'selling_price' => 'sometimes|numeric|min:0',
             'total_amount'  => 'nullable|numeric|min:0',
             'due_amount'    => 'nullable|numeric|min:0',
+            'paid_amount'   => 'nullable|numeric|min:0',
             'stock_date'    => 'nullable|date',
             'expire_date'   => 'nullable|date',
+            'comission'     => 'nullable|numeric|min:0',
+            'sku'           => 'nullable|string|max:1000',
             'color'         => 'nullable|string|max:1000',
             'bar_code'      => 'nullable|string|max:1000',
-            'paid_amount'   => 'nullable|numeric|min:0',
-            'image'         => 'nullable|file|mimes:jpg,jpeg,png,gif|max:2048',
             'note'          => 'nullable|string|max:1000',
-            'comission'     => 'nullable|numeric|min:0',
+            'image'         => 'nullable|file|mimes:jpg,jpeg,png,gif|max:2048',
             'status'        => 'sometimes|in:active,inactive',
-            'sku'           => 'nullable|string|max:1000',
         ]);
 
         if ($validator->fails()) {
@@ -209,9 +223,12 @@ class StockController extends Controller
 
         $data = $validator->validated();
 
+        // Handle image upload
+        $imagePath = $stock->image; // Keep old if not new
         if ($request->hasFile('image')) {
-            if ($stock->image && File::exists(public_path($stock->image))) {
-                File::delete(public_path($stock->image));
+            // Delete old image if exists
+            if ($imagePath && File::exists(public_path($imagePath))) {
+                File::delete(public_path($imagePath));
             }
 
             $folder = public_path('stock');
@@ -222,77 +239,81 @@ class StockController extends Controller
             $image = $request->file('image');
             $imageName = time() . '_' . $image->getClientOriginalName();
             $image->move($folder, $imageName);
-            $data['image'] = 'stock/' . $imageName;
+            $imagePath = 'stock/' . $imageName;
         }
 
         $productId = $data['product_id'] ?? $stock->product_id;
         $product = Prooducts::with('productType')->find($productId);
         $isElectronic = strtolower(optional($product->productType)->name ?? '') === 'electronic';
 
-        // For update, use new quantity if provided, else old one
         $quantity = isset($data['quantity']) ? (int) $data['quantity'] : (int) $stock->quantity;
 
-        if ($isElectronic) {
-            // If sku is being updated or already exists
-            $skuToCheck = $data['sku'] ?? $stock->sku;
+        $hasSerialData = $isElectronic || isset($data['sku']) || isset($data['color']) || isset($data['bar_code']) || isset($data['note']) || $request->hasFile('image');
 
-            if (empty($skuToCheck)) {
+        if ($hasSerialData) {
+            if ($isElectronic && (!isset($data['sku']) || empty($data['sku']))) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Electronic products require SKUs.',
+                    'message' => 'SKU is required for electronic products',
                 ], 422);
             }
 
-            $skus = array_map('trim', explode(',', $skuToCheck));
-            if (count($skus) !== $quantity) {
-                return response()->json([
-                    'success' => false,
-                    'message' => "SKU count must match quantity. Expected: $quantity, Got: " . count($skus),
-                ], 422);
-            }
-            $data['sku'] = implode(',', $skus);
+            $skus = $isElectronic ? array_map('trim', explode(',', $data['sku'] ?? '')) : array_fill(0, $quantity, $data['sku'] ?? null);
+            $barcodes = $isElectronic ? (isset($data['bar_code']) ? array_map('trim', explode(',', $data['bar_code'])) : array_fill(0, $quantity, null)) : array_fill(0, $quantity, $data['bar_code'] ?? null);
+            $colors = $isElectronic ? (isset($data['color']) ? array_map('trim', explode(',', $data['color'])) : array_fill(0, $quantity, null)) : array_fill(0, $quantity, $data['color'] ?? null);
+            $notes = $isElectronic ? (isset($data['note']) ? array_map('trim', explode(',', $data['note'])) : array_fill(0, $quantity, null)) : array_fill(0, $quantity, $data['note'] ?? null);
 
-            // Colors
-            if (!empty($data['color'] ?? $stock->color)) {
-                $colorToCheck = $data['color'] ?? $stock->color;
-                $colors = array_map('trim', explode(',', $colorToCheck));
-                if (count($colors) !== $quantity) {
+            if ($isElectronic) {
+                if (count($skus) !== $quantity) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => "SKU count must match quantity. Expected: $quantity, Got: " . count($skus),
+                    ], 422);
+                }
+
+                // Check optional fields
+                if (isset($data['color']) && count($colors) !== $quantity) {
                     return response()->json([
                         'success' => false,
                         'message' => "Color count must match quantity. Expected: $quantity, Got: " . count($colors),
                     ], 422);
                 }
-                $data['color'] = implode(',', $colors);
-            }
-
-            // Bar codes
-            if (!empty($data['bar_code'] ?? $stock->bar_code)) {
-                $barCodeToCheck = $data['bar_code'] ?? $stock->bar_code;
-                $codes = array_map('trim', explode(',', $barCodeToCheck));
-                if (count($codes) !== $quantity) {
+                if (isset($data['bar_code']) && count($barcodes) !== $quantity) {
                     return response()->json([
                         'success' => false,
-                        'message' => "Bar code count must match quantity. Expected: $quantity, Got: " . count($codes),
+                        'message' => "Bar code count must match quantity. Expected: $quantity, Got: " . count($barcodes),
                     ], 422);
                 }
-                $data['bar_code'] = implode(',', $codes);
-            }
-
-            // Notes
-            if (!empty($data['note'] ?? $stock->note)) {
-                $noteToCheck = $data['note'] ?? $stock->note;
-                $notes = array_map('trim', explode(',', $noteToCheck));
-                if (count($notes) !== $quantity) {
+                if (isset($data['note']) && count($notes) !== $quantity) {
                     return response()->json([
                         'success' => false,
                         'message' => "Note count must match quantity. Expected: $quantity, Got: " . count($notes),
                     ], 422);
                 }
-                $data['note'] = implode(',', $notes);
             }
+
+            // Delete old serials if existing
+            SerialList::where('stock_id', $id)->delete();
         }
 
+        // Update stock (without serial fields)
+        unset($data['sku'], $data['color'], $data['bar_code'], $data['note'], $data['image']);
         $stock->update($data);
+
+        // Create new serials if needed
+        if ($hasSerialData) {
+            for ($i = 0; $i < $quantity; $i++) {
+                SerialList::create([
+                    'stock_id' => $stock->id,
+                    'sku'      => $skus[$i],
+                    'barcode'  => $barcodes[$i],
+                    'color'    => $colors[$i],
+                    'notes'    => $notes[$i],
+                    'image'    => $imagePath,
+                    'status'   => 'active',
+                ]);
+            }
+        }
 
         return response()->json([
             'success' => true,
@@ -312,9 +333,8 @@ class StockController extends Controller
             ], 404);
         }
 
-        if ($stock->image && File::exists(public_path($stock->image))) {
-            File::delete(public_path($stock->image));
-        }
+        // Delete associated serial lists (will cascade if set, but explicit delete)
+        SerialList::where('stock_id', $id)->delete();
 
         $stock->delete();
 

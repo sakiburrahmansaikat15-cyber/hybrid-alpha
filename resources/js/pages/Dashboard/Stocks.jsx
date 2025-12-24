@@ -3,7 +3,7 @@ import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus, Search, Edit, Trash2, X, Check, AlertCircle, Package, DollarSign,
-  BarChart3, Calendar, Barcode, Hash, Loader, ChevronLeft, ChevronRight,
+  BarChart3, Calendar, Hash, Loader, ChevronLeft, ChevronRight,
   CheckCircle, XCircle, Building,
 } from 'lucide-react';
 
@@ -24,7 +24,6 @@ const StocksManager = () => {
   const [products, setProducts] = useState([]);
   const [vendors, setVendors] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
-  const [isElectronicProduct, setIsElectronicProduct] = useState(false);
   const [skuInputs, setSkuInputs] = useState([]);
   const [colorInputs, setColorInputs] = useState([]);
   const [barCodeInputs, setBarCodeInputs] = useState([]);
@@ -42,12 +41,6 @@ const StocksManager = () => {
     stock_date: new Date().toISOString().split('T')[0],
     expire_date: '',
     comission: '',
-    sku: '',
-    color: '',
-    bar_code: '',
-    note: '',
-    image: null,
-    existingImage: '',
     status: 'active',
   });
   const [calculatedTotalAmount, setCalculatedTotalAmount] = useState('');
@@ -98,11 +91,6 @@ const StocksManager = () => {
         comission: item.comission ?? null,
         stock_date: item.stock_date ?? null,
         expire_date: item.expire_date ?? null,
-        sku: item.sku || '',
-        color: item.color || '',
-        bar_code: item.bar_code || '',
-        note: item.note || '',
-        image: item.image || '',
         status: item.status || 'active',
       })));
       setPagination({
@@ -166,51 +154,12 @@ const StocksManager = () => {
   }, [formData.paid_amount, formData.total_amount, calculatedTotalAmount, editingStock]);
 
   useEffect(() => {
-    if (formData.product_id) {
-      const product = products.find(p => p.id === parseInt(formData.product_id));
-      const typeName = (product?.product_type?.name || product?.productType?.name || '').toLowerCase();
-      setIsElectronicProduct(typeName === 'electronic');
-    }
-  }, [formData.product_id, products]);
-
-  useEffect(() => {
     const qty = parseInt(formData.quantity) || 0;
-    if (isElectronicProduct) {
-      setSkuInputs(prev => {
-        const newArr = Array(qty).fill('');
-        for (let i = 0; i < Math.min(prev.length, qty); i++) {
-          newArr[i] = prev[i] || '';
-        }
-        return newArr;
-      });
-      setColorInputs(prev => {
-        const newArr = Array(qty).fill('');
-        for (let i = 0; i < Math.min(prev.length, qty); i++) {
-          newArr[i] = prev[i] || '';
-        }
-        return newArr;
-      });
-      setBarCodeInputs(prev => {
-        const newArr = Array(qty).fill('');
-        for (let i = 0; i < Math.min(prev.length, qty); i++) {
-          newArr[i] = prev[i] || '';
-        }
-        return newArr;
-      });
-      setNoteInputs(prev => {
-        const newArr = Array(qty).fill('');
-        for (let i = 0; i < Math.min(prev.length, qty); i++) {
-          newArr[i] = prev[i] || '';
-        }
-        return newArr;
-      });
-    } else {
-      setSkuInputs([]);
-      setColorInputs([]);
-      setBarCodeInputs([]);
-      setNoteInputs([]);
-    }
-  }, [formData.quantity, isElectronicProduct]);
+    setSkuInputs(Array(qty).fill(''));
+    setColorInputs(Array(qty).fill(''));
+    setBarCodeInputs(Array(qty).fill(''));
+    setNoteInputs(Array(qty).fill(''));
+  }, [formData.quantity]);
 
   const handlePageChange = (newPage) => {
     if (newPage < 1 || newPage > pagination.last_page) return;
@@ -237,19 +186,12 @@ const StocksManager = () => {
       stock_date: new Date().toISOString().split('T')[0],
       expire_date: '',
       comission: '',
-      sku: '',
-      color: '',
-      bar_code: '',
-      note: '',
-      image: null,
-      existingImage: '',
       status: 'active',
     });
     setCalculatedTotalAmount('');
     setCalculatedDueAmount('');
     setErrors({});
     setEditingStock(null);
-    setIsElectronicProduct(false);
     setSkuInputs([]);
     setColorInputs([]);
     setBarCodeInputs([]);
@@ -259,22 +201,7 @@ const StocksManager = () => {
   const openModal = (stock = null) => {
     if (stock) {
       setEditingStock(stock);
-      const product = products.find(p => p.id === stock.product?.id);
-      const isElec = (product?.product_type?.name || product?.productType?.name || '').toLowerCase() === 'electronic';
-      const qty = parseInt(stock.quantity) || 0;
-      const skuArr = stock.sku ? stock.sku.split(',').map(s => s.trim()) : Array(qty).fill('');
-      const colorArr = stock.color ? stock.color.split(',').map(c => c.trim()) : Array(qty).fill('');
-      const barCodeArr = stock.bar_code ? stock.bar_code.split(',').map(b => b.trim()) : Array(qty).fill('');
-      const noteArr = stock.note ? stock.note.split(',').map(n => n.trim()) : Array(qty).fill('');
-      setIsElectronicProduct(isElec);
-      if (isElec) {
-        setSkuInputs(skuArr);
-        setColorInputs(colorArr);
-        setBarCodeInputs(barCodeArr);
-        setNoteInputs(noteArr);
-      }
-      setFormData(prev => ({
-        ...prev,
+      setFormData({
         product_id: stock.product?.id?.toString() || '',
         vendor_id: stock.vendor?.id?.toString() || '',
         warehouse_id: stock.warehouse?.id?.toString() || '',
@@ -287,10 +214,10 @@ const StocksManager = () => {
         stock_date: stock.stock_date || new Date().toISOString().split('T')[0],
         expire_date: stock.expire_date || '',
         comission: stock.comission || '',
-        existingImage: stock.image || '',
         status: stock.status || 'active',
-      }));
+      });
       const price = parseFloat(stock.buying_price) || 0;
+      const qty = parseInt(stock.quantity) || 0;
       setCalculatedTotalAmount((qty * price).toFixed(2));
     } else {
       resetForm();
@@ -309,13 +236,6 @@ const StocksManager = () => {
     if (errors[name]) setErrors(prev => ({ ...prev, [name]: undefined }));
   };
 
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setFormData(prev => ({ ...prev, image: file }));
-    }
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setOperationLoading('saving');
@@ -327,64 +247,49 @@ const StocksManager = () => {
     let finalNote = '';
     const qty = parseInt(formData.quantity) || 0;
 
-    if (isElectronicProduct) {
-      // 1. Check length matches quantity
-      if (skuInputs.length !== qty) {
-        showNotification(`Please provide exactly ${qty} SKUs.`, 'error');
+    if (skuInputs.length !== qty) {
+      showNotification(`Please provide exactly ${qty} SKUs.`, 'error');
+      setOperationLoading(null);
+      return;
+    }
+
+    const trimmedSkus = skuInputs.map(s => s.trim());
+    if (trimmedSkus.some(s => !s)) {
+      showNotification('All SKU fields are required.', 'error');
+      setErrors({ sku: ['All SKU fields are required.'] });
+      setOperationLoading(null);
+      return;
+    }
+    finalSku = trimmedSkus.join(',');
+
+    const trimmedColors = colorInputs.map(c => c.trim());
+    if (trimmedColors.some(c => c)) {
+      if (trimmedColors.length !== qty) {
+        showNotification(`Colors must match quantity (${qty}).`, 'error');
         setOperationLoading(null);
         return;
       }
+      finalColor = trimmedColors.join(',');
+    }
 
-      // 2. All SKUs must be filled (required)
-      const trimmedSkus = skuInputs.map(s => s.trim());
-      if (trimmedSkus.some(s => !s)) {
-        showNotification('All SKU fields are required for electronic products.', 'error');
-        setErrors({ sku: ['All SKU fields are required.'] });
+    const trimmedBarCodes = barCodeInputs.map(b => b.trim());
+    if (trimmedBarCodes.some(b => b)) {
+      if (trimmedBarCodes.length !== qty) {
+        showNotification(`Bar codes must match quantity (${qty}).`, 'error');
         setOperationLoading(null);
         return;
       }
-      finalSku = trimmedSkus.join(',');
+      finalBarCode = trimmedBarCodes.join(',');
+    }
 
-      // Colors: optional but must match count if any filled
-      const trimmedColors = colorInputs.map(c => c.trim());
-      if (trimmedColors.some(c => c)) {
-        if (trimmedColors.length !== qty) {
-          showNotification(`Colors must match quantity (${qty}).`, 'error');
-          setErrors({ color: [`Colors must match quantity (${qty}).`] });
-          setOperationLoading(null);
-          return;
-        }
-        finalColor = trimmedColors.join(',');
+    const trimmedNotes = noteInputs.map(n => n.trim());
+    if (trimmedNotes.some(n => n)) {
+      if (trimmedNotes.length !== qty) {
+        showNotification(`Notes must match quantity (${qty}).`, 'error');
+        setOperationLoading(null);
+        return;
       }
-
-      // Bar codes: same logic
-      const trimmedBarCodes = barCodeInputs.map(b => b.trim());
-      if (trimmedBarCodes.some(b => b)) {
-        if (trimmedBarCodes.length !== qty) {
-          showNotification(`Bar codes must match quantity (${qty}).`, 'error');
-          setErrors({ bar_code: [`Bar codes must match quantity (${qty}).`] });
-          setOperationLoading(null);
-          return;
-        }
-        finalBarCode = trimmedBarCodes.join(',');
-      }
-
-      // Notes: same logic
-      const trimmedNotes = noteInputs.map(n => n.trim());
-      if (trimmedNotes.some(n => n)) {
-        if (trimmedNotes.length !== qty) {
-          showNotification(`Notes must match quantity (${qty}).`, 'error');
-          setErrors({ note: [`Notes must match quantity (${qty}).`] });
-          setOperationLoading(null);
-          return;
-        }
-        finalNote = trimmedNotes.join(',');
-      }
-    } else {
-      finalSku = formData.sku.trim() || '';
-      finalColor = formData.color.trim() || '';
-      finalBarCode = formData.bar_code.trim() || '';
-      finalNote = formData.note.trim() || '';
+      finalNote = trimmedNotes.join(',');
     }
 
     const formDataToSend = new FormData();
@@ -405,10 +310,6 @@ const StocksManager = () => {
     formDataToSend.append('bar_code', finalBarCode);
     formDataToSend.append('note', finalNote);
     formDataToSend.append('status', formData.status);
-
-    if (formData.image) {
-      formDataToSend.append('image', formData.image);
-    }
 
     try {
       if (editingStock) {
@@ -533,7 +434,7 @@ const StocksManager = () => {
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
               <input
                 type="text"
-                placeholder="Search by SKU, product, vendor, or warehouse..."
+                placeholder="Search by product, vendor, or warehouse..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-12 pr-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500/50 outline-none"
@@ -576,14 +477,9 @@ const StocksManager = () => {
             <table className="w-full min-w-max">
               <thead>
                 <tr className="border-b border-gray-700/30">
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Image</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Product</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Vendor</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Warehouse</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">SKU</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Color</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Bar Code</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Note</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Qty</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Buy Price</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Sell Price</th>
@@ -600,14 +496,14 @@ const StocksManager = () => {
               <tbody className="divide-y divide-gray-700/30">
                 {loading ? (
                   <tr>
-                    <td colSpan="18" className="px-6 py-12 text-center">
+                    <td colSpan="14" className="px-6 py-12 text-center">
                       <Loader size={32} className="animate-spin mx-auto text-blue-400" />
                       <p className="text-gray-400 mt-3">Loading stocks...</p>
                     </td>
                   </tr>
                 ) : stocks.length === 0 ? (
                   <tr>
-                    <td colSpan="18" className="px-6 py-16 text-center">
+                    <td colSpan="14" className="px-6 py-16 text-center">
                       <Package size={64} className="mx-auto text-gray-500 mb-4" />
                       <h3 className="text-2xl font-bold text-white mb-2">
                         {searchTerm ? 'No stocks found' : 'No stock entries yet'}
@@ -631,17 +527,6 @@ const StocksManager = () => {
                     .map(stock => (
                       <tr key={stock.id} className="hover:bg-gray-700/20 transition-colors">
                         <td className="px-6 py-4">
-                          {stock.image ? (
-                            <img
-                              src={`/${stock.image}`}
-                              alt="Stock"
-                              className="w-12 h-12 object-cover rounded"
-                            />
-                          ) : (
-                            <span className="text-gray-400">—</span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
                             <Package size={20} className="text-blue-400" />
                             <span className="font-medium">{stock.product?.name || '-'}</span>
@@ -653,29 +538,6 @@ const StocksManager = () => {
                             <Building size={20} className="text-amber-400" />
                             <span>{stock.warehouse?.name || '-'}</span>
                           </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          {stock.sku ? (
-                            <div className="flex items-center gap-2">
-                              <Barcode size={16} />
-                              <span className="font-mono">{stock.sku}</span>
-                            </div>
-                          ) : '-'}
-                        </td>
-                        <td className="px-6 py-4">
-                          {stock.color ? (
-                            <span className="font-mono text-sm">{stock.color}</span>
-                          ) : '-'}
-                        </td>
-                        <td className="px-6 py-4">
-                          {stock.bar_code ? (
-                            <span className="font-mono text-sm">{stock.bar_code}</span>
-                          ) : '-'}
-                        </td>
-                        <td className="px-6 py-4">
-                          {stock.note ? (
-                            <span className="text-sm">{stock.note}</span>
-                          ) : '-'}
                         </td>
                         <td className="px-6 py-4 font-bold text-blue-400">{stock.quantity}</td>
                         <td className="px-6 py-4 text-green-400">{formatCurrency(stock.buying_price)}</td>
@@ -946,166 +808,78 @@ const StocksManager = () => {
                   </div>
                 </div>
                 <div className="space-y-6">
-                  {isElectronicProduct ? (
-                    <div>
-                      <label className="block text-sm font-semibold mb-2">
-                        SKU, Color, Bar Code & Note <span className="text-red-400">*</span>
-                      </label>
-                      <div className="space-y-4">
-                        {skuInputs.map((_, index) => (
-                          <div key={index} className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-center bg-gray-800/40 p-4 rounded-xl border border-gray-700">
-                            <div>
-                              <span className="text-gray-400 text-sm block mb-1">#{index + 1} SKU *</span>
-                              <input
-                                type="text"
-                                value={skuInputs[index] || ''}
-                                onChange={(e) => {
-                                  const newSkus = [...skuInputs];
-                                  newSkus[index] = e.target.value;
-                                  setSkuInputs(newSkus);
-                                }}
-                                placeholder="Enter SKU"
-                                className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-                                required
-                              />
-                            </div>
-                            <div>
-                              <span className="text-gray-400 text-sm block mb-1">Color (optional)</span>
-                              <input
-                                type="text"
-                                value={colorInputs[index] || ''}
-                                onChange={(e) => {
-                                  const newColors = [...colorInputs];
-                                  newColors[index] = e.target.value;
-                                  setColorInputs(newColors);
-                                }}
-                                placeholder="e.g. Black"
-                                className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-                              />
-                            </div>
-                            <div>
-                              <span className="text-gray-400 text-sm block mb-1">Bar Code (optional)</span>
-                              <input
-                                type="text"
-                                value={barCodeInputs[index] || ''}
-                                onChange={(e) => {
-                                  const newBarCodes = [...barCodeInputs];
-                                  newBarCodes[index] = e.target.value;
-                                  setBarCodeInputs(newBarCodes);
-                                }}
-                                placeholder="Enter Bar Code"
-                                className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-                              />
-                            </div>
-                            <div>
-                              <span className="text-gray-400 text-sm block mb-1">Note (optional)</span>
-                              <input
-                                type="text"
-                                value={noteInputs[index] || ''}
-                                onChange={(e) => {
-                                  const newNotes = [...noteInputs];
-                                  newNotes[index] = e.target.value;
-                                  setNoteInputs(newNotes);
-                                }}
-                                placeholder="Enter note"
-                                className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-                              />
-                            </div>
+                  <div>
+                    <label className="block text-sm font-semibold mb-2">
+                      Item Details <span className="text-red-400">(SKU required for each item)</span>
+                    </label>
+                    <div className="space-y-4">
+                      {skuInputs.map((_, index) => (
+                        <div key={index} className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-center bg-gray-800/40 p-4 rounded-xl border border-gray-700">
+                          <div>
+                            <span className="text-gray-400 text-sm block mb-1">#{index + 1} SKU *</span>
+                            <input
+                              type="text"
+                              value={skuInputs[index] || ''}
+                              onChange={(e) => {
+                                const newSkus = [...skuInputs];
+                                newSkus[index] = e.target.value;
+                                setSkuInputs(newSkus);
+                              }}
+                              placeholder="Enter SKU"
+                              className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                              required
+                            />
                           </div>
-                        ))}
-                        <p className="text-xs text-gray-400 mt-2">
-                          Provide exactly <strong>{formData.quantity || 0}</strong> items.
-                        </p>
-                      </div>
+                          <div>
+                            <span className="text-gray-400 text-sm block mb-1">Color (optional)</span>
+                            <input
+                              type="text"
+                              value={colorInputs[index] || ''}
+                              onChange={(e) => {
+                                const newColors = [...colorInputs];
+                                newColors[index] = e.target.value;
+                                setColorInputs(newColors);
+                              }}
+                              placeholder="e.g. Black"
+                              className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-gray-400 text-sm block mb-1">Bar Code (optional)</span>
+                            <input
+                              type="text"
+                              value={barCodeInputs[index] || ''}
+                              onChange={(e) => {
+                                const newBarCodes = [...barCodeInputs];
+                                newBarCodes[index] = e.target.value;
+                                setBarCodeInputs(newBarCodes);
+                              }}
+                              placeholder="Enter Bar Code"
+                              className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-gray-400 text-sm block mb-1">Note (optional)</span>
+                            <input
+                              type="text"
+                              value={noteInputs[index] || ''}
+                              onChange={(e) => {
+                                const newNotes = [...noteInputs];
+                                newNotes[index] = e.target.value;
+                                setNoteInputs(newNotes);
+                              }}
+                              placeholder="Enter note"
+                              className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                            />
+                          </div>
+                        </div>
+                      ))}
+                      <p className="text-xs text-gray-400 mt-2">
+                        Provide details for <strong>{formData.quantity || 0}</strong> items.
+                      </p>
                     </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div>
-                        <label className="block text-sm font-semibold mb-2">
-                          SKU <span className="text-gray-400">(optional)</span>
-                        </label>
-                        <input
-                          type="text"
-                          name="sku"
-                          value={formData.sku}
-                          onChange={handleChange}
-                          placeholder="Enter SKU (optional)"
-                          className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-semibold mb-2">
-                          Color <span className="text-gray-400">(optional)</span>
-                        </label>
-                        <input
-                          type="text"
-                          name="color"
-                          value={formData.color}
-                          onChange={handleChange}
-                          placeholder="e.g. Black"
-                          className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-semibold mb-2">
-                          Bar Code <span className="text-gray-400">(optional)</span>
-                        </label>
-                        <input
-                          type="text"
-                          name="bar_code"
-                          value={formData.bar_code}
-                          onChange={handleChange}
-                          placeholder="Enter Bar Code"
-                          className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-semibold mb-2">
-                          Note <span className="text-gray-400">(optional)</span>
-                        </label>
-                        <textarea
-                          name="note"
-                          value={formData.note}
-                          onChange={handleChange}
-                          placeholder="Enter note"
-                          className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-                          rows={2}
-                        />
-                      </div>
-                    </div>
-                  )}
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-semibold mb-2">
-                    Image <span className="text-gray-400">(optional)</span>
-                  </label>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileChange}
-                    className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-                  />
-                  {formData.existingImage && !formData.image && (
-                    <div className="mt-2">
-                      <p className="text-sm text-gray-400">Current Image:</p>
-                      <img src={`/${formData.existingImage}`} alt="Current" className="w-32 h-32 object-cover rounded mt-2" />
-                    </div>
-                  )}
-                  {formData.image && (
-                    <div className="mt-2">
-                      <p className="text-sm text-gray-400">New Image Preview:</p>
-                      <img
-                        src={URL.createObjectURL(formData.image)}
-                        alt="Preview"
-                        className="w-32 h-32 object-cover rounded mt-2"
-                      />
-                    </div>
-                  )}
-                </div>
-                {errors.sku && <p className="text-red-400 text-sm mt-1">{errors.sku[0]}</p>}
-                {errors.color && <p className="text-red-400 text-sm mt-1">{errors.color[0]}</p>}
-                {errors.bar_code && <p className="text-red-400 text-sm mt-1">{errors.bar_code[0]}</p>}
-                {errors.note && <p className="text-red-400 text-sm mt-1">{errors.note[0]}</p>}
                 <div>
                   <label className="block text-sm font-semibold mb-3">Status</label>
                   <div className="grid grid-cols-2 gap-4">
