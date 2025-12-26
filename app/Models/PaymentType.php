@@ -15,4 +15,9 @@ class PaymentType extends Model
     {
         return $this->hasMany(Transaction::class, 'payment_type_id');
     }
+
+    public function stocks()
+    {
+        return $this->hasMany(Stocks::class, 'payment_type_id');
+    }
 }

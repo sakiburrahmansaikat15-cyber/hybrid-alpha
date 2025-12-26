@@ -20,7 +20,7 @@ class StockController extends Controller
         $limit   = (int) $request->query('limit', 10);
         $page    = (int) $request->query('page', 1);
 
-        $query = Stocks::with(['product', 'vendor', 'warehouse']);
+        $query = Stocks::with(['product', 'vendor', 'warehouse','paymentType']);
 
        if ($keyword) {
         $query->where(function ($q) use ($keyword) {
@@ -53,6 +53,7 @@ class StockController extends Controller
             'product_id'    => 'required|exists:prooducts,id',
             'vendor_id'     => 'nullable|exists:vendors,id',
             'warehouse_id'  => 'nullable|exists:warehouses,id',
+            "payment_type_id"  => 'nullable|exists:payment_types,id',
             'quantity'      => 'required|integer|min:1',
             'buying_price'  => 'required|numeric|min:0',
             'selling_price' => 'required|numeric|min:0',
@@ -164,7 +165,7 @@ class StockController extends Controller
 
     public function show($id)
     {
-        $stock = Stocks::with(['product', 'vendor', 'warehouse'])->find($id);
+        $stock = Stocks::with(['product', 'vendor', 'warehouse','paymentType'])->find($id);
 
         if (!$stock) {
             return response()->json([
@@ -194,6 +195,7 @@ class StockController extends Controller
         'product_id'    => 'nullable|exists:prooducts,id',
         'vendor_id'     => 'nullable|exists:vendors,id',
         'warehouse_id'  => 'nullable|exists:warehouses,id',
+        "payment_type_id"  => 'nullable|exists:payment_types,id',
         'quantity'      => 'nullable|integer|min:1',
         'buying_price'  => 'nullable|numeric|min:0',
         'selling_price' => 'nullable|numeric|min:0',

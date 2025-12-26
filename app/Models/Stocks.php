@@ -40,5 +40,10 @@ class Stocks extends Model
         return $this->belongsTo(Warehouse::class, 'warehouse_id');
     }
 
+     public function paymentType()
+    {
+        return $this->belongsTo(PaymentType::class, 'payment_type_id');
+    }
+
 
 }

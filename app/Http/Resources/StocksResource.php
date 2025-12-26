@@ -31,6 +31,7 @@ class StocksResource extends JsonResource
             'product' => new ProductsResource($this->whenLoaded('product')),
             'vendor' => new VendorResource($this->whenLoaded('vendor')),
             'warehouse' => new WarehouseResource($this->whenLoaded('warehouse')),
+             'paymentType' => new PaymentTypeResource($this->whenLoaded('paymentType')),
             'created_at' => $this->created_at?->toDateTimeString(),
             'updated_at' => $this->updated_at?->toDateTimeString(),
         ];

@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus, Search, Edit, Trash2, X, Check, AlertCircle, Package, DollarSign,
   BarChart3, Calendar, Hash, Loader, ChevronLeft, ChevronRight,
-  CheckCircle, XCircle, Building,
+  CheckCircle, XCircle, Building, CreditCard,
 } from 'lucide-react';
 
 const API_URL = '/api/stocks';
@@ -12,6 +12,7 @@ const SERIALS_BY_STOCK_URL = (stockId) => `/api/serial-list/stock/${stockId}`;
 const PRODUCTS_URL = '/api/products';
 const VENDORS_URL = '/api/vendors';
 const WAREHOUSES_URL = '/api/warehouses';
+const PAYMENT_TYPES_URL = '/api/payment-types';
 
 const StocksManager = () => {
   const [stocks, setStocks] = useState([]);
@@ -25,6 +26,7 @@ const StocksManager = () => {
   const [products, setProducts] = useState([]);
   const [vendors, setVendors] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
+  const [paymentTypes, setPaymentTypes] = useState([]);
   
   const [skuInputs, setSkuInputs] = useState(['']);
   const [colorInputs, setColorInputs] = useState(['']);
@@ -37,6 +39,7 @@ const StocksManager = () => {
     product_id: '',
     vendor_id: '',
     warehouse_id: '',
+    payment_type_id: '',
     quantity: '',
     buying_price: '',
     selling_price: '',
@@ -86,6 +89,7 @@ const StocksManager = () => {
         product: item.product || {},
         vendor: item.vendor || {},
         warehouse: item.warehouse || {},
+        paymentType: item.paymentType || {}, // ← Correct key from API (camelCase paymentType)
         quantity: item.quantity ?? 0,
         buying_price: item.buying_price ?? '0.00',
         selling_price: item.selling_price ?? '0.00',
@@ -113,10 +117,11 @@ const StocksManager = () => {
 
   const fetchRelatedData = useCallback(async () => {
     try {
-      const [prodRes, vendRes, wareRes] = await Promise.all([
+      const [prodRes, vendRes, wareRes, payRes] = await Promise.all([
         axios.get(PRODUCTS_URL),
         axios.get(VENDORS_URL),
         axios.get(WAREHOUSES_URL),
+        axios.get(PAYMENT_TYPES_URL),
       ]);
       const extractItems = (res) => {
         const data = res.data;
@@ -125,6 +130,7 @@ const StocksManager = () => {
       setProducts(extractItems(prodRes));
       setVendors(extractItems(vendRes));
       setWarehouses(extractItems(wareRes));
+      setPaymentTypes(extractItems(payRes));
     } catch (error) {
       showNotification('Failed to load related data', 'error');
     }
@@ -203,6 +209,7 @@ const StocksManager = () => {
       product_id: '',
       vendor_id: '',
       warehouse_id: '',
+      payment_type_id: '',
       quantity: '',
       buying_price: '',
       selling_price: '',
@@ -232,6 +239,7 @@ const StocksManager = () => {
         product_id: stock.product?.id?.toString() || '',
         vendor_id: stock.vendor?.id?.toString() || '',
         warehouse_id: stock.warehouse?.id?.toString() || '',
+        payment_type_id: stock.paymentType?.id?.toString() || '', // ← Fixed to match paymentType
         quantity: stock.quantity?.toString() || '',
         buying_price: stock.buying_price || '',
         selling_price: stock.selling_price || '',
@@ -296,6 +304,7 @@ const StocksManager = () => {
     formDataToSend.append('product_id', formData.product_id);
     formDataToSend.append('vendor_id', formData.vendor_id || '');
     formDataToSend.append('warehouse_id', formData.warehouse_id || '');
+    formDataToSend.append('payment_type_id', formData.payment_type_id || '');
     formDataToSend.append('quantity', parseInt(formData.quantity) || 0);
     formDataToSend.append('buying_price', parseFloat(formData.buying_price) || 0);
     formDataToSend.append('selling_price', parseFloat(formData.selling_price) || 0);
@@ -488,6 +497,7 @@ const StocksManager = () => {
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Product</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Vendor</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Warehouse</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Payment Type</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Qty</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Buy Price</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Sell Price</th>
@@ -504,14 +514,14 @@ const StocksManager = () => {
               <tbody className="divide-y divide-gray-700/30">
                 {loading ? (
                   <tr>
-                    <td colSpan="14" className="px-6 py-12 text-center">
+                    <td colSpan="15" className="px-6 py-12 text-center">
                       <Loader size={32} className="animate-spin mx-auto text-blue-400" />
                       <p className="text-gray-400 mt-3">Loading stocks...</p>
                     </td>
                   </tr>
                 ) : stocks.length === 0 ? (
                   <tr>
-                    <td colSpan="14" className="px-6 py-16 text-center">
+                    <td colSpan="15" className="px-6 py-16 text-center">
                       <Package size={64} className="mx-auto text-gray-500 mb-4" />
                       <h3 className="text-2xl font-bold text-white mb-2">
                         {searchTerm ? 'No stocks found' : 'No stock entries yet'}
@@ -545,6 +555,12 @@ const StocksManager = () => {
                           <div className="flex items-center gap-3">
                             <Building size={20} className="text-amber-400" />
                             <span>{stock.warehouse?.name || '-'}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <CreditCard size={20} className="text-purple-400" />
+                            <span>{stock.paymentType?.name || '-'}</span>
                           </div>
                         </td>
                         <td className="px-6 py-4 font-bold text-blue-400">{stock.quantity}</td>
@@ -689,19 +705,35 @@ const StocksManager = () => {
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-semibold mb-2">Warehouse</label>
-                  <select
-                    name="warehouse_id"
-                    value={formData.warehouse_id}
-                    onChange={handleChange}
-                    className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-                  >
-                    <option value="">No Warehouse</option>
-                    {warehouses.map(w => (
-                      <option key={w.id} value={w.id}>{w.name}</option>
-                    ))}
-                  </select>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-semibold mb-2">Warehouse</label>
+                    <select
+                      name="warehouse_id"
+                      value={formData.warehouse_id}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                    >
+                      <option value="">No Warehouse</option>
+                      {warehouses.map(w => (
+                        <option key={w.id} value={w.id}>{w.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold mb-2">Payment Type</label>
+                    <select
+                      name="payment_type_id"
+                      value={formData.payment_type_id}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                    >
+                      <option value="">No Payment Type</option>
+                      {paymentTypes.map(pt => (
+                        <option key={pt.id} value={pt.id}>{pt.name}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

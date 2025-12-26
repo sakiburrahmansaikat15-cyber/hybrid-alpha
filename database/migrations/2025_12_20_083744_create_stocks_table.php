@@ -16,6 +16,7 @@ return new class extends Migration
             $table->foreignId('product_id')->constrained('prooducts')->onDelete('cascade');
             $table->foreignId('vendor_id')->constrained('vendors')->onDelete('cascade');
             $table->foreignId('warehouse_id')->constrained('warehouses')->onDelete('cascade');
+            $table->foreignId('payment_type_id')->nullable()->constrained('payment_types')->onDelete('set null');
 
             // Stock details
             $table->integer('quantity')->default(0);
