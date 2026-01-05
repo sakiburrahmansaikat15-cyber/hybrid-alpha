@@ -16,6 +16,10 @@ import {
   ChevronLeft,
   ChevronRight,
   Package,
+  DollarSign,
+  Percent,
+  Truck,
+  Clock,
 } from 'lucide-react';
 
 const API_URL = 'http://localhost:8000/api/pos/hold-carts';
@@ -64,7 +68,21 @@ const HoldCarts = () => {
     }
   }, [showNotification]);
 
-  // Fetch hold carts with server-side search & pagination
+  // Parse cart_data safely
+  const parseCartData = (cartDataStr) => {
+    if (!cartDataStr) return null;
+    try {
+      const cleaned = cartDataStr
+        .replace(/^"(.*)"$/, '$1')
+        .replace(/\\"/g, '"')
+        .replace(/\\n/g, '\n');
+      return JSON.parse(cleaned);
+    } catch (e) {
+      console.error('Failed to parse cart_data:', e);
+      return null;
+    }
+  };
+
   const fetchHoldCarts = useCallback(async (page = 1, perPage = 10, keyword = '') => {
     setLoading(true);
     try {
@@ -79,9 +97,10 @@ const HoldCarts = () => {
         id: item.id,
         terminal_id: item.terminal_id,
         terminal: item.terminal || null,
-        cart_data: item.cart_data || null, // Plain text string
+        cart_data: item.cart_data || null,
         created_at: item.created_at,
         updated_at: item.updated_at,
+        parsed_cart: parseCartData(item.cart_data), // Add parsed version
       }));
 
       setHoldCarts(formattedCarts);
@@ -94,13 +113,11 @@ const HoldCarts = () => {
     } catch (error) {
       handleApiError(error, 'Failed to fetch hold carts');
       setHoldCarts([]);
-      setPagination({ current_page: 1, last_page: 1, per_page: 10, total_items: 0 });
     } finally {
       setLoading(false);
     }
   }, [handleApiError]);
 
-  // Fetch terminals for dropdown
   const fetchTerminals = useCallback(async () => {
     try {
       const response = await axios.get(TERMINALS_API_URL);
@@ -112,7 +129,6 @@ const HoldCarts = () => {
     }
   }, []);
 
-  // Debounced search
   useEffect(() => {
     const timer = setTimeout(() => {
       fetchHoldCarts(1, pagination.per_page, searchTerm);
@@ -120,7 +136,6 @@ const HoldCarts = () => {
     return () => clearTimeout(timer);
   }, [searchTerm, pagination.per_page, fetchHoldCarts]);
 
-  // Initial load
   useEffect(() => {
     fetchHoldCarts(1, 10);
     fetchTerminals();
@@ -138,10 +153,7 @@ const HoldCarts = () => {
   };
 
   const resetForm = () => {
-    setFormData({
-      terminal_id: '',
-      cart_data: '',
-    });
+    setFormData({ terminal_id: '', cart_data: '' });
     setEditingCart(null);
     setErrors({});
   };
@@ -181,16 +193,13 @@ const HoldCarts = () => {
         cart_data: formData.cart_data.trim() || null,
       };
 
-      let response;
       if (editingCart) {
-        response = await axios.post(`${API_URL}/${editingCart.id}`, submitData);
+        await axios.post(`${API_URL}/${editingCart.id}`, submitData);
       } else {
-        response = await axios.post(API_URL, submitData);
+        await axios.post(API_URL, submitData);
       }
 
-      showNotification(
-        response.data.message || `Hold cart ${editingCart ? 'updated' : 'created'} successfully!`
-      );
+      showNotification(`Hold cart ${editingCart ? 'updated' : 'created'} successfully!`);
       fetchHoldCarts(pagination.current_page, pagination.per_page, searchTerm);
       closeModal();
     } catch (error) {
@@ -220,15 +229,22 @@ const HoldCarts = () => {
     }
   };
 
-  const formatDate = (date) => date ? new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A';
+  const formatDate = (date) => date ? new Date(date).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  }) : 'N/A';
 
-  // Clean display function to remove escaped quotes
-  const cleanCartNotes = (notes) => {
-    if (!notes) return 'No notes added';
-    return String(notes)
-      .replace(/^"(.*)"$/, '$1')     // Remove surrounding quotes
-      .replace(/\\"/g, '"')          // Unescape internal quotes
-      .replace(/\\n/g, '\n');        // Preserve line breaks if any
+  const formatTime = (isoString) => {
+    if (!isoString) return 'N/A';
+    return new Date(isoString).toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
   useEffect(() => {
@@ -252,7 +268,7 @@ const HoldCarts = () => {
             {[...Array(6)].map((_, i) => (
               <div key={i} className="bg-gray-800/30 rounded-2xl p-6 animate-pulse space-y-4">
                 <div className="h-8 bg-gray-700 rounded"></div>
-                <div className="h-20 bg-gray-700/50 rounded-lg"></div>
+                <div className="h-32 bg-gray-700/50 rounded-lg"></div>
               </div>
             ))}
           </div>
@@ -277,7 +293,6 @@ const HoldCarts = () => {
       </AnimatePresence>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
         <div className="mb-8 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
           <div>
             <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-cyan-500 bg-clip-text text-transparent">
@@ -293,7 +308,6 @@ const HoldCarts = () => {
           </button>
         </div>
 
-        {/* Search + Per Page */}
         <div className="bg-gray-800/30 backdrop-blur-sm rounded-2xl p-6 mb-8 border border-gray-700/30">
           <div className="flex flex-col lg:flex-row gap-6">
             <div className="flex-1 relative">
@@ -322,89 +336,149 @@ const HoldCarts = () => {
           </div>
         </div>
 
-        {/* Hold Carts Grid */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1, transition: { staggerChildren: 0.1 } }}
           className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mb-8"
         >
-          {holdCarts.map(cart => (
-            <motion.div
-              key={cart.id}
-              whileHover={{ y: -8, scale: 1.02 }}
-              className="group bg-gray-800/30 backdrop-blur-sm rounded-2xl border border-gray-700/30 hover:border-blue-500/50 transition-all overflow-hidden"
-            >
-              <div className="p-6">
-                <div className="flex justify-between items-start mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-purple-500/10 rounded-lg">
-                      <ShoppingCart size={20} className="text-purple-400" />
+          {holdCarts.map(cart => {
+            const cartInfo = cart.parsed_cart;
+            const hasItems = cartInfo && cartInfo.items && cartInfo.items.length > 0;
+
+            return (
+              <motion.div
+                key={cart.id}
+                whileHover={{ y: -8, scale: 1.02 }}
+                className="group bg-gray-800/30 backdrop-blur-sm rounded-2xl border border-gray-700/30 hover:border-blue-500/50 transition-all overflow-hidden"
+              >
+                <div className="p-6">
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-purple-500/10 rounded-lg">
+                        <ShoppingCart size={20} className="text-purple-400" />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-bold">Hold Cart #{cart.id}</h3>
+                        <p className="text-sm text-gray-400 flex items-center gap-1">
+                          <Monitor size={14} /> {cart.terminal?.name || 'Unknown Terminal'}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="text-xl font-bold">Hold Cart #{cart.id}</h3>
-                      <p className="text-sm text-gray-400 flex items-center gap-1">
-                        <Monitor size={14} /> {cart.terminal?.name || 'Unknown Terminal'}
-                      </p>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setActionMenu(actionMenu === cart.id ? null : cart.id); }}
+                      className="p-2 hover:bg-gray-700/50 rounded-lg"
+                    >
+                      <MoreVertical size={18} />
+                    </button>
+                  </div>
+
+                  {/* Professional Cart Summary */}
+                  <div className="space-y-4">
+                    {hasItems ? (
+                      <>
+                        {/* Summary Header */}
+                        <div className="bg-gradient-to-r from-blue-600/20 to-cyan-600/20 rounded-xl p-4 border border-blue-500/30">
+                          <div className="flex justify-between items-center mb-3">
+                            <div className="flex items-center gap-2">
+                              <Package size={18} className="text-cyan-400" />
+                              <span className="font-semibold">{cartInfo.items.length} Item{cartInfo.items.length > 1 ? 's' : ''}</span>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-2xl font-bold text-cyan-400">${parseFloat(cartInfo.total || 0).toFixed(2)}</p>
+                              <p className="text-xs text-gray-400">Total Amount</p>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3 text-sm">
+                            <div className="flex items-center gap-2">
+                              <Clock size={14} className="text-gray-400" />
+                              <span>{cartInfo.total_qty} pcs</span>
+                            </div>
+                            <div className="flex items-center gap-2 justify-end">
+                              <Percent size={14} className="text-yellow-400" />
+                              <span>Tax: {cartInfo.displayed_tax_percent || 0}%</span>
+                            </div>
+                            {cartInfo.discount_value > 0 && (
+                              <div className="col-span-2 text-green-400 text-xs">
+                                Discount Applied: ${parseFloat(cartInfo.discount_value).toFixed(2)}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Items List */}
+                        <div className="space-y-3 max-h-64 overflow-y-auto">
+                          {cartInfo.items.map((item, idx) => (
+                            <div key={idx} className="flex gap-3 bg-gray-700/30 rounded-lg p-3">
+                              {item.image ? (
+                                <img src={item.image} alt={item.name} className="w-12 h-12 object-cover rounded-lg" />
+                              ) : (
+                                <div className="w-12 h-12 bg-gray-600 rounded-lg flex items-center justify-center">
+                                  <Package size={24} className="text-gray-500" />
+                                </div>
+                              )}
+                              <div className="flex-1">
+                                <p className="font-medium text-sm truncate">{item.name}</p>
+                                <div className="flex justify-between text-xs text-gray-400 mt-1">
+                                  <span>{item.quantity} × ${parseFloat(item.price).toFixed(2)}</span>
+                                  <span className="font-semibold text-cyan-400">
+                                    ${(item.quantity * item.price).toFixed(2)}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Timestamp */}
+                        <div className="flex items-center justify-center gap-2 text-xs text-gray-500 pt-3 border-t border-gray-700/50">
+                          <Clock size={14} />
+                          Held on: {formatTime(cartInfo.timestamp)}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="bg-gray-700/30 rounded-lg p-8 text-center">
+                        <Package size={40} className="mx-auto text-gray-600 mb-3" />
+                        <p className="text-gray-400">Empty or invalid cart data</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex justify-between items-center mt-6 pt-4 border-t border-gray-700/30">
+                    <span className="text-xs text-gray-500">Created: {formatDate(cart.created_at)}</span>
+                    <div className="flex gap-2">
+                      <button onClick={() => openModal(cart)} className="p-2 bg-blue-500/20 hover:bg-blue-500/40 rounded-lg">
+                        <Edit size={14} />
+                      </button>
+                      <button onClick={() => handleDelete(cart.id)} disabled={operationLoading === `delete-${cart.id}`} className="p-2 bg-red-500/20 hover:bg-red-500/40 rounded-lg disabled:opacity-50">
+                        {operationLoading === `delete-${cart.id}` ? <Loader size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                      </button>
                     </div>
                   </div>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setActionMenu(actionMenu === cart.id ? null : cart.id); }}
-                    className="p-2 hover:bg-gray-700/50 rounded-lg"
-                  >
-                    <MoreVertical size={18} />
-                  </button>
                 </div>
 
-                <div className="mb-6">
-                  <div className="bg-gray-700/30 rounded-lg p-4 min-h-[80px]">
-                    <p className="text-sm text-gray-300 whitespace-pre-wrap break-words">
-                      {cleanCartNotes(cart.cart_data)}
-                    </p>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-2 text-center">Cart Notes</p>
-                </div>
-
-                <div className="space-y-2 text-sm text-gray-400">
-                  <div className="flex items-center gap-2">
-                    <Calendar size={16} /> Created: {formatDate(cart.created_at)}
-                  </div>
-                </div>
-
-                <div className="flex justify-between items-center mt-6 pt-4 border-t border-gray-700/30">
-                  <span className="text-xs text-gray-500">Updated: {formatDate(cart.updated_at)}</span>
-                  <div className="flex gap-2">
-                    <button onClick={() => openModal(cart)} className="p-2 bg-blue-500/20 hover:bg-blue-500/40 rounded-lg">
-                      <Edit size={14} />
-                    </button>
-                    <button onClick={() => handleDelete(cart.id)} className="p-2 bg-red-500/20 hover:bg-red-500/40 rounded-lg">
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <AnimatePresence>
-                {actionMenu === cart.id && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="absolute right-4 top-20 bg-gray-800 border border-gray-600 rounded-xl shadow-xl py-2 z-10 min-w-[160px]"
-                  >
-                    <button onClick={() => { openModal(cart); setActionMenu(null); }} className="w-full text-left px-4 py-2 hover:bg-gray-700 flex items-center gap-3 text-sm">
-                      <Edit size={16} /> Edit
-                    </button>
-                    <button onClick={() => handleDelete(cart.id)} className="w-full text-left px-4 py-2 hover:bg-red-500/20 text-red-400 flex items-center gap-3 text-sm">
-                      <Trash2 size={16} /> Delete
-                    </button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.div>
-          ))}
+                <AnimatePresence>
+                  {actionMenu === cart.id && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="absolute right-4 top-20 bg-gray-800 border border-gray-600 rounded-xl shadow-xl py-2 z-10 min-w-[160px]"
+                    >
+                      <button onClick={() => { openModal(cart); setActionMenu(null); }} className="w-full text-left px-4 py-2 hover:bg-gray-700 flex items-center gap-3 text-sm">
+                        <Edit size={16} /> Edit
+                      </button>
+                      <button onClick={() => { handleDelete(cart.id); setActionMenu(null); }} className="w-full text-left px-4 py-2 hover:bg-red-500/20 text-red-400 flex items-center gap-3 text-sm">
+                        <Trash2 size={16} /> Delete
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.div>
+            );
+          })}
         </motion.div>
 
-        {/* Pagination */}
+        {/* Pagination & Empty State - unchanged */}
         {pagination.last_page > 1 && (
           <div className="flex justify-between items-center py-6 border-t border-gray-700/30">
             <div className="text-sm text-gray-400">
@@ -443,7 +517,6 @@ const HoldCarts = () => {
           </div>
         )}
 
-        {/* Empty State */}
         {holdCarts.length === 0 && !loading && (
           <div className="text-center py-20">
             <ShoppingCart size={64} className="mx-auto text-gray-600 mb-6" />
@@ -458,7 +531,7 @@ const HoldCarts = () => {
         )}
       </div>
 
-      {/* Modal */}
+      {/* Modal - unchanged (kept as is) */}
       <AnimatePresence>
         {showModal && (
           <motion.div

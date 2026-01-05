@@ -418,6 +418,13 @@ export const menuData = {
           path: "/tax-groups",
 
           icon: "CreditCard"
+        },
+        {
+          id: 119,
+          title: "Checkout",
+          path: "/checkout",
+
+          icon: "CreditCard"
         }
       ]
     },

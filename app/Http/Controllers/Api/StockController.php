@@ -20,7 +20,7 @@ class StockController extends Controller
         $limit   = (int) $request->query('limit', 10);
         $page    = (int) $request->query('page', 1);
 
-        $query = Stocks::with(['product', 'vendor', 'warehouse','paymentType']);
+        $query = Stocks::with(['product', 'vendor', 'warehouse','paymentType','serialLists']);
 
        if ($keyword) {
         $query->where(function ($q) use ($keyword) {
@@ -32,6 +32,9 @@ class StockController extends Controller
               })
               ->orWhereHas('warehouse', function ($sub) use ($keyword) {
                   $sub->where('name', 'like', "%{$keyword}%");
+              })
+               ->orWhereHas('serialLists', function ($sub) use ($keyword) {
+                  $sub->where('barcode', 'like', "%{$keyword}%");
               });
         });
     }
@@ -56,6 +59,7 @@ class StockController extends Controller
             "payment_type_id"  => 'nullable|exists:payment_types,id',
             'quantity'      => 'required|integer|min:1',
             'buying_price'  => 'required|numeric|min:0',
+            'tax'  => 'required|numeric|min:0',
             'selling_price' => 'required|numeric|min:0',
             'total_amount'  => 'required|numeric|min:0',
             'due_amount'    => 'nullable|numeric|min:0',
@@ -211,6 +215,7 @@ class StockController extends Controller
         'note'          => 'nullable|string|max:1000',
         'image'         => 'nullable|file|mimes:jpg,jpeg,png,gif|max:2048',
         'status'        => 'sometimes|in:active,inactive',
+        'tax'  => 'nullable|numeric|min:0'
     ]);
 
     if ($validator->fails()) {

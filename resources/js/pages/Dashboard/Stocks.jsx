@@ -4,11 +4,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus, Search, Edit, Trash2, X, Check, AlertCircle, Package, DollarSign,
   BarChart3, Calendar, Hash, Loader, ChevronLeft, ChevronRight,
-  CheckCircle, XCircle, Building, CreditCard,
+  CheckCircle, XCircle, Building, CreditCard, Percent,
 } from 'lucide-react';
 
 const API_URL = '/api/stocks';
-const SERIALS_BY_STOCK_URL = (stockId) => `/api/serial-list/stock/${stockId}`;
 const PRODUCTS_URL = '/api/products';
 const VENDORS_URL = '/api/vendors';
 const WAREHOUSES_URL = '/api/warehouses';
@@ -27,12 +26,12 @@ const StocksManager = () => {
   const [vendors, setVendors] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
   const [paymentTypes, setPaymentTypes] = useState([]);
-  
+
   const [skuInputs, setSkuInputs] = useState(['']);
   const [colorInputs, setColorInputs] = useState(['']);
   const [barCodeInputs, setBarCodeInputs] = useState(['']);
   const [noteInputs, setNoteInputs] = useState(['']);
-  
+
   const [isElectronic, setIsElectronic] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -42,6 +41,7 @@ const StocksManager = () => {
     payment_type_id: '',
     quantity: '',
     buying_price: '',
+    tax: '0', // Manual tax percentage - no auto calculation
     selling_price: '',
     total_amount: '',
     due_amount: '',
@@ -89,9 +89,10 @@ const StocksManager = () => {
         product: item.product || {},
         vendor: item.vendor || {},
         warehouse: item.warehouse || {},
-        paymentType: item.paymentType || {}, // ← Correct key from API (camelCase paymentType)
+        paymentType: item.paymentType || {},
         quantity: item.quantity ?? 0,
         buying_price: item.buying_price ?? '0.00',
+        tax: item.tax ?? '0.00',
         selling_price: item.selling_price ?? '0.00',
         total_amount: item.total_amount ?? null,
         due_amount: item.due_amount ?? null,
@@ -146,7 +147,7 @@ const StocksManager = () => {
     return () => clearTimeout(timer);
   }, [searchTerm, pagination.per_page, fetchStocks]);
 
-  // Auto-calculate Total Amount only when creating new stock
+  // Auto-calculate Total Amount = Qty × Buying Price (Tax NOT included)
   useEffect(() => {
     if (!editingStock) {
       const qty = parseFloat(formData.quantity) || 0;
@@ -156,7 +157,7 @@ const StocksManager = () => {
     }
   }, [formData.quantity, formData.buying_price, editingStock]);
 
-  // Auto-calculate Due Amount only when creating new stock
+  // Auto-calculate Due Amount = Total - Paid
   useEffect(() => {
     if (!editingStock) {
       const total = parseFloat(formData.total_amount) || 0;
@@ -193,6 +194,12 @@ const StocksManager = () => {
     }
   };
 
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+    if (errors[name]) setErrors(prev => ({ ...prev, [name]: undefined }));
+  };
+
   const handlePageChange = (newPage) => {
     if (newPage < 1 || newPage > pagination.last_page) return;
     fetchStocks(newPage, pagination.per_page, searchTerm);
@@ -212,6 +219,7 @@ const StocksManager = () => {
       payment_type_id: '',
       quantity: '',
       buying_price: '',
+      tax: '0',
       selling_price: '',
       total_amount: '',
       due_amount: '',
@@ -239,9 +247,10 @@ const StocksManager = () => {
         product_id: stock.product?.id?.toString() || '',
         vendor_id: stock.vendor?.id?.toString() || '',
         warehouse_id: stock.warehouse?.id?.toString() || '',
-        payment_type_id: stock.paymentType?.id?.toString() || '', // ← Fixed to match paymentType
+        payment_type_id: stock.paymentType?.id?.toString() || '',
         quantity: stock.quantity?.toString() || '',
         buying_price: stock.buying_price || '',
+        tax: stock.tax || '0',
         selling_price: stock.selling_price || '',
         total_amount: stock.total_amount || '',
         due_amount: stock.due_amount || '',
@@ -263,12 +272,6 @@ const StocksManager = () => {
   const closeModal = () => {
     setShowModal(false);
     setTimeout(resetForm, 300);
-  };
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-    if (errors[name]) setErrors(prev => ({ ...prev, [name]: undefined }));
   };
 
   const handleSubmit = async (e) => {
@@ -307,6 +310,7 @@ const StocksManager = () => {
     formDataToSend.append('payment_type_id', formData.payment_type_id || '');
     formDataToSend.append('quantity', parseInt(formData.quantity) || 0);
     formDataToSend.append('buying_price', parseFloat(formData.buying_price) || 0);
+    formDataToSend.append('tax', parseFloat(formData.tax) || 0);
     formDataToSend.append('selling_price', parseFloat(formData.selling_price) || 0);
     formDataToSend.append('total_amount', parseFloat(formData.total_amount) || 0);
     formDataToSend.append('due_amount', parseFloat(formData.due_amount) || 0);
@@ -406,6 +410,7 @@ const StocksManager = () => {
           </motion.div>
         )}
       </AnimatePresence>
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -425,6 +430,7 @@ const StocksManager = () => {
             <Plus size={22} /> Add New Stock
           </button>
         </motion.div>
+
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           {[
             { label: 'Total Stocks', value: stats.total, icon: Package, color: 'blue' },
@@ -445,6 +451,7 @@ const StocksManager = () => {
             </div>
           ))}
         </div>
+
         <div className="bg-gray-800/30 backdrop-blur-sm rounded-2xl p-6 mb-8 border border-gray-700/30">
           <div className="flex flex-col lg:flex-row gap-6">
             <div className="flex-1 relative">
@@ -483,6 +490,7 @@ const StocksManager = () => {
             </div>
           </div>
         </div>
+
         <div className="bg-gray-800/30 backdrop-blur-sm rounded-2xl border border-gray-700/30 overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-700/30 bg-gray-800/20">
             <div className="flex items-center justify-between">
@@ -500,6 +508,7 @@ const StocksManager = () => {
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Payment Type</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Qty</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Buy Price</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Tax (%)</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Sell Price</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Total Amt</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 uppercase tracking-wider">Due Amt</th>
@@ -514,14 +523,14 @@ const StocksManager = () => {
               <tbody className="divide-y divide-gray-700/30">
                 {loading ? (
                   <tr>
-                    <td colSpan="15" className="px-6 py-12 text-center">
+                    <td colSpan="16" className="px-6 py-12 text-center">
                       <Loader size={32} className="animate-spin mx-auto text-blue-400" />
                       <p className="text-gray-400 mt-3">Loading stocks...</p>
                     </td>
                   </tr>
                 ) : stocks.length === 0 ? (
                   <tr>
-                    <td colSpan="15" className="px-6 py-16 text-center">
+                    <td colSpan="16" className="px-6 py-16 text-center">
                       <Package size={64} className="mx-auto text-gray-500 mb-4" />
                       <h3 className="text-2xl font-bold text-white mb-2">
                         {searchTerm ? 'No stocks found' : 'No stock entries yet'}
@@ -565,11 +574,14 @@ const StocksManager = () => {
                         </td>
                         <td className="px-6 py-4 font-bold text-blue-400">{stock.quantity}</td>
                         <td className="px-6 py-4 text-green-400">{formatCurrency(stock.buying_price)}</td>
+                        <td className="px-6 py-4 text-yellow-400 flex items-center gap-1">
+                          <Percent size={14} /> {parseFloat(stock.tax || 0).toFixed(1)}%
+                        </td>
                         <td className="px-6 py-4 text-yellow-400">{formatCurrency(stock.selling_price)}</td>
                         <td className="px-6 py-4 font-bold text-purple-400">{formatCurrency(stock.total_amount)}</td>
-                        <td className="px-6 py-4 text-orange-400 font-medium">{formatCurrency(stock.due_amount)}</td>
-                        <td className="px-6 py-4 text-cyan-400 font-medium">{formatCurrency(stock.paid_amount)}</td>
-                        <td className="px-6 py-4 text-cyan-400 font-medium">{formatCurrency(stock.comission)}</td>
+                        <td className="px-6 py-4 text-orange-400">{formatCurrency(stock.due_amount)}</td>
+                        <td className="px-6 py-4 text-cyan-400">{formatCurrency(stock.paid_amount)}</td>
+                        <td className="px-6 py-4 text-cyan-400">{formatCurrency(stock.comission)}</td>
                         <td className="px-6 py-4 text-sm text-gray-300">
                           <Calendar size={16} className="inline mr-2" />
                           {formatDate(stock.stock_date)}
@@ -736,7 +748,7 @@ const StocksManager = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                   <div>
                     <label className="block text-sm font-semibold mb-2">Quantity *</label>
                     <input
@@ -763,6 +775,20 @@ const StocksManager = () => {
                     />
                   </div>
                   <div>
+                    <label className="block text-sm font-semibold mb-2 flex items-center gap-1">
+                      <Percent size={16} /> Tax (%)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      name="tax"
+                      value={formData.tax}
+                      onChange={handleChange}
+                      min="0"
+                      className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                    />
+                  </div>
+                  <div>
                     <label className="block text-sm font-semibold mb-2">Selling Price *</label>
                     <input
                       type="number"
@@ -779,15 +805,12 @@ const StocksManager = () => {
 
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                   <div>
-                    <label className="block text-sm font-semibold mb-2">Total Amount *</label>
+                    <label className="block text-sm font-semibold mb-2">Total Amount (Auto)</label>
                     <input
-                      type="number"
-                      step="0.01"
-                      name="total_amount"
+                      type="text"
                       value={formData.total_amount}
-                      onChange={handleChange}
-                      required
-                      className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                      disabled
+                      className="w-full px-4 py-3 bg-gray-700/50 rounded-xl opacity-70"
                     />
                   </div>
                   <div>
@@ -802,15 +825,12 @@ const StocksManager = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold mb-2">Due Amount *</label>
+                    <label className="block text-sm font-semibold mb-2">Due Amount (Auto)</label>
                     <input
-                      type="number"
-                      step="0.01"
-                      name="due_amount"
+                      type="text"
                       value={formData.due_amount}
-                      onChange={handleChange}
-                      required
-                      className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                      disabled
+                      className="w-full px-4 py-3 bg-gray-700/50 rounded-xl opacity-70"
                     />
                   </div>
                   <div>
@@ -929,9 +949,6 @@ const StocksManager = () => {
                                 </div>
                               </div>
                             ))}
-                            <p className="text-xs text-gray-400 mt-2">
-                              Provide unique details for {formData.quantity || 0} items.
-                            </p>
                           </div>
                         </div>
                       </div>
@@ -944,52 +961,47 @@ const StocksManager = () => {
                             Item Details
                             <span className="text-gray-400"> (Optional - applies to all items)</span>
                           </label>
-                          <div className="space-y-4">
-                            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-center bg-gray-800/40 p-4 rounded-xl border border-gray-700">
-                              <div>
-                                <span className="text-gray-400 text-sm block mb-1">SKU (optional)</span>
-                                <input
-                                  type="text"
-                                  value={skuInputs[0] || ''}
-                                  onChange={(e) => setSkuInputs([e.target.value])}
-                                  placeholder="Enter SKU"
-                                  className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-                                />
-                              </div>
-                              <div>
-                                <span className="text-gray-400 text-sm block mb-1">Color (optional)</span>
-                                <input
-                                  type="text"
-                                  value={colorInputs[0] || ''}
-                                  onChange={(e) => setColorInputs([e.target.value])}
-                                  placeholder="e.g. Black"
-                                  className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-                                />
-                              </div>
-                              <div>
-                                <span className="text-gray-400 text-sm block mb-1">Bar Code (optional)</span>
-                                <input
-                                  type="text"
-                                  value={barCodeInputs[0] || ''}
-                                  onChange={(e) => setBarCodeInputs([e.target.value])}
-                                  placeholder="Enter Bar Code"
-                                  className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-                                />
-                              </div>
-                              <div>
-                                <span className="text-gray-400 text-sm block mb-1">Note (optional)</span>
-                                <input
-                                  type="text"
-                                  value={noteInputs[0] || ''}
-                                  onChange={(e) => setNoteInputs([e.target.value])}
-                                  placeholder="Enter note"
-                                  className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-                                />
-                              </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-center bg-gray-800/40 p-4 rounded-xl border border-gray-700">
+                            <div>
+                              <span className="text-gray-400 text-sm block mb-1">SKU (optional)</span>
+                              <input
+                                type="text"
+                                value={skuInputs[0] || ''}
+                                onChange={(e) => setSkuInputs([e.target.value])}
+                                placeholder="Enter SKU"
+                                className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                              />
                             </div>
-                            <p className="text-xs text-gray-400 mt-2">
-                              These details apply to all {formData.quantity || 0} items.
-                            </p>
+                            <div>
+                              <span className="text-gray-400 text-sm block mb-1">Color (optional)</span>
+                              <input
+                                type="text"
+                                value={colorInputs[0] || ''}
+                                onChange={(e) => setColorInputs([e.target.value])}
+                                placeholder="e.g. Black"
+                                className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                              />
+                            </div>
+                            <div>
+                              <span className="text-gray-400 text-sm block mb-1">Bar Code (optional)</span>
+                              <input
+                                type="text"
+                                value={barCodeInputs[0] || ''}
+                                onChange={(e) => setBarCodeInputs([e.target.value])}
+                                placeholder="Enter Bar Code"
+                                className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                              />
+                            </div>
+                            <div>
+                              <span className="text-gray-400 text-sm block mb-1">Note (optional)</span>
+                              <input
+                                type="text"
+                                value={noteInputs[0] || ''}
+                                onChange={(e) => setNoteInputs([e.target.value])}
+                                placeholder="Enter note"
+                                className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                              />
+                            </div>
                           </div>
                         </div>
                       </div>

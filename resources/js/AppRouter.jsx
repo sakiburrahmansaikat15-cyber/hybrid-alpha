@@ -58,6 +58,7 @@ import SaleTaxes from "./pages/Dashboard/POS/SaleTaxes";
 import TaxGroups from "./pages/Dashboard/POS/TaxGroups";
 import TaxRates from "./pages/Dashboard/POS/TaxRates";
 import Vouchers from "./pages/Dashboard/POS/Vouchers";
+import Checkout from "./pages/Dashboard/POS/checkout";
 
 
 const AppRouter = () => {
@@ -122,6 +123,7 @@ const AppRouter = () => {
                                              <Route path="/tax-groups" element={<TaxGroups/>} />
                                               <Route path="/tax-rates" element={<TaxRates/>} />
                                               <Route path="/vouchers" element={<Vouchers/>} />
+                                               <Route path="/checkout" element={<Checkout/>} />
                 </Route>
             </Routes>
         </div>
