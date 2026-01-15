@@ -21,7 +21,7 @@ class CampaignController extends Controller
 
         if ($keyword) {
             $query->where('name', 'like', "%$keyword%")
-                  ->orWhere('type', 'like', "%$keyword%");
+                ->orWhere('type', 'like', "%$keyword%");
         }
 
         if (!$limit) {
@@ -60,18 +60,18 @@ class CampaignController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'name'       => 'required|string|max:255',
-            'type'       => 'required|in:email,sms,social',
+            'name' => 'required|string|max:255',
+            'type' => 'required|in:email,sms,social,ads,other',
             'start_date' => 'nullable|date',
-            'end_date'   => 'nullable|date|after_or_equal:start_date',
-            'budget'     => 'nullable|numeric|min:0',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'budget' => 'nullable|numeric|min:0',
         ]);
 
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Validation failed',
-                'errors'  => $validator->errors()
+                'errors' => $validator->errors()
             ], 422);
         }
 
@@ -112,11 +112,11 @@ class CampaignController extends Controller
         $campaign = Campaign::findOrFail($id);
 
         $data = $request->validate([
-            'name'       => 'sometimes|string|max:255',
-            'type'       => 'sometimes|in:email,sms,social',
+            'name' => 'sometimes|string|max:255',
+            'type' => 'sometimes|in:email,sms,social,ads,other',
             'start_date' => 'nullable|date',
-            'end_date'   => 'nullable|date|after_or_equal:start_date',
-            'budget'     => 'nullable|numeric|min:0',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'budget' => 'nullable|numeric|min:0',
         ]);
 
         $campaign->update($data);

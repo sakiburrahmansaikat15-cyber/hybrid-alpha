@@ -13,7 +13,7 @@ class TaxGroupSeeder extends Seeder
         $faker = Faker::create();
 
         for ($i = 1; $i <= 10; $i++) {
-            TaxGroup::create([
+            TaxGroup::firstOrCreate([
                 'name' => 'Group ' . $i,
             ]);
         }

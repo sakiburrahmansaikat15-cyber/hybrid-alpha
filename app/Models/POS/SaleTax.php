@@ -9,7 +9,12 @@ class SaleTax extends Model
 {
     use HasFactory;
 
-     protected $guarded = [];
+     protected $fillable = [
+        'sale_id',
+        'tax_rate_id',
+        'tax_amount',
+        'taxable_amount',
+    ];
 
 
         public function sale()

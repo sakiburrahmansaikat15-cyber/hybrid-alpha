@@ -9,7 +9,14 @@ class SubItems extends Model
 {
     use HasFactory;
     protected $table = 'sub_items';
-    protected $guarded = [];
+
+    protected $fillable = [
+        'name',
+        'sub_category_id',
+        'description',
+        'status',
+        'image',
+    ];
 
     public function subcategory()
     {
@@ -17,8 +24,8 @@ class SubItems extends Model
     }
 
 
-        public function products()
+    public function products()
     {
-        return $this->hasMany(Prooducts::class, 'sub_item_id');
+        return $this->hasMany(Product::class, 'sub_item_id');
     }
 }

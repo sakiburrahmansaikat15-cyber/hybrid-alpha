@@ -6,9 +6,19 @@ use App\Http\Controllers\Controller;
 use App\Models\HRM\Attendance;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use App\Http\Requests\HRM\StoreAttendanceRequest;
+use App\Http\Requests\HRM\UpdateAttendanceRequest;
+use App\Http\Resources\AttendanceResource;
 
-class AttendenceController extends Controller
+class AttendanceController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware('permission:attendance.view')->only(['index', 'show']);
+        $this->middleware('permission:attendance.create')->only(['store']);
+        $this->middleware('permission:attendance.edit')->only(['update']);
+        $this->middleware('permission:attendance.delete')->only(['destroy']);
+    }
     public function index(Request $request)
     {
         $keyword = $request->query('keyword', '');
@@ -30,7 +40,7 @@ class AttendenceController extends Controller
                     'per_page' => $data->count(),
                     'total_items' => $data->count(),
                     'total_pages' => 1,
-                    'data' => $data,
+                    'data' => AttendanceResource::collection($data),
                 ],
             ]);
         }
@@ -45,32 +55,14 @@ class AttendenceController extends Controller
                 'per_page' => $attendances->perPage(),
                 'total_items' => $attendances->total(),
                 'total_pages' => $attendances->lastPage(),
-                'data' => $attendances->items(),
+                'data' => AttendanceResource::collection($attendances),
             ],
         ]);
     }
 
-    public function store(Request $request)
+    public function store(StoreAttendanceRequest $request)
     {
-        $validator = Validator::make($request->all(), [
-            'employee_id'   => 'required|exists:employees,id',
-            'date'          => 'required|date',
-            'clock_in'      => 'nullable|date_format:H:i',
-            'clock_out'     => 'nullable|date_format:H:i',
-            'late'          => 'boolean',
-            'early_leave'   => 'boolean',
-            'working_hours' => 'nullable|numeric',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors'  => $validator->errors()
-            ], 422);
-        }
-
-        $attendance = Attendance::create($validator->validated());
+        $attendance = Attendance::create($request->validated());
 
         return response()->json([
             'success' => true,
@@ -96,21 +88,11 @@ class AttendenceController extends Controller
         ], 200);
     }
 
-    public function update(Request $request, $id)
+    public function update(UpdateAttendanceRequest $request, $id)
     {
         $attendance = Attendance::findOrFail($id);
 
-        $data = $request->validate([
-            'employee_id'   => 'sometimes|exists:employees,id',
-            'date'          => 'sometimes|date',
-            'clock_in'      => 'nullable|date_format:H:i',
-            'clock_out'     => 'nullable|date_format:H:i',
-            'late'          => 'boolean',
-            'early_leave'   => 'boolean',
-            'working_hours' => 'nullable|numeric',
-        ]);
-
-        $attendance->update($data);
+        $attendance->update($request->validated());
 
         return response()->json([
             'success' => true,

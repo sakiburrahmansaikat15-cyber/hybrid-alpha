@@ -8,7 +8,18 @@ use Illuminate\Database\Eloquent\Model;
 class LeaveApplication extends Model
 {
     use HasFactory;
-    protected $guarded = [];
+    protected $fillable = [
+        'employee_id',
+        'leave_type_id',
+        'start_date',
+        'end_date',
+        'days',
+        'reason',
+        'status',
+        'approved_by',
+        'approved_at',
+        'notes',
+    ];
 
     
 

@@ -8,12 +8,16 @@ use Illuminate\Database\Eloquent\Model;
 class LeaveType extends Model
 {
     use HasFactory;
-    protected $guarded = [];
+    protected $fillable = [
+        'name',
+        'max_days',
+        'status',
+    ];
 
 
     public function leaveApplications()
-{
-    return $this->hasMany(LeaveApplication::class, 'leave_type_id');
-}
+    {
+        return $this->hasMany(LeaveApplication::class, 'leave_type_id');
+    }
 
 }

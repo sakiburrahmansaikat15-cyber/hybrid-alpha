@@ -2,23 +2,12 @@ import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Plus,
-  Search,
-  Edit,
-  Trash2,
-  X,
-  Check,
-  Loader,
-  ChevronLeft,
-  ChevronRight,
-  MoreVertical,
-  FileText,
-  Download,
-  User,
+  Plus, Search, Edit, Trash2, X, Check, Loader, ChevronLeft, ChevronRight,
+  MoreVertical, FileText, Download, User, RefreshCw, Shield, FolderOpen
 } from 'lucide-react';
 
-const EMPLOYEE_DOCUMENTS_API = 'http://localhost:8000/api/hrm/employee-documents';
-const EMPLOYEES_API = 'http://localhost:8000/api/hrm/employees';
+const EMPLOYEE_DOCUMENTS_API = '/api/hrm/employee-documents';
+const EMPLOYEES_API = '/api/hrm/employees';
 
 const EmployeeDocuments = () => {
   const [documents, setDocuments] = useState([]);
@@ -30,19 +19,18 @@ const EmployeeDocuments = () => {
   const [editingDocument, setEditingDocument] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [actionMenu, setActionMenu] = useState(null);
+
   const [formData, setFormData] = useState({
     employee_id: '',
     document_type: '',
     document_file: null,
   });
   const [selectedFileName, setSelectedFileName] = useState('');
+
   const [errors, setErrors] = useState({});
   const [notification, setNotification] = useState({ show: false, message: '', type: '' });
   const [pagination, setPagination] = useState({
-    current_page: 1,
-    last_page: 1,
-    per_page: 10,
-    total_items: 0,
+    current_page: 1, last_page: 1, per_page: 10, total_items: 0
   });
 
   const showNotification = useCallback((message, type = 'success') => {
@@ -50,78 +38,55 @@ const EmployeeDocuments = () => {
     setTimeout(() => setNotification({ show: false, message: '', type: '' }), 4000);
   }, []);
 
-  const handleApiError = useCallback(
-    (error, defaultMessage) => {
-      if (error.response?.status === 422) {
-        const validationErrors = error.response.data.errors || {};
-        setErrors(validationErrors);
-        const firstError = Object.values(validationErrors)[0]?.[0];
-        showNotification(firstError || 'Validation error', 'error');
-      } else if (error.response?.data?.message) {
-        showNotification(error.response.data.message, 'error');
-        setErrors({ _general: error.response.data.message });
-      } else {
-        showNotification(defaultMessage || 'Something went wrong', 'error');
-        setErrors({ _general: defaultMessage });
-      }
-    },
-    [showNotification]
-  );
+  const handleApiError = useCallback((error, defaultMessage) => {
+    if (error.response?.status === 422) {
+      setErrors(error.response.data.errors || {});
+      showNotification('Validation failed', 'error');
+    } else {
+      showNotification(error.response?.data?.message || defaultMessage, 'error');
+    }
+  }, [showNotification]);
 
-  const fetchDocuments = useCallback(
-    async (page = 1, perPage = 10, keyword = '') => {
-      setLoading(true);
-      try {
-        const params = { page, limit: perPage };
-        if (keyword.trim()) params.keyword = keyword.trim();
+  const fetchDocuments = useCallback(async (page = 1, limit = 10, keyword = '') => {
+    setLoading(true);
+    try {
+      const params = { page, limit };
+      if (keyword.trim()) params.keyword = keyword.trim();
 
-        const response = await axios.get(EMPLOYEE_DOCUMENTS_API, { params });
-        const res = response.data;
+      const response = await axios.get(EMPLOYEE_DOCUMENTS_API, { params });
+      const data = response.data.pagination || response.data;
+      const list = data.data || [];
 
-        const documentData = res.pagination?.data || [];
-        const formattedDocuments = documentData.map((item) => ({
-          id: item.id,
-          employee_id: item.employee?.id || null,
-          employee_name: item.employee ? `${item.employee.first_name} ${item.employee.last_name || ''}`.trim() : '—',
-          document_type: item.document_type || '—',
-          document_file: item.document_file || null,
-          created_at: item.created_at,
-          updated_at: item.updated_at,
-        }));
+      setDocuments(list.map(item => ({
+        ...item,
+        employee_name: item.employee ? `${item.employee.first_name} ${item.employee.last_name || ''}`.trim() : '—',
+      })));
 
-        setDocuments(formattedDocuments);
-        setPagination({
-          current_page: res.pagination.current_page || 1,
-          last_page: res.pagination.total_pages || 1,
-          per_page: res.pagination.per_page || 10,
-          total_items: res.pagination.total_items || 0,
-        });
-      } catch (error) {
-        handleApiError(error, 'Failed to fetch employee documents');
-        setDocuments([]);
-        setPagination({ current_page: 1, last_page: 1, per_page: 10, total_items: 0 });
-      } finally {
-        setLoading(false);
-      }
-    },
-    [handleApiError]
-  );
+      setPagination({
+        current_page: data.current_page || 1,
+        last_page: data.total_pages || data.last_page || 1,
+        per_page: data.per_page || limit,
+        total_items: data.total_items || data.total || 0
+      });
+    } catch (error) {
+      console.error(error);
+      setDocuments([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   const fetchEmployees = async () => {
     setDropdownLoading(true);
     try {
       const response = await axios.get(EMPLOYEES_API);
-      const res = response.data;
-      const data = res.pagination?.data || res.data || res || [];
-      const formatted = data.map((emp) => ({
+      const data = response.data.pagination?.data || response.data?.data || [];
+      setEmployees(data.map(emp => ({
         id: emp.id,
         name: `${emp.first_name} ${emp.last_name || ''}`.trim() || emp.employee_code,
-      }));
-      setEmployees(formatted);
+      })));
     } catch (error) {
-      console.error('Failed to fetch employees:', error);
-      showNotification('Unable to load employees', 'error');
-      setEmployees([]);
+      console.error(error);
     } finally {
       setDropdownLoading(false);
     }
@@ -130,547 +95,247 @@ const EmployeeDocuments = () => {
   useEffect(() => {
     fetchDocuments(1, 10);
     fetchEmployees();
-  }, []);
+  }, [fetchDocuments]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchDocuments(1, pagination.per_page, searchTerm);
-    }, 500);
+    const timer = setTimeout(() => fetchDocuments(1, pagination.per_page, searchTerm), 500);
     return () => clearTimeout(timer);
   }, [searchTerm, pagination.per_page, fetchDocuments]);
 
-  const handlePageChange = (newPage) => {
-    if (newPage < 1 || newPage > pagination.last_page) return;
-    fetchDocuments(newPage, pagination.per_page, searchTerm);
+  useEffect(() => {
+    const handler = (e) => {
+      if (!e.target.closest('.action-menu-btn')) setActionMenu(null);
+    };
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
+  }, []);
+
+  const handlePageChange = (p) => {
+    if (p >= 1 && p <= pagination.last_page) fetchDocuments(p, pagination.per_page, searchTerm);
   };
 
-  const handleLimitChange = (newLimit) => {
-    const limit = parseInt(newLimit);
-    setPagination((prev) => ({ ...prev, per_page: limit }));
-    fetchDocuments(1, limit, searchTerm);
-  };
-
-  const resetForm = () => {
-    setFormData({ employee_id: '', document_type: '', document_file: null });
-    setSelectedFileName('');
-    setEditingDocument(null);
+  const openModal = (doc = null) => {
     setErrors({});
-  };
-
-  const openModal = (document = null) => {
-    if (document) {
-      setEditingDocument(document);
+    if (doc) {
+      setEditingDocument(doc);
       setFormData({
-        employee_id: document.employee_id?.toString() || '',
-        document_type: document.document_type || '',
+        employee_id: doc.employee_id?.toString() || '',
+        document_type: doc.document_type || '',
         document_file: null,
       });
+      setSelectedFileName(getFileNameFromPath(doc.document_file));
     } else {
-      resetForm();
+      setEditingDocument(null);
+      setFormData({ employee_id: '', document_type: '', document_file: null });
+      setSelectedFileName('');
     }
     setShowModal(true);
-  };
-
-  const closeModal = () => {
-    setShowModal(false);
-    setTimeout(resetForm, 300);
-  };
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-    if (errors[name]) setErrors((prev) => ({ ...prev, [name]: undefined }));
+    setActionMenu(null);
   };
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      setFormData((prev) => ({ ...prev, document_file: file }));
+      setFormData(prev => ({ ...prev, document_file: file }));
       setSelectedFileName(file.name);
-      if (errors.document_file) setErrors((prev) => ({ ...prev, document_file: undefined }));
+      if (errors.document_file) setErrors(prev => ({ ...prev, document_file: undefined }));
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setOperationLoading('saving');
-    setErrors({});
+
+    const payload = new FormData();
+    payload.append('employee_id', formData.employee_id);
+    payload.append('document_type', formData.document_type);
+    if (formData.document_file) payload.append('document_file', formData.document_file);
+
+    const config = {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    };
 
     try {
-      const submitData = new FormData();
-      submitData.append('employee_id', formData.employee_id);
-      submitData.append('document_type', formData.document_type);
-      if (formData.document_file) {
-        submitData.append('document_file', formData.document_file);
-      }
-
-      let response;
       if (editingDocument) {
-        response = await axios.post(`${EMPLOYEE_DOCUMENTS_API}/${editingDocument.id}`, submitData);
-        showNotification('Employee document updated successfully');
+        await axios.post(`${EMPLOYEE_DOCUMENTS_API}/${editingDocument.id}`, payload, config);
       } else {
-        response = await axios.post(EMPLOYEE_DOCUMENTS_API, submitData);
-        showNotification('Employee document created successfully');
+        await axios.post(EMPLOYEE_DOCUMENTS_API, payload, config);
       }
-
+      showNotification(editingDocument ? 'Updated successfully' : 'Uploaded successfully');
       fetchDocuments(pagination.current_page, pagination.per_page, searchTerm);
-      closeModal();
+      setShowModal(false);
     } catch (error) {
-      handleApiError(error, 'Failed to save document');
+      handleApiError(error, 'Save failed');
     } finally {
       setOperationLoading(null);
     }
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Delete this document permanently?')) return;
-    setOperationLoading(`delete-${id}`);
+    if (!confirm('Permanently delete this document?')) return;
+    setOperationLoading(`del-${id}`);
     try {
       await axios.delete(`${EMPLOYEE_DOCUMENTS_API}/${id}`);
-      showNotification('Employee document deleted successfully');
-
-      const remainingItems = pagination.total_items - 1;
-      const maxPage = Math.ceil(remainingItems / pagination.per_page);
-      const targetPage = pagination.current_page > maxPage ? maxPage : pagination.current_page;
-
-      fetchDocuments(targetPage || 1, pagination.per_page, searchTerm);
-    } catch (error) {
-      handleApiError(error, 'Delete failed');
-    } finally {
-      setOperationLoading(null);
-      setActionMenu(null);
-    }
+      showNotification('Deleted successfully');
+      fetchDocuments(pagination.current_page, pagination.per_page, searchTerm);
+    } catch (e) { handleApiError(e, 'Delete failed'); }
+    finally { setOperationLoading(null); setActionMenu(null); }
   };
 
-  const getFileNameFromPath = (path) => {
-    if (!path) return '—';
-    return path.split('/').pop().split('_').slice(1).join('_');
-  };
-
-  const getFileExtension = (path) => {
-    if (!path) return '';
-    return path.split('.').pop().toUpperCase();
-  };
-
-  const stats = {
-    total: pagination.total_items,
-  };
-
-  const formatDate = (date) =>
-    date ? new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
-
-  useEffect(() => {
-    const handler = () => setActionMenu(null);
-    document.addEventListener('click', handler);
-    return () => document.removeEventListener('click', handler);
-  }, []);
-
-  if (loading && documents.length === 0) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="mb-8 flex justify-between">
-            <div className="h-10 bg-gray-800 rounded w-64 animate-pulse"></div>
-            <div className="h-12 bg-gray-800 rounded-xl w-48 animate-pulse"></div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="bg-gray-800/40 rounded-2xl p-6 animate-pulse">
-                <div className="h-12 bg-gray-700 rounded"></div>
-              </div>
-            ))}
-          </div>
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="bg-gray-800/30 rounded-2xl p-6 animate-pulse space-y-4">
-                <div className="h-8 bg-gray-700 rounded"></div>
-                <div className="space-y-2">
-                  <div className="h-4 bg-gray-700 rounded w-3/4"></div>
-                  <div className="h-4 bg-gray-700 rounded w-1/2"></div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const getFileNameFromPath = (path) => path ? path.split('/').pop().split('_').slice(1).join('_') : 'No file selected';
+  const getFileExtension = (path) => path ? path.split('.').pop().toUpperCase() : 'FILE';
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-gray-100 py-8">
+    <div className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-8 font-sans selection:bg-indigo-500/30">
       <AnimatePresence>
         {notification.show && (
-          <motion.div
-            initial={{ opacity: 0, x: 300 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 300 }}
-            className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-xl shadow-2xl ${
-              notification.type === 'error' ? 'bg-red-600' : 'bg-green-600'
-            } text-white font-medium`}
-          >
-            {notification.message}
+          <motion.div initial={{ y: -50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -50, opacity: 0 }} className={`fixed top-6 right-1/2 translate-x-1/2 z-[60] px-6 py-3 rounded-full shadow-2xl backdrop-blur-md border border-white/10 flex items-center gap-3 font-medium ${notification.type === 'error' ? 'bg-rose-500/20 text-rose-300' : 'bg-indigo-500/20 text-indigo-300'}`}>
+            {notification.type === 'error' ? <Shield size={18} /> : <Check size={18} />} {notification.message}
           </motion.div>
         )}
       </AnimatePresence>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-8 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+      <div className="max-w-6xl mx-auto space-y-8">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
           <div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-cyan-500 bg-clip-text text-transparent">
-              Employee Documents
+            <h1 className="text-4xl md:text-5xl font-black tracking-tight text-white mb-2">
+              <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-blue-400">Documents</span>
             </h1>
-            <p className="text-gray-400 mt-2">Manage employee-related documents</p>
+            <p className="text-slate-400 text-lg">Employee files and records</p>
           </div>
-          <button
-            onClick={() => openModal()}
-            className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 px-6 py-3 rounded-xl font-bold flex items-center gap-3 shadow-lg"
-          >
-            <Plus size={22} /> Upload New Document
+          <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => openModal()} className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-blue-600 rounded-xl font-bold text-white shadow-lg shadow-indigo-900/20 hover:shadow-indigo-900/40 flex items-center gap-2">
+            <Plus size={20} /> Upload File
+          </motion.button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-sm flex items-center justify-between">
+            <div>
+              <p className="text-slate-400 text-sm font-medium">Total Files</p>
+              <h3 className="text-3xl font-bold text-white mt-1">{pagination.total_items}</h3>
+            </div>
+            <div className="p-4 rounded-xl bg-indigo-400/10"><FolderOpen size={24} className="text-indigo-400" /></div>
+          </div>
+        </div>
+
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-4 backdrop-blur-md flex flex-col md:flex-row gap-4 items-center justify-between sticky top-4 z-40 shadow-2xl">
+          <div className="relative w-full md:w-96 group">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-400 transition-colors" size={20} />
+            <input type="text" placeholder="Search by document type..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-slate-900/50 border border-white/10 text-white rounded-xl pl-12 pr-4 py-3 focus:ring-2 focus:ring-indigo-500/50 outline-none transition-all placeholder:text-slate-500" />
+          </div>
+          <button onClick={() => fetchDocuments(pagination.current_page, pagination.per_page, searchTerm)} className="p-3 bg-slate-900/50 rounded-xl border border-white/10 hover:text-indigo-400 transition-colors">
+            <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
           </button>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          {[
-            { label: 'Total Documents', value: stats.total, icon: FileText, color: 'blue' },
-          ].map((s, i) => (
-            <div key={i} className="bg-gray-800/40 backdrop-blur-sm rounded-2xl p-6 border border-gray-700/40">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-400 text-sm">{s.label}</p>
-                  <p className="text-3xl font-bold mt-1">{s.value}</p>
-                </div>
-                <div className={`p-3 bg-${s.color}-500/10 rounded-xl`}>
-                  <s.icon size={28} className={`text-${s.color}-400`} />
-                </div>
-              </div>
-            </div>
-          ))}
-          <div className="bg-gray-800/40 backdrop-blur-sm rounded-2xl p-6 border border-gray-700/40 opacity-50">
-            <div className="h-12 bg-gray-700 rounded animate-pulse"></div>
-          </div>
-          <div className="bg-gray-800/40 backdrop-blur-sm rounded-2xl p-6 border border-gray-700/40 opacity-50">
-            <div className="h-12 bg-gray-700 rounded animate-pulse"></div>
-          </div>
-        </div>
-
-        {/* Search */}
-        <div className="bg-gray-800/30 backdrop-blur-sm rounded-2xl p-6 mb-8 border border-gray-700/30">
-          <div className="flex flex-col lg:flex-row gap-6">
-            <div className="flex-1 relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-              <input
-                type="text"
-                placeholder="Search by document type..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500/50 outline-none"
-              />
-            </div>
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="flex items-center gap-2 bg-gray-700/50 border border-gray-600/50 rounded-xl px-4 py-3">
-                <span className="text-sm text-gray-400">Show:</span>
-                <select
-                  value={pagination.per_page}
-                  onChange={(e) => handleLimitChange(e.target.value)}
-                  className="bg-transparent border-0 text-white text-sm focus:ring-0 focus:outline-none"
-                >
-                  <option value="5">5</option>
-                  <option value="10">10</option>
-                  <option value="25">25</option>
-                  <option value="50">50</option>
-                </select>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Documents Grid */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1, transition: { staggerChildren: 0.1 } }}
-          className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mb-8"
-        >
-          {documents.map((doc) => (
-            <motion.div
-              key={doc.id}
-              whileHover={{ y: -8, scale: 1.02 }}
-              className="group bg-gray-800/30 backdrop-blur-sm rounded-2xl border border-gray-700/30 hover:border-blue-500/50 transition-all overflow-hidden"
-            >
-              <div className="p-6">
-                <div className="flex justify-between items-start mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-full flex items-center justify-center text-white font-bold text-lg">
-                      <FileText size={24} />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <AnimatePresence mode="popLayout">
+            {documents.map(doc => (
+              <motion.div layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} key={doc.id} className="group bg-slate-900/40 border border-white/10 rounded-2xl overflow-hidden hover:border-indigo-500/30 transition-all hover:shadow-xl relative flex flex-col">
+                <div className="min-h-[120px] bg-slate-800/50 flex/ items-center justify-center relative p-6 border-b border-white/5">
+                  <div className="absolute top-4 right-4 z-20">
+                    <button onClick={(e) => { e.stopPropagation(); setActionMenu(actionMenu === doc.id ? null : doc.id); }} className="action-menu-btn p-2 hover:bg-white/10 rounded-lg text-slate-400 hover:text-white transition-colors"><MoreVertical size={18} /></button>
+                    {actionMenu === doc.id && (
+                      <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="absolute right-0 top-full mt-2 w-48 bg-slate-800 border border-white/10 rounded-xl shadow-xl z-50 py-1 flex flex-col">
+                        <button onClick={() => openModal(doc)} className="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-white/5 hover:text-indigo-300 flex items-center gap-2"><Edit size={14} /> Edit</button>
+                        <div className="h-px bg-white/5 my-1" />
+                        <button onClick={() => handleDelete(doc.id)} className="w-full text-left px-4 py-2.5 text-sm text-rose-400 hover:bg-rose-500/10 flex items-center gap-2"><Trash2 size={14} /> Delete</button>
+                      </motion.div>
+                    )}
+                  </div>
+                  <div className="flex flex-col items-center gap-3">
+                    <div className='w-16 h-16 bg-gradient-to-br from-indigo-500 to-blue-500 rounded-2xl flex items-center justify-center text-white shadow-lg'>
+                      <FileText size={32} />
                     </div>
-                    <div>
-                      <h3 className="text-xl font-bold">{doc.document_type}</h3>
-                      <p className="text-sm text-gray-400">ID: {doc.id}</p>
+                    <span className="text-xs font-bold font-mono text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">{getFileExtension(doc.document_file)} FILE</span>
+                  </div>
+                </div>
+
+                <div className="p-6 flex-1 flex flex-col">
+                  <div className="mb-4">
+                    <h3 className="font-bold text-lg text-white mb-1">{doc.document_type}</h3>
+                    <div className="flex items-center gap-2 text-slate-400 text-sm">
+                      <User size={14} />
+                      <span className="truncate">{doc.employee_name}</span>
                     </div>
                   </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setActionMenu(actionMenu === doc.id ? null : doc.id);
-                    }}
-                    className="p-2 hover:bg-gray-700/50 rounded-lg"
-                  >
-                    <MoreVertical size={18} />
-                  </button>
-                </div>
 
-                <div className="space-y-3 text-sm">
-                  <div className="flex items-center gap-2 text-gray-300">
-                    <User size={16} />
-                    {doc.employee_name}
-                  </div>
-                  <div className="flex items-center gap-2 text-gray-300 break-all">
-                    <FileText size={16} />
-                    {getFileNameFromPath(doc.document_file)}
-                    {doc.document_file && <span className="text-xs text-gray-500 ml-1">.{getFileExtension(doc.document_file)}</span>}
+                  <div className="mt-auto pt-4 space-y-4">
+                    {doc.document_file && (
+                      <a href={`/${doc.document_file}`} target="_blank" className="flex items-center justify-center gap-2 w-full py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-sm font-medium transition-colors text-indigo-300">
+                        <Download size={16} /> Download File
+                      </a>
+                    )}
+                    <div className="flex justify-between items-center text-xs text-slate-500">
+                      <span>ID: {doc.id}</span>
+                      <span>{new Date(doc.created_at).toLocaleDateString()}</span>
+                    </div>
                   </div>
                 </div>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </div>
 
-                {doc.document_file && (
-                  <a
-                    href={`http://localhost:8000/${doc.document_file}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 mt-4 px-4 py-2 bg-blue-500/20 hover:bg-blue-500/40 rounded-lg text-sm font-medium"
-                  >
-                    <Download size={16} /> View / Download
-                  </a>
-                )}
-
-                <div className="flex justify-between items-center mt-6 pt-4 border-t border-gray-700/30">
-                  <span className="text-xs text-gray-500">Updated: {formatDate(doc.updated_at)}</span>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => openModal(doc)}
-                      className="p-2 bg-blue-500/20 hover:bg-blue-500/40 rounded-lg"
-                    >
-                      <Edit size={14} />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(doc.id)}
-                      className="p-2 bg-red-500/20 hover:bg-red-500/40 rounded-lg"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <AnimatePresence>
-                {actionMenu === doc.id && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="absolute right-4 top-20 bg-gray-800 border border-gray-600 rounded-xl shadow-xl py-2 z-10 min-w-[160px]"
-                  >
-                    <button
-                      onClick={() => {
-                        openModal(doc);
-                        setActionMenu(null);
-                      }}
-                      className="w-full text-left px-4 py-2 hover:bg-gray-700 flex items-center gap-3 text-sm"
-                    >
-                      <Edit size={16} /> Edit
-                    </button>
-                    <button
-                      onClick={() => handleDelete(doc.id)}
-                      className="w-full text-left px-4 py-2 hover:bg-red-500/20 text-red-400 flex items-center gap-3 text-sm"
-                    >
-                      <Trash2 size={16} /> Delete
-                    </button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.div>
-          ))}
-        </motion.div>
-
-        {/* Pagination */}
-        {pagination.last_page > 1 && (
-          <div className="flex justify-between items-center py-6 border-t border-gray-700/30">
-            <div className="text-sm text-gray-400">
-              Showing {(pagination.current_page - 1) * pagination.per_page + 1} to{' '}
-              {Math.min(pagination.current_page * pagination.per_page, pagination.total_items)} of{' '}
-              {pagination.total_items}
+        {!loading && pagination.last_page > 1 && (
+          <div className="flex justify-center pt-8">
+            <div className="flex bg-slate-900/50 p-1 rounded-xl border border-white/10">
+              <button onClick={() => handlePageChange(pagination.current_page - 1)} disabled={pagination.current_page === 1} className="p-3 hover:bg-white/10 rounded-lg disabled:opacity-30 text-white"><ChevronLeft size={20} /></button>
+              <span className="px-4 py-3 font-mono text-sm text-slate-400">Page {pagination.current_page} of {pagination.last_page}</span>
+              <button onClick={() => handlePageChange(pagination.current_page + 1)} disabled={pagination.current_page === pagination.last_page} className="p-3 hover:bg-white/10 rounded-lg disabled:opacity-30 text-white"><ChevronRight size={20} /></button>
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => handlePageChange(pagination.current_page - 1)}
-                disabled={pagination.current_page === 1}
-                className="px-4 py-2 rounded-xl border border-gray-600 disabled:opacity-50 flex items-center gap-2"
-              >
-                <ChevronLeft size={16} /> Previous
-              </button>
-              {Array.from({ length: pagination.last_page }, (_, i) => i + 1)
-                .filter(
-                  (p) =>
-                    p === 1 ||
-                    p === pagination.last_page ||
-                    Math.abs(p - pagination.current_page) <= 2
-                )
-                .map((p, idx, arr) => (
-                  <React.Fragment key={p}>
-                    {idx > 0 && p - arr[idx - 1] > 1 && <span className="px-3">...</span>}
-                    <button
-                      onClick={() => handlePageChange(p)}
-                      className={`px-4 py-2 rounded-xl border ${
-                        pagination.current_page === p ? 'bg-blue-600 border-blue-500' : 'border-gray-600'
-                      }`}
-                    >
-                      {p}
-                    </button>
-                  </React.Fragment>
-                ))}
-              <button
-                onClick={() => handlePageChange(pagination.current_page + 1)}
-                disabled={pagination.current_page === pagination.last_page}
-                className="px-4 py-2 rounded-xl border border-gray-600 disabled:opacity-50 flex items-center gap-2"
-              >
-                Next <ChevronRight size={16} />
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Empty State */}
-        {documents.length === 0 && !loading && (
-          <div className="text-center py-20">
-            <FileText size={64} className="mx-auto text-gray-600 mb-6" />
-            <h3 className="text-2xl font-bold mb-3">
-              {searchTerm ? 'No documents found' : 'No employee documents yet'}
-            </h3>
-            <p className="text-gray-400 mb-8">
-              {searchTerm ? 'Try different keywords' : 'Upload the first document'}
-            </p>
-            {!searchTerm && (
-              <button
-                onClick={() => openModal()}
-                className="bg-gradient-to-r from-blue-600 to-cyan-600 px-8 py-3 rounded-xl font-bold"
-              >
-                <Plus className="inline mr-2" /> Upload First Document
-              </button>
-            )}
           </div>
         )}
       </div>
 
-      {/* Modal */}
       <AnimatePresence>
         {showModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto"
-            onClick={closeModal}
-          >
-            <motion.div
-              initial={{ scale: 0.9 }}
-              animate={{ scale: 1 }}
-              exit={{ scale: 0.9 }}
-              className="bg-gray-800 rounded-3xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-gray-700"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-cyan-500 bg-clip-text text-transparent">
-                  {editingDocument ? 'Edit Document' : 'Upload New Document'}
-                </h2>
-                <button onClick={closeModal} className="p-2 hover:bg-gray-700 rounded-lg">
-                  <X size={24} />
-                </button>
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowModal(false)} className="absolute inset-0 bg-black/80 backdrop-blur-md" />
+            <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }} className="relative w-full max-w-lg bg-slate-900 rounded-2xl border border-white/10 shadow-2xl overflow-hidden flex flex-col">
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 to-blue-500" />
+              <div className="p-6 border-b border-white/5 flex justify-between items-center bg-slate-900 shrink-0">
+                <h2 className="text-xl font-bold text-white">{editingDocument ? 'Edit Document' : 'Upload Document'}</h2>
+                <button onClick={() => setShowModal(false)} className="p-2 hover:bg-white/10 rounded-lg text-slate-400 hover:text-white"><X size={20} /></button>
               </div>
 
-              <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-6">
-                <div>
-                  <label className="block text-sm font-semibold mb-2">Employee *</label>
-                  <select
-                    name="employee_id"
-                    value={formData.employee_id}
-                    onChange={handleInputChange}
-                    required
-                    disabled={dropdownLoading}
-                    className={`w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none ${
-                      errors.employee_id ? 'border border-red-500' : ''
-                    }`}
-                  >
-                    <option value="">
-                      {dropdownLoading ? 'Loading employees...' : 'Select Employee'}
-                    </option>
-                    {employees.map((emp) => (
-                      <option key={emp.id} value={emp.id}>
-                        {emp.name}
-                      </option>
-                    ))}
-                  </select>
-                  {errors.employee_id && <p className="text-red-400 text-sm mt-1">{errors.employee_id[0]}</p>}
-                </div>
+              <div className="p-6">
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-xs uppercase font-bold text-slate-500 tracking-wider">Employee *</label>
+                    <select value={formData.employee_id} onChange={e => setFormData({ ...formData, employee_id: e.target.value })} className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-indigo-500/50 outline-none" required>
+                      <option value="">Select Employee</option>
+                      {employees.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                    </select>
+                  </div>
 
-                <div>
-                  <label className="block text-sm font-semibold mb-2">Document Type *</label>
-                  <input
-                    type="text"
-                    name="document_type"
-                    value={formData.document_type}
-                    onChange={handleInputChange}
-                    required
-                    placeholder="e.g. Passport, Resume, Contract"
-                    className={`w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none ${
-                      errors.document_type ? 'border border-red-500' : ''
-                    }`}
-                  />
-                  {errors.document_type && <p className="text-red-400 text-sm mt-1">{errors.document_type[0]}</p>}
-                </div>
+                  <div className="space-y-2">
+                    <label className="text-xs uppercase font-bold text-slate-500 tracking-wider">Document Type *</label>
+                    <input type="text" value={formData.document_type} onChange={e => setFormData({ ...formData, document_type: e.target.value })} className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-indigo-500/50 outline-none" required placeholder="e.g. Contract, ID Proof" />
+                  </div>
 
-                <div>
-                  <label className="block text-sm font-semibold mb-2">
-                    Document File * {editingDocument && '(Leave empty to keep current)'}
-                  </label>
-                  <input
-                    type="file"
-                    accept=".pdf,.jpg,.jpeg,.png"
-                    onChange={handleFileChange}
-                    {...(editingDocument ? {} : { required: true })}
-                    className={`w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-600 file:text-white hover:file:bg-blue-700 ${
-                      errors.document_file ? 'border border-red-500' : ''
-                    }`}
-                  />
-                  {selectedFileName && (
-                    <p className="text-sm text-gray-400 mt-2">Selected: {selectedFileName}</p>
-                  )}
-                  {errors.document_file && <p className="text-red-400 text-sm mt-1">{errors.document_file[0]}</p>}
-                </div>
+                  <div className="space-y-2">
+                    <label className="text-xs uppercase font-bold text-slate-500 tracking-wider">File Upload</label>
+                    <div className="relative group">
+                      <input type="file" onChange={handleFileChange} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+                      <div className="w-full bg-slate-800 border border-dashed border-white/20 rounded-xl px-4 py-8 text-center group-hover:border-indigo-500/50 transition-colors">
+                        <p className="text-slate-400 text-sm group-hover:text-indigo-400 transition-colors pointer-events-none">
+                          {selectedFileName || 'Click to upload or drag and drop'}
+                        </p>
+                      </div>
+                    </div>
+                    {errors.document_file && <p className="text-rose-400 text-xs">{errors.document_file[0]}</p>}
+                  </div>
 
-                <div className="flex justify-end gap-3 pt-4">
-                  <button
-                    type="button"
-                    onClick={closeModal}
-                    className="px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-xl"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={operationLoading === 'saving'}
-                    className="px-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-xl font-bold flex items-center gap-2 disabled:opacity-70"
-                  >
-                    {operationLoading === 'saving' ? (
-                      <Loader size={20} className="animate-spin" />
-                    ) : (
-                      <Check size={20} />
-                    )}
-                    {editingDocument ? 'Update' : 'Upload'} Document
-                  </button>
-                </div>
-              </form>
+                  <div className="pt-4 border-t border-white/5">
+                    <button type="submit" disabled={operationLoading} className="w-full py-3.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white rounded-xl font-bold shadow-lg shadow-indigo-900/20 flex items-center justify-center gap-2">
+                      {operationLoading && <Loader size={20} className="animate-spin" />} {editingDocument ? 'Update File' : 'Upload File'}
+                    </button>
+                  </div>
+                </form>
+              </div>
             </motion.div>
-          </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

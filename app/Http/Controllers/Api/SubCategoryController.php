@@ -12,51 +12,51 @@ use Illuminate\Support\Facades\Validator;
 class SubCategoryController extends Controller
 {
     public function index(Request $request)
-{
-    $keyword = $request->query('keyword', '');
-    $limit = $request->query('limit');
+    {
+        $keyword = $request->query('keyword', '');
+        $limit = $request->query('limit');
 
-    $query = SubCategory::with('category');
+        $query = SubCategory::with('category');
 
-    // 🔍 Apply search filter if keyword provided
-    if ($keyword) {
-        $query->where('name', 'like', "%{$keyword}%");
-    }
+        // 🔍 Apply search filter if keyword provided
+        if ($keyword) {
+            $query->where('name', 'like', "%{$keyword}%");
+        }
 
-    // ⚙️ If no limit, return all results
-    if (!$limit) {
-        $data = $query->latest()->get();
+        // ⚙️ If no limit, return all results
+        if (!$limit) {
+            $data = $query->latest()->get();
+
+            return response()->json([
+                'message' => 'SubCategories fetched successfully',
+                'pagination' => [
+                    'current_page' => 1,
+                    'per_page' => $data->count(),
+                    'total_items' => $data->count(),
+                    'total_pages' => 1,
+                    'data' => SubCategoryResource::collection($data),
+                ],
+            ]);
+        }
+
+        // 📄 Otherwise, paginate results
+        $limit = (int) $limit ?: 10;
+        $subCategories = $query->latest()->paginate($limit);
 
         return response()->json([
             'message' => 'SubCategories fetched successfully',
             'pagination' => [
-                'current_page' => 1,
-                'per_page' => $data->count(),
-                'total_items' => $data->count(),
-                'total_pages' => 1,
-                'data' => SubCategoryResource::collection($data),
+                'current_page' => $subCategories->currentPage(),
+                'per_page' => $subCategories->perPage(),
+                'total_items' => $subCategories->total(),
+                'total_pages' => $subCategories->lastPage(),
+                'data' => SubCategoryResource::collection($subCategories),
             ],
         ]);
     }
 
-    // 📄 Otherwise, paginate results
-    $limit = (int) $limit ?: 10;
-    $subCategories = $query->latest()->paginate($limit);
 
-    return response()->json([
-        'message' => 'SubCategories fetched successfully',
-        'pagination' => [
-            'current_page' => $subCategories->currentPage(),
-            'per_page' => $subCategories->perPage(),
-            'total_items' => $subCategories->total(),
-            'total_pages' => $subCategories->lastPage(),
-            'data' => SubCategoryResource::collection($subCategories),
-        ],
-    ]);
-}
-
-
-public function store(Request $request)
+    public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
@@ -86,6 +86,10 @@ public function store(Request $request)
             $imageName = time() . '_' . $image->getClientOriginalName();
             $image->move($folder, $imageName);
             $data['image'] = 'sub_categories/' . $imageName;
+        }
+
+        if (isset($data['status'])) {
+            $data['status'] = $data['status'];
         }
 
         $category = SubCategory::create($data);
@@ -127,12 +131,22 @@ public function store(Request $request)
             ], 404);
         }
 
-        $data = $request->validate([
+        $validator = Validator::make($request->all(), [
             'name' => 'sometimes|string|max:255',
             'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
             'status' => 'sometimes|in:active,inactive',
             'category_id' => 'nullable|exists:categories,id',
         ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $data = $validator->validated();
 
         // ✅ Handle image update
         if ($request->hasFile('image')) {
@@ -149,6 +163,10 @@ public function store(Request $request)
             $imageName = time() . '_' . $image->getClientOriginalName();
             $image->move($folder, $imageName);
             $data['image'] = 'sub_categories/' . $imageName;
+        }
+
+        if (isset($data['status'])) {
+            $data['status'] = $data['status'];
         }
 
         $category->update($data);

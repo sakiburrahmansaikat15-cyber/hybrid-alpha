@@ -4,6 +4,7 @@ namespace App\Http\Controllers\HRM;
 
 use App\Http\Controllers\Controller;
 use App\Models\HRM\LeaveType;
+use App\Http\Resources\LeaveTypeResource;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -30,7 +31,7 @@ class LeaveTypesController extends Controller
                     'per_page' => $data->count(),
                     'total_items' => $data->count(),
                     'total_pages' => 1,
-                    'data' => $data,
+                    'data' => LeaveTypeResource::collection($data),
                 ],
             ]);
         }
@@ -45,7 +46,7 @@ class LeaveTypesController extends Controller
                 'per_page' => $leaveTypes->perPage(),
                 'total_items' => $leaveTypes->total(),
                 'total_pages' => $leaveTypes->lastPage(),
-                'data' => $leaveTypes->items(),
+                'data' => LeaveTypeResource::collection($leaveTypes),
             ],
         ]);
     }
@@ -53,16 +54,16 @@ class LeaveTypesController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'name'      => 'required|string|max:255',
-            'max_days'  => 'required|integer|min:0',
-            'status'    => 'required|in:active,inactive',
+            'name' => 'required|string|max:255',
+            'max_days' => 'required|integer|min:0',
+            'status' => 'required|in:active,inactive',
         ]);
 
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Validation failed',
-                'errors'  => $validator->errors()
+                'errors' => $validator->errors()
             ], 422);
         }
 
@@ -71,7 +72,7 @@ class LeaveTypesController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Leave type created successfully',
-            'data' => $leaveType
+            'data' => new LeaveTypeResource($leaveType)
         ], 201);
     }
 
@@ -88,7 +89,7 @@ class LeaveTypesController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $leaveType
+            'data' => new LeaveTypeResource($leaveType)
         ], 200);
     }
 
@@ -97,9 +98,9 @@ class LeaveTypesController extends Controller
         $leaveType = LeaveType::findOrFail($id);
 
         $data = $request->validate([
-            'name'      => 'sometimes|string|max:255',
-            'max_days'  => 'sometimes|integer|min:0',
-            'status'    => 'sometimes|in:active,inactive',
+            'name' => 'sometimes|string|max:255',
+            'max_days' => 'sometimes|integer|min:0',
+            'status' => 'sometimes|in:active,inactive',
         ]);
 
         $leaveType->update($data);
@@ -107,7 +108,7 @@ class LeaveTypesController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Leave type updated successfully',
-            'data' => $leaveType
+            'data' => new LeaveTypeResource($leaveType)
         ], 200);
     }
 

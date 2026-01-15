@@ -11,49 +11,49 @@ use Illuminate\Support\Facades\Validator;
 class ProductTypeController extends Controller
 {
     // ✅ List all product types with pagination
-     public function index(Request $request)
-{
-    $keyword = $request->query('keyword', '');
-    $limit = $request->query('limit');
+    public function index(Request $request)
+    {
+        $keyword = $request->query('keyword', '');
+        $limit = $request->query('limit');
 
-    $query = ProductType::query();
+        $query = ProductType::query();
 
-    // 🔍 Apply search if keyword provided
-    if ($keyword) {
-        $query->where('name', 'like', "%{$keyword}%");
-    }
+        // 🔍 Apply search if keyword provided
+        if ($keyword) {
+            $query->where('name', 'like', "%{$keyword}%");
+        }
 
-    // ⚙️ If no limit, return all results
-    if (!$limit) {
-        $data = $query->latest()->get();
+        // ⚙️ If no limit, return all results
+        if (!$limit) {
+            $data = $query->latest()->get();
+
+            return response()->json([
+                'message' => 'ProductTypes fetched successfully',
+                'pagination' => [
+                    'current_page' => 1,
+                    'per_page' => $data->count(),
+                    'total_items' => $data->count(),
+                    'total_pages' => 1,
+                    'data' => ProductTypeResource::collection($data),
+                ],
+            ]);
+        }
+
+        // 📄 Otherwise, paginate results
+        $limit = (int) $limit ?: 10;
+        $productTypes = $query->latest()->paginate($limit);
 
         return response()->json([
             'message' => 'ProductTypes fetched successfully',
             'pagination' => [
-                'current_page' => 1,
-                'per_page' => $data->count(),
-                'total_items' => $data->count(),
-                'total_pages' => 1,
-                'data' => ProductTypeResource::collection($data),
+                'current_page' => $productTypes->currentPage(),
+                'per_page' => $productTypes->perPage(),
+                'total_items' => $productTypes->total(),
+                'total_pages' => $productTypes->lastPage(),
+                'data' => ProductTypeResource::collection($productTypes),
             ],
         ]);
     }
-
-    // 📄 Otherwise, paginate results
-    $limit = (int) $limit ?: 10;
-    $productTypes = $query->latest()->paginate($limit);
-
-    return response()->json([
-        'message' => 'ProductTypes fetched successfully',
-        'pagination' => [
-            'current_page' => $productTypes->currentPage(),
-            'per_page' => $productTypes->perPage(),
-            'total_items' => $productTypes->total(),
-            'total_pages' => $productTypes->lastPage(),
-            'data' => ProductTypeResource::collection($productTypes),
-        ],
-    ]);
-}
 
 
     // ✅ Store a new product type
@@ -113,12 +113,20 @@ class ProductTypeController extends Controller
             ], 404);
         }
 
-        $data = $request->validate([
+        $validator = Validator::make($request->all(), [
             'name' => 'sometimes|string|max:255',
             'status' => 'sometimes|in:active,inactive',
         ]);
 
-        $productType->update($data);
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $productType->update($validator->validated());
 
         return response()->json([
             'success' => true,

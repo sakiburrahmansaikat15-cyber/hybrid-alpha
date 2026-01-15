@@ -8,69 +8,77 @@ use App\Models\Vendor;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Validator;
+use App\Http\Requests\Api\StoreVendorRequest;
+use App\Http\Requests\Api\UpdateVendorRequest;
 
 class VendorController extends Controller
 {
-    // ✅ List vendors with pagination
-public function index(Request $request)
-{
-    $keyword = $request->query('keyword', '');
-    $limit = $request->query('limit');
-
-    $query = Vendor::query();
-
-    // 🔍 Apply search if keyword provided
-    if ($keyword) {
-        $query->where(function ($q) use ($keyword) {
-            $q->where('name', 'like', "%{$keyword}%")
-              ->orWhere('shop_name', 'like', "%{$keyword}%");
-        });
+    public function __construct()
+    {
+        $this->middleware('permission:vendors.view')->only(['index', 'show']);
+        $this->middleware('permission:vendors.create')->only(['store']);
+        $this->middleware('permission:vendors.edit')->only(['update']);
+        $this->middleware('permission:vendors.delete')->only(['destroy']);
     }
+    // ✅ List vendors with pagination
+    public function index(Request $request)
+    {
+        $keyword = $request->query('keyword', '');
+        $limit = $request->query('limit');
 
-    // ⚙️ If no limit, return all results (no pagination)
-    if (!$limit) {
-        $data = $query->latest()->get();
+        $query = Vendor::query();
+
+        // 🔍 Apply search if keyword provided
+        if ($keyword) {
+            $query->where(function ($q) use ($keyword) {
+                $q->where('name', 'like', "%{$keyword}%")
+                    ->orWhere('shop_name', 'like', "%{$keyword}%");
+            });
+        }
+
+        // ⚙️ If no limit, return all results (no pagination)
+        if (!$limit) {
+            $data = $query->latest()->get();
+
+            return response()->json([
+                'message' => 'Vendors fetched successfully',
+                'pagination' => [
+                    'current_page' => 1,
+                    'per_page' => $data->count(),
+                    'total_items' => $data->count(),
+                    'total_pages' => 1,
+                    'data' => VendorResource::collection($data),
+                ],
+            ]);
+        }
+
+        // 📄 Otherwise, paginate results
+        $limit = (int) $limit ?: 10;
+        $vendors = $query->latest()->paginate($limit);
 
         return response()->json([
             'message' => 'Vendors fetched successfully',
             'pagination' => [
-                'current_page' => 1,
-                'per_page' => $data->count(),
-                'total_items' => $data->count(),
-                'total_pages' => 1,
-                'data' => VendorResource::collection($data),
+                'current_page' => $vendors->currentPage(),
+                'per_page' => $vendors->perPage(),
+                'total_items' => $vendors->total(),
+                'total_pages' => $vendors->lastPage(),
+                'data' => VendorResource::collection($vendors),
             ],
         ]);
     }
 
-    // 📄 Otherwise, paginate results
-    $limit = (int) $limit ?: 10;
-    $vendors = $query->latest()->paginate($limit);
 
-    return response()->json([
-        'message' => 'Vendors fetched successfully',
-        'pagination' => [
-            'current_page' => $vendors->currentPage(),
-            'per_page' => $vendors->perPage(),
-            'total_items' => $vendors->total(),
-            'total_pages' => $vendors->lastPage(),
-            'data' => VendorResource::collection($vendors),
-        ],
-    ]);
-}
-
-
-    // ✅ Store a new vendor
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'name'      => 'required|string|max:255',
+            'name' => 'required|string|max:255',
             'shop_name' => 'required|string|max:255',
-            'email'     => 'required|email|unique:vendors,email',
-            'contact'   => 'required|string|max:20',
-            'address'   => 'required|string',
-            'status'    => 'required|in:active,inactive',
-            'image'     => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'email' => 'required|email|unique:vendors,email',
+            'contact' => 'required|string|max:20',
+            'address' => 'required|string',
+            'status' => 'required|in:active,inactive',
+            'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
         ]);
 
         if ($validator->fails()) {
@@ -123,20 +131,36 @@ public function index(Request $request)
         ], 200);
     }
 
-    // ✅ Update a vendor
     public function update(Request $request, $id)
     {
-        $vendor = Vendor::findOrFail($id);
+        $vendor = Vendor::find($id);
 
-        $data = $request->validate([
-            'name'      => 'sometimes|string|max:255',
+        if (!$vendor) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Vendor not found'
+            ], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'name' => 'sometimes|string|max:255',
             'shop_name' => 'sometimes|string|max:255',
-            'email'     => 'sometimes|email|unique:vendors,email,' . $vendor->id,
-            'contact'   => 'sometimes|string|max:20',
-            'address'   => 'sometimes|string',
-            'status'    => 'sometimes|in:active,inactive',
-            'image'     => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'email' => 'sometimes|email|unique:vendors,email,' . $id,
+            'contact' => 'sometimes|string|max:20',
+            'address' => 'sometimes|string',
+            'status' => 'sometimes|in:active,inactive',
+            'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
         ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $data = $validator->validated();
 
         // Handle image update
         if ($request->hasFile('image')) {

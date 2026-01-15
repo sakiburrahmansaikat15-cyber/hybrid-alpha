@@ -8,5 +8,9 @@ use Illuminate\Database\Eloquent\Model;
 class Activity extends Model
 {
     use HasFactory;
-    protected $guarded = [];
+    protected $fillable = [
+        'type',
+        'description',
+        'scheduled_at',
+    ];
 }

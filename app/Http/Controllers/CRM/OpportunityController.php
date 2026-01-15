@@ -4,6 +4,7 @@ namespace App\Http\Controllers\CRM;
 
 use App\Http\Controllers\Controller;
 use App\Models\CRM\Opportunity;
+use App\Http\Resources\OpportunityResource;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -22,8 +23,9 @@ class OpportunityController extends Controller
         if ($keyword) {
             $query->whereHas('customer', function ($q) use ($keyword) {
                 $q->where('name', 'like', "%$keyword%");
-            })->orWhere('value', 'like', "%$keyword%")
-              ->orWhere('probability', 'like', "%$keyword%");
+            })->orWhere('amount', 'like', "%$keyword%")
+                ->orWhere('name', 'like', "%$keyword%")
+                ->orWhere('probability', 'like', "%$keyword%");
         }
 
         if (!$limit) {
@@ -36,7 +38,7 @@ class OpportunityController extends Controller
                     'per_page' => $data->count(),
                     'total_items' => $data->count(),
                     'total_pages' => 1,
-                    'data' => $data,
+                    'data' => OpportunityResource::collection($data),
                 ],
             ]);
         }
@@ -51,7 +53,7 @@ class OpportunityController extends Controller
                 'per_page' => $opportunities->perPage(),
                 'total_items' => $opportunities->total(),
                 'total_pages' => $opportunities->lastPage(),
-                'data' => $opportunities->items(),
+                'data' => OpportunityResource::collection($opportunities),
             ],
         ]);
     }
@@ -63,17 +65,18 @@ class OpportunityController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'customer_id' => 'required|exists:customers,id',
-            'stage_id'    => 'required|exists:opportunity_stages,id',
-            'value'       => 'nullable|numeric|min:0',
+            'opportunity_stage_id' => 'required|exists:opportunity_stages,id',
+            'amount' => 'nullable|numeric|min:0',
             'probability' => 'nullable|integer|min:0|max:100',
             'expected_close_date' => 'nullable|date',
+            'name' => 'required|string|max:255',
         ]);
 
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Validation failed',
-                'errors'  => $validator->errors()
+                'errors' => $validator->errors()
             ], 422);
         }
 
@@ -82,7 +85,7 @@ class OpportunityController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Opportunity created successfully',
-            'data' => $opportunity
+            'data' => new OpportunityResource($opportunity->load(['customer', 'stage']))
         ], 201);
     }
 
@@ -102,7 +105,7 @@ class OpportunityController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $opportunity
+            'data' => new OpportunityResource($opportunity)
         ], 200);
     }
 
@@ -115,10 +118,11 @@ class OpportunityController extends Controller
 
         $data = $request->validate([
             'customer_id' => 'sometimes|exists:customers,id',
-            'stage_id'    => 'sometimes|exists:opportunity_stages,id',
-            'value'       => 'nullable|numeric|min:0',
+            'opportunity_stage_id' => 'sometimes|exists:opportunity_stages,id',
+            'amount' => 'nullable|numeric|min:0',
             'probability' => 'nullable|integer|min:0|max:100',
             'expected_close_date' => 'nullable|date',
+            'name' => 'sometimes|string|max:255',
         ]);
 
         $opportunity->update($data);
@@ -126,7 +130,7 @@ class OpportunityController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Opportunity updated successfully',
-            'data' => $opportunity
+            'data' => new OpportunityResource($opportunity->load(['customer', 'stage']))
         ], 200);
     }
 

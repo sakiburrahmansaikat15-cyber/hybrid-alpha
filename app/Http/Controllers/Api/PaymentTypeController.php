@@ -12,52 +12,52 @@ use Illuminate\Support\Facades\Validator;
 class PaymentTypeController extends Controller
 {
     // ✅ List all payment types with pagination
-   public function index(Request $request)
-{
-    $keyword = $request->query('keyword', '');
-    $limit = $request->query('limit');
+    public function index(Request $request)
+    {
+        $keyword = $request->query('keyword', '');
+        $limit = $request->query('limit');
 
-    $query = PaymentType::query();
+        $query = PaymentType::query();
 
-    // 🔍 Apply search if keyword provided
-    if ($keyword) {
-        $query->where(function ($q) use ($keyword) {
-            $q->where('name', 'like', "%{$keyword}%")
-              ->orWhere('type', 'like', "%{$keyword}%");
-        });
-    }
+        // 🔍 Apply search if keyword provided
+        if ($keyword) {
+            $query->where(function ($q) use ($keyword) {
+                $q->where('name', 'like', "%{$keyword}%")
+                    ->orWhere('type', 'like', "%{$keyword}%");
+            });
+        }
 
-    // ⚙️ If no limit, return all results
-    if (!$limit) {
-        $data = $query->latest()->get();
+        // ⚙️ If no limit, return all results
+        if (!$limit) {
+            $data = $query->latest()->get();
+
+            return response()->json([
+                'message' => 'PaymentTypes fetched successfully',
+                'pagination' => [
+                    'current_page' => 1,
+                    'per_page' => $data->count(),
+                    'total_items' => $data->count(),
+                    'total_pages' => 1,
+                    'data' => PaymentTypeResource::collection($data),
+                ],
+            ]);
+        }
+
+        // 📄 Otherwise, paginate results
+        $limit = (int) $limit ?: 10;
+        $paymentTypes = $query->latest()->paginate($limit);
 
         return response()->json([
             'message' => 'PaymentTypes fetched successfully',
             'pagination' => [
-                'current_page' => 1,
-                'per_page' => $data->count(),
-                'total_items' => $data->count(),
-                'total_pages' => 1,
-                'data' => PaymentTypeResource::collection($data),
+                'current_page' => $paymentTypes->currentPage(),
+                'per_page' => $paymentTypes->perPage(),
+                'total_items' => $paymentTypes->total(),
+                'total_pages' => $paymentTypes->lastPage(),
+                'data' => PaymentTypeResource::collection($paymentTypes),
             ],
         ]);
     }
-
-    // 📄 Otherwise, paginate results
-    $limit = (int) $limit ?: 10;
-    $paymentTypes = $query->latest()->paginate($limit);
-
-    return response()->json([
-        'message' => 'PaymentTypes fetched successfully',
-        'pagination' => [
-            'current_page' => $paymentTypes->currentPage(),
-            'per_page' => $paymentTypes->perPage(),
-            'total_items' => $paymentTypes->total(),
-            'total_pages' => $paymentTypes->lastPage(),
-            'data' => PaymentTypeResource::collection($paymentTypes),
-        ],
-    ]);
-}
 
 
     // ✅ Store a new payment type
@@ -125,9 +125,16 @@ class PaymentTypeController extends Controller
     // ✅ Update a payment type
     public function update(Request $request, $id)
     {
-        $paymentType = PaymentType::findOrFail($id);
+        $paymentType = PaymentType::find($id);
 
-        $data = $request->validate([
+        if (!$paymentType) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Payment Type not found'
+            ], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
             'name' => 'sometimes|string|max:255',
             'type' => 'sometimes|string|max:255',
             'account_number' => 'sometimes|string|max:255',
@@ -135,6 +142,16 @@ class PaymentTypeController extends Controller
             'status' => 'sometimes|in:active,inactive',
             'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
         ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $data = $validator->validated();
 
         // ✅ Handle image update
         if ($request->hasFile('image')) {

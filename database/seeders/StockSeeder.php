@@ -25,6 +25,7 @@ class StockSeeder extends Seeder
             DB::table('stocks')->insert([
                 'product_id' => $faker->numberBetween(1, 50), // make sure you have products with IDs in this range
                 'vendor_id' => $faker->numberBetween(1, 20),  // make sure you have vendors with IDs in this range
+                'warehouse_id' => $faker->numberBetween(1, 5),  // Assume 5 warehouses exist
                 'quantity' => $quantity,
                 'buying_price' => $buying_price,
                 'selling_price' => $selling_price,

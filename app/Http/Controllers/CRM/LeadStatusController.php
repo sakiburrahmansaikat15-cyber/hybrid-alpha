@@ -4,6 +4,7 @@ namespace App\Http\Controllers\CRM;
 
 use App\Http\Controllers\Controller;
 use App\Models\CRM\LeadStatus;
+use App\Http\Resources\LeadStatusResource;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -17,11 +18,11 @@ class LeadStatusController extends Controller
         $keyword = $request->query('keyword', '');
         $limit = $request->query('limit');
 
-        $query = LeadStatus::with('leads');
+        $query = LeadStatus::withCount('leads');
 
         if ($keyword) {
             $query->where('name', 'like', "%$keyword%")
-                  ->orWhere('color_code', 'like', "%$keyword%");
+                ->orWhere('color_code', 'like', "%$keyword%");
         }
 
         if (!$limit) {
@@ -34,7 +35,7 @@ class LeadStatusController extends Controller
                     'per_page' => $data->count(),
                     'total_items' => $data->count(),
                     'total_pages' => 1,
-                    'data' => $data,
+                    'data' => LeadStatusResource::collection($data),
                 ],
             ]);
         }
@@ -49,7 +50,7 @@ class LeadStatusController extends Controller
                 'per_page' => $statuses->perPage(),
                 'total_items' => $statuses->total(),
                 'total_pages' => $statuses->lastPage(),
-                'data' => $statuses->items(),
+                'data' => LeadStatusResource::collection($statuses),
             ],
         ]);
     }
@@ -69,7 +70,7 @@ class LeadStatusController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Validation failed',
-                'errors'  => $validator->errors()
+                'errors' => $validator->errors()
             ], 422);
         }
 
@@ -78,7 +79,7 @@ class LeadStatusController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Lead status created successfully',
-            'data' => $status
+            'data' => new LeadStatusResource($status->loadCount('leads'))
         ], 201);
     }
 
@@ -98,7 +99,7 @@ class LeadStatusController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $status
+            'data' => new LeadStatusResource($status->loadCount('leads'))
         ], 200);
     }
 
@@ -120,7 +121,7 @@ class LeadStatusController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Lead status updated successfully',
-            'data' => $status
+            'data' => new LeadStatusResource($status->loadCount('leads'))
         ], 200);
     }
 

@@ -6,9 +6,17 @@ use App\Http\Controllers\Controller;
 use App\Models\HRM\PayRoll;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use App\Http\Resources\PayrollResource;
 
 class PayRollController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware('permission:payroll.view')->only(['index', 'show']);
+        $this->middleware('permission:payroll.create')->only(['store']);
+        $this->middleware('permission:payroll.edit')->only(['update']);
+        $this->middleware('permission:payroll.delete')->only(['destroy']);
+    }
     public function index(Request $request)
     {
         $keyword = $request->query('keyword', '');
@@ -16,12 +24,12 @@ class PayRollController extends Controller
 
         $query = PayRoll::with('employee');
 
-           if ($keyword) {
-        $query->where(function ($q) use ($keyword) {
-            $q->where('month', $keyword)
-              ->orWhere('year', $keyword);
-        });
-    }
+        if ($keyword) {
+            $query->where(function ($q) use ($keyword) {
+                $q->where('month', $keyword)
+                    ->orWhere('year', $keyword);
+            });
+        }
 
         if (!$limit) {
             $data = $query->latest()->get();
@@ -33,7 +41,7 @@ class PayRollController extends Controller
                     'per_page' => $data->count(),
                     'total_items' => $data->count(),
                     'total_pages' => 1,
-                    'data' => $data,
+                    'data' => PayrollResource::collection($data),
                 ],
             ]);
         }
@@ -48,7 +56,7 @@ class PayRollController extends Controller
                 'per_page' => $payrolls->perPage(),
                 'total_items' => $payrolls->total(),
                 'total_pages' => $payrolls->lastPage(),
-                'data' => $payrolls->items(),
+                'data' => PayrollResource::collection($payrolls),
             ],
         ]);
     }
@@ -56,21 +64,21 @@ class PayRollController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'employee_id'      => 'required|exists:employees,id',
-            'month'            => 'required|integer|min:1|max:12',
-            'year'             => 'required|integer|min:2000',
-            'basic_salary'     => 'required|numeric|min:0',
-            'total_allowance'  => 'nullable|numeric|min:0',
-            'total_deduction'  => 'nullable|numeric|min:0',
-            'net_salary'       => 'required|numeric|min:0',
-            'status'           => 'nullable|in:pending,paid,rejected',
+            'employee_id' => 'required|exists:employees,id',
+            'month' => 'required|integer|min:1|max:12',
+            'year' => 'required|integer|min:2000',
+            'basic_salary' => 'required|numeric|min:0',
+            'total_allowance' => 'nullable|numeric|min:0',
+            'total_deduction' => 'nullable|numeric|min:0',
+            'net_salary' => 'required|numeric|min:0',
+            'status' => 'nullable|in:pending,paid,rejected',
         ]);
 
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Validation failed',
-                'errors'  => $validator->errors()
+                'errors' => $validator->errors()
             ], 422);
         }
 
@@ -79,7 +87,7 @@ class PayRollController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Payroll created successfully',
-            'data' => $payroll
+            'data' => new PayrollResource($payroll->load('employee'))
         ], 201);
     }
 
@@ -96,7 +104,7 @@ class PayRollController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $payroll
+            'data' => new PayrollResource($payroll->load('employee'))
         ], 200);
     }
 
@@ -105,14 +113,14 @@ class PayRollController extends Controller
         $payroll = PayRoll::findOrFail($id);
 
         $data = $request->validate([
-            'employee_id'      => 'sometimes|exists:employees,id',
-            'month'            => 'sometimes|integer|min:1|max:12',
-            'year'             => 'sometimes|integer|min:2000',
-            'basic_salary'     => 'sometimes|numeric|min:0',
-            'total_allowance'  => 'nullable|numeric|min:0',
-            'total_deduction'  => 'nullable|numeric|min:0',
-            'net_salary'       => 'sometimes|numeric|min:0',
-            'status'           => 'sometimes|in:pending,paid,rejected',
+            'employee_id' => 'sometimes|exists:employees,id',
+            'month' => 'sometimes|integer|min:1|max:12',
+            'year' => 'sometimes|integer|min:2000',
+            'basic_salary' => 'sometimes|numeric|min:0',
+            'total_allowance' => 'nullable|numeric|min:0',
+            'total_deduction' => 'nullable|numeric|min:0',
+            'net_salary' => 'sometimes|numeric|min:0',
+            'status' => 'sometimes|in:pending,paid,rejected',
         ]);
 
         $payroll->update($data);
@@ -120,7 +128,7 @@ class PayRollController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Payroll updated successfully',
-            'data' => $payroll
+            'data' => new PayrollResource($payroll->load('employee'))
         ], 200);
     }
 

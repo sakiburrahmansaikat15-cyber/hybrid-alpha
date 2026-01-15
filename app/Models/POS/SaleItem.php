@@ -4,15 +4,24 @@ namespace App\Models\POS;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use App\Models\Prooducts;
+use App\Models\Product;
 
 class SaleItem extends Model
 {
     use HasFactory;
 
-     protected $guarded = [];
+    protected $fillable = [
+        'sale_id',
+        'product_id',
+        'quantity',
+        'unit_price',
+        'subtotal',
+        'tax_amount',
+        'discount_amount',
+        'total',
+    ];
 
-       public function sale()
+    public function sale()
     {
         return $this->belongsTo(Sale::class, 'sale_id');
     }
@@ -20,6 +29,6 @@ class SaleItem extends Model
     // SaleItem belongs to a Product
     public function product()
     {
-        return $this->belongsTo(Prooducts::class, 'product_id');
+        return $this->belongsTo(Product::class, 'product_id');
     }
 }

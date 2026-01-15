@@ -2,22 +2,32 @@ import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Plus,
-  Search,
-  Edit,
-  Trash2,
-  X,
-  Check,
-  Eye,
-  EyeOff,
-  Image as ImageIcon,
-  Package,
-  Calendar,
-  Upload,
-  Loader
+  Plus, Search, Edit, Trash2, X, Check, Eye, EyeOff,
+  MoreVertical, Package, ChevronLeft, ChevronRight,
+  Shield, Image as ImageIcon, Upload, Filter, RefreshCw, Calendar
 } from 'lucide-react';
 
 const API_URL = '/api/sub-items';
+const APP_URL = import.meta.env.VITE_APP_URL?.replace(/\/$/, '') || '';
+
+const getImageUrl = (path) => {
+  if (!path) return null;
+  if (path.startsWith('http')) return path;
+  return `${APP_URL}/${path.replace(/^\//, '')}`;
+};
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.1 }
+  }
+};
+
+const itemVariants = {
+  hidden: { y: 20, opacity: 0 },
+  visible: { y: 0, opacity: 1 }
+};
 
 const SubItemsManager = () => {
   const [subItems, setSubItems] = useState([]);
@@ -27,21 +37,21 @@ const SubItemsManager = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [actionMenu, setActionMenu] = useState(null);
+
   const [formData, setFormData] = useState({
     sub_category_id: '',
     name: '',
     status: 'active',
     image: null
   });
+
   const [imagePreview, setImagePreview] = useState(null);
   const [errors, setErrors] = useState({});
   const [notification, setNotification] = useState({ show: false, message: '', type: '' });
 
   const [pagination, setPagination] = useState({
-    current_page: 1,
-    last_page: 1,
-    per_page: 10,
-    total: 0
+    current_page: 1, per_page: 8, total_items: 0, total_pages: 1
   });
 
   const showNotification = useCallback((message, type = 'success') => {
@@ -57,68 +67,69 @@ const SubItemsManager = () => {
       showNotification(firstError || 'Validation error', 'error');
     } else if (error.response?.data?.message) {
       showNotification(error.response.data.message, 'error');
-      setErrors({ _general: error.response.data.message });
     } else {
       showNotification(defaultMessage || 'Something went wrong', 'error');
     }
   }, [showNotification]);
 
-  // Fetch sub-items with pagination and optional search
-  const fetchSubItems = useCallback(async (page = 1, limit = 10, keyword = '') => {
+  const fetchSubItems = useCallback(async (page = 1, limit = 8, keyword = '') => {
     setLoading(true);
     try {
       const params = { page, limit };
       if (keyword.trim()) params.keyword = keyword.trim();
 
       const response = await axios.get(API_URL, { params });
-      const res = response.data;
+      const data = response.data.pagination || response.data;
+      const itemList = data.data || [];
 
-      // API returns: pagination.data as array of SubItemsResource
-      const items = res.pagination?.data || [];
-      setSubItems(items);
-
+      setSubItems(itemList);
       setPagination({
-        current_page: res.pagination.current_page || 1,
-        last_page: res.pagination.total_pages || 1,
-        per_page: res.pagination.per_page || limit,
-        total: res.pagination.total_items || 0
+        current_page: data.current_page || 1,
+        per_page: data.per_page || limit,
+        total_items: data.total_items || data.total || itemList.length,
+        total_pages: data.total_pages || data.last_page || 1
       });
     } catch (error) {
       handleApiError(error, 'Failed to fetch sub-items');
       setSubItems([]);
-      setPagination({ current_page: 1, last_page: 1, per_page: 10, total: 0 });
     } finally {
       setLoading(false);
     }
   }, [handleApiError]);
 
-  // Debounced search
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchSubItems(1, pagination.per_page, searchTerm);
-    }, 500);
-
-    return () => clearTimeout(timer);
-  }, [searchTerm, pagination.per_page, fetchSubItems]);
-
   const fetchSubCategories = async () => {
     try {
       const response = await axios.get('/api/sub-categories');
-      // Fixed: Extract from pagination.data (consistent with your API structure)
-      setSubCategories(response.data?.pagination?.data || []);
+      setSubCategories(response.data?.pagination?.data || response.data?.data || []);
     } catch (error) {
       console.error('Error fetching sub-categories:', error);
-      setSubCategories([]);
     }
   };
 
   useEffect(() => {
-    fetchSubItems(1, 10);
+    fetchSubItems(1, 8);
     fetchSubCategories();
   }, []);
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchSubItems(1, pagination.per_page, searchTerm);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchTerm, pagination.per_page, fetchSubItems]);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (actionMenu && !e.target.closest('.action-menu-container')) {
+        setActionMenu(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [actionMenu]);
+
   const handlePageChange = (newPage) => {
-    if (newPage < 1 || newPage > pagination.last_page) return;
+    if (newPage < 1 || newPage > pagination.total_pages || newPage === pagination.current_page) return;
     fetchSubItems(newPage, pagination.per_page, searchTerm);
   };
 
@@ -141,14 +152,15 @@ const SubItemsManager = () => {
       setFormData({
         sub_category_id: item.sub_category_id ? String(item.sub_category_id) : '',
         name: item.name || '',
-        status: item.status === 'active' ? 'active' : 'inactive',
+        status: item.status || 'active',
         image: null
       });
-      setImagePreview(item.image ? `/${item.image}` : null);
+      setImagePreview(getImageUrl(item.image));
     } else {
       resetForm();
     }
     setShowModal(true);
+    setActionMenu(null);
   };
 
   const closeModal = () => {
@@ -168,11 +180,11 @@ const SubItemsManager = () => {
 
     const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
     if (!validTypes.includes(file.type)) {
-      setErrors(prev => ({ ...prev, image: 'Only JPEG, PNG, WebP allowed' }));
+      setErrors(prev => ({ ...prev, image: ['Only JPEG, PNG, WebP allowed'] }));
       return;
     }
     if (file.size > 2 * 1024 * 1024) {
-      setErrors(prev => ({ ...prev, image: 'Image must be < 2MB' }));
+      setErrors(prev => ({ ...prev, image: ['Image must be less than 2MB'] }));
       return;
     }
 
@@ -186,501 +198,496 @@ const SubItemsManager = () => {
     setOperationLoading('saving');
     setErrors({});
 
+    const submitData = new FormData();
+    submitData.append('name', formData.name.trim());
+    submitData.append('status', formData.status);
+    if (formData.sub_category_id) submitData.append('sub_category_id', formData.sub_category_id);
+    if (formData.image instanceof File) submitData.append('image', formData.image);
+
     try {
-      const submitData = new FormData();
-      submitData.append('name', formData.name.trim());
-      submitData.append('status', formData.status);
-
-      const catId = formData.sub_category_id ? parseInt(formData.sub_category_id, 10) : null;
-      if (catId) submitData.append('sub_category_id', catId);
-
-      if (formData.image instanceof File) {
-        submitData.append('image', formData.image);
-      }
-
-      let response;
       if (editingItem) {
-        // Laravel uses POST + _method=PUT for updates when using FormData
         submitData.append('_method', 'POST');
-        response = await axios.post(`${API_URL}/${editingItem.id}`, submitData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
+        await axios.post(`${API_URL}/${editingItem.id}`, submitData);
       } else {
-        response = await axios.post(API_URL, submitData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
+        await axios.post(API_URL, submitData);
       }
-
-      showNotification(editingItem ? 'Sub-item updated successfully!' : 'Sub-item created successfully!');
+      showNotification(editingItem ? 'Sub-item updated!' : 'Sub-item created!');
       fetchSubItems(pagination.current_page, pagination.per_page, searchTerm);
       closeModal();
     } catch (error) {
-      handleApiError(error, editingItem ? 'Failed to update sub-item' : 'Failed to create sub-item');
+      handleApiError(error, 'Failed to save');
     } finally {
       setOperationLoading(null);
     }
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Delete this sub-item permanently?')) return;
-
+    if (!window.confirm('Delete this sub-item?')) return;
     setOperationLoading(`delete-${id}`);
     try {
       await axios.delete(`${API_URL}/${id}`);
-      showNotification('Sub-item deleted successfully');
-
-      // If last item on page was deleted, go to previous page
+      showNotification('Sub-item deleted');
       if (subItems.length === 1 && pagination.current_page > 1) {
         fetchSubItems(pagination.current_page - 1, pagination.per_page, searchTerm);
       } else {
         fetchSubItems(pagination.current_page, pagination.per_page, searchTerm);
       }
     } catch (error) {
-      handleApiError(error, 'Failed to delete sub-item');
+      handleApiError(error, 'Failed to delete');
     } finally {
       setOperationLoading(null);
+      setActionMenu(null);
     }
   };
 
   const toggleStatus = async (item) => {
     const newStatus = item.status === 'active' ? 'inactive' : 'active';
     setOperationLoading(`status-${item.id}`);
-
     try {
       const form = new FormData();
       form.append('status', newStatus);
       form.append('name', item.name);
-      if (item.sub_category_id) form.append('sub_category_id', item.sub_category_id);
       form.append('_method', 'POST');
+      if (item.sub_category_id) form.append('sub_category_id', item.sub_category_id);
 
-      await axios.post(`${API_URL}/${item.id}`, form, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-
-      showNotification(`Sub-item ${newStatus === 'active' ? 'activated' : 'deactivated'}`);
+      await axios.post(`${API_URL}/${item.id}`, form);
+      showNotification(`Sub-item ${newStatus}`);
       fetchSubItems(pagination.current_page, pagination.per_page, searchTerm);
     } catch (error) {
       handleApiError(error, 'Failed to update status');
     } finally {
       setOperationLoading(null);
+      setActionMenu(null);
     }
   };
 
-  const getImageUrl = (path) => path ? `/${path}` : null;
+  const formatDate = (date) => date ? new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A';
 
-  const formatDate = (dateString) => {
-    if (!dateString) return 'Unknown';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+  const getSubCategoryName = (id) => {
+    const cat = subCategories.find(c => c.id === parseInt(id));
+    return cat ? cat.name : 'Uncategorized';
   };
 
   const stats = {
-    total: pagination.total,
+    total: pagination.total_items,
     active: subItems.filter(i => i.status === 'active').length,
-    inactive: subItems.filter(i => i.status === 'inactive').length
+    inactive: subItems.filter(i => i.status !== 'active').length
   };
 
-  if (loading && subItems.length === 0) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="mb-8 flex justify-between">
-            <div className="h-10 bg-gray-800 rounded w-64 animate-pulse"></div>
-            <div className="h-12 bg-gray-800 rounded-xl w-40 animate-pulse"></div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="bg-gray-800/40 rounded-2xl p-6 animate-pulse">
-                <div className="h-12 bg-gray-700 rounded"></div>
-              </div>
-            ))}
-          </div>
-          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-            {[...Array(8)].map((_, i) => (
-              <div key={i} className="bg-gray-800/30 rounded-2xl p-6 animate-pulse space-y-4">
-                <div className="h-48 bg-gray-700/50 rounded-lg"></div>
-                <div className="h-8 bg-gray-700 rounded"></div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <>
-      {/* Notification */}
+    <div className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-8 font-sans selection:bg-teal-500/30">
       <AnimatePresence>
         {notification.show && (
           <motion.div
-            initial={{ opacity: 0, x: 300 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 300 }}
-            className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-xl shadow-2xl ${notification.type === 'error' ? 'bg-red-600' : 'bg-green-600'} text-white font-medium`}
+            initial={{ opacity: 0, y: -20, x: '50%' }}
+            animate={{ opacity: 1, y: 0, x: '50%' }}
+            exit={{ opacity: 0, y: -20, x: '50%' }}
+            className={`fixed top-6 right-1/2 translate-x-1/2 z-[60] px-6 py-3 rounded-full shadow-2xl backdrop-blur-md border flex items-center gap-3 font-medium ${notification.type === 'error'
+              ? 'bg-rose-500/10 border-rose-500/50 text-rose-400'
+              : 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400'
+              }`}
           >
+            {notification.type === 'error' ? <Shield size={18} /> : <Check size={18} />}
             {notification.message}
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Main Content */}
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 text-gray-100 py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Header */}
-          <div className="mb-8 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-            <div>
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
-                Sub Items Manager
-              </h1>
-              <p className="text-gray-400 mt-2">Manage your sub-items with ease and precision</p>
+      <div className="max-w-7xl mx-auto space-y-8">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+          <div className="space-y-1">
+            <h1 className="text-4xl md:text-5xl font-black tracking-tight text-white mb-2">
+              <span className="bg-clip-text text-transparent bg-gradient-to-r from-teal-400 to-cyan-500">
+                Sub-Items
+              </span>
+            </h1>
+            <p className="text-slate-400 text-lg font-light">
+              Manage detailed inventory components
+            </p>
+          </div>
+
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => openModal()}
+            className="group relative px-6 py-3 bg-gradient-to-r from-teal-600 to-cyan-600 rounded-xl font-semibold text-white shadow-lg shadow-teal-500/20 hover:shadow-teal-500/40 transition-all flex items-center gap-2 overflow-hidden"
+          >
+            <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
+            <Plus size={20} className="relative z-10" />
+            <span className="relative z-10">Add Sub-Item</span>
+          </motion.button>
+        </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {[
+            { label: 'Total Items', value: stats.total, icon: Package, color: 'text-teal-400', bg: 'bg-teal-400/10', border: 'border-teal-400/20' },
+            { label: 'Active', value: stats.active, icon: Check, color: 'text-emerald-400', bg: 'bg-emerald-400/10', border: 'border-emerald-400/20' },
+            { label: 'Inactive', value: stats.inactive, icon: EyeOff, color: 'text-rose-400', bg: 'bg-rose-400/10', border: 'border-rose-400/20' },
+          ].map((stat, i) => (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.1 }}
+              key={i}
+              className={`relative overflow-hidden p-6 rounded-2xl border ${stat.border} bg-white/5 backdrop-blur-sm group`}
+            >
+              <div className={`absolute top-0 right-0 p-32 opacity-10 rounded-full blur-3xl ${stat.bg}`} />
+              <div className="flex items-center justify-between relative z-10">
+                <div>
+                  <p className="text-slate-400 font-medium mb-1">{stat.label}</p>
+                  <h3 className="text-3xl font-bold text-white">{stat.value}</h3>
+                </div>
+                <div className={`p-4 rounded-xl ${stat.bg}`}>
+                  <stat.icon size={24} className={stat.color} />
+                </div>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+
+        {/* Controls */}
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-4 backdrop-blur-md flex flex-col md:flex-row gap-4 items-center justify-between sticky top-4 z-40 shadow-2xl shadow-black/50">
+          <div className="relative w-full md:w-96 group">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-teal-400 transition-colors" size={20} />
+            <input
+              type="text"
+              placeholder="Search sub-items..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full bg-slate-900/50 border border-white/10 text-white rounded-xl pl-12 pr-4 py-3 focus:ring-2 focus:ring-teal-500/50 focus:border-teal-500/50 outline-none transition-all placeholder:text-slate-500"
+            />
+          </div>
+
+          <div className="flex items-center gap-3 w-full md:w-auto">
+            <div className="flex items-center gap-2 bg-slate-900/50 px-4 py-3 rounded-xl border border-white/10">
+              <Filter size={16} className="text-slate-400" />
+              <select
+                value={pagination.per_page}
+                onChange={(e) => handleLimitChange(e.target.value)}
+                className="bg-transparent border-none text-sm text-slate-300 focus:ring-0 cursor-pointer outline-none"
+              >
+                <option value="8">8 per page</option>
+                <option value="16">16 per page</option>
+                <option value="24">24 per page</option>
+              </select>
             </div>
             <button
-              onClick={() => openModal()}
-              className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 px-6 py-3 rounded-xl font-bold flex items-center gap-3 shadow-lg"
+              onClick={() => fetchSubItems(pagination.current_page, pagination.per_page, searchTerm)}
+              className="p-3 bg-slate-900/50 rounded-xl border border-white/10 hover:border-teal-500/30 hover:text-teal-400 transition-colors"
+              title="Refresh"
             >
-              <Plus size={22} /> Add Sub Item
+              <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
             </button>
           </div>
+        </div>
 
-          {/* Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <div className="bg-gray-800/50 backdrop-blur-sm rounded-2xl p-6 border border-gray-700/50">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-400 text-sm font-medium">Total Items</p>
-                  <p className="text-3xl font-bold mt-1">{stats.total}</p>
-                </div>
-                <div className="p-3 bg-blue-500/10 rounded-xl">
-                  <Package size={28} className="text-blue-400" />
-                </div>
-              </div>
-            </div>
-            <div className="bg-gray-800/50 backdrop-blur-sm rounded-2xl p-6 border border-gray-700/50">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-400 text-sm font-medium">Active</p>
-                  <p className="text-3xl font-bold mt-1">{stats.active}</p>
-                </div>
-                <div className="p-3 bg-green-500/10 rounded-xl">
-                  <Eye size={28} className="text-green-400" />
-                </div>
-              </div>
-            </div>
-            <div className="bg-gray-800/50 backdrop-blur-sm rounded-2xl p-6 border border-gray-700/50">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-400 text-sm font-medium">Inactive</p>
-                  <p className="text-3xl font-bold mt-1">{stats.inactive}</p>
-                </div>
-                <div className="p-3 bg-red-500/10 rounded-xl">
-                  <EyeOff size={28} className="text-red-400" />
-                </div>
-              </div>
-            </div>
-            <div className="bg-gray-800/50 backdrop-blur-sm rounded-2xl p-6 border border-gray-700/50">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-400 text-sm font-medium">Categories</p>
-                  <p className="text-3xl font-bold mt-1">{subCategories.length}</p>
-                </div>
-                <div className="p-3 bg-purple-500/10 rounded-xl">
-                  <Package size={28} className="text-purple-400" />
-                </div>
-              </div>
-            </div>
+        {/* Grid */}
+        {loading && !subItems.length ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {[...Array(8)].map((_, i) => (
+              <div key={i} className="h-64 rounded-2xl bg-white/5 animate-pulse border border-white/5" />
+            ))}
           </div>
-
-          {/* Search + Filters */}
-          <div className="bg-gray-800/30 backdrop-blur-sm rounded-2xl p-6 mb-8 border border-gray-700/30">
-            <div className="flex flex-col lg:flex-row gap-6">
-              <div className="flex-1 relative">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-                <input
-                  type="text"
-                  placeholder="Search by name..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500/50 outline-none"
-                />
-              </div>
-              <div className="flex flex-col sm:flex-row gap-4">
-                <div className="flex items-center gap-2 bg-gray-700/50 border border-gray-600/50 rounded-xl px-4 py-3">
-                  <span className="text-sm text-gray-400">Show:</span>
-                  <select
-                    value={pagination.per_page}
-                    onChange={(e) => handleLimitChange(e.target.value)}
-                    className="bg-transparent border-0 text-white text-sm focus:ring-0 focus:outline-none"
-                  >
-                    <option value="5">5</option>
-                    <option value="10">10</option>
-                    <option value="25">25</option>
-                    <option value="50">50</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Sub Items Grid */}
+        ) : (
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1, transition: { staggerChildren: 0.1 } }}
-            className="grid gap-6 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 mb-8"
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
           >
-            {subItems.map(item => {
-              const categoryName = item.sub_category_id
-                ? subCategories.find(cat => cat.id === item.sub_category_id)?.name || 'Uncategorized'
-                : 'Uncategorized';
-
-              return (
+            <AnimatePresence mode='popLayout'>
+              {subItems.map((item) => (
                 <motion.div
+                  layout
+                  variants={itemVariants}
                   key={item.id}
-                  whileHover={{ y: -8, scale: 1.02 }}
-                  className="group bg-gray-800/30 backdrop-blur-sm rounded-2xl overflow-hidden border border-gray-700/30 hover:border-blue-500/50 transition-all"
+                  className="group relative bg-slate-900/40 border border-white/10 rounded-2xl overflow-hidden transition-all duration-300 hover:shadow-2xl hover:shadow-teal-900/10 hover:border-teal-500/30"
                 >
-                  <div className="relative h-48 bg-gradient-to-br from-gray-700 to-gray-800">
+                  <div className="aspect-video relative overflow-hidden bg-slate-800">
                     {item.image ? (
-                      <img
-                        src={getImageUrl(item.image)}
-                        alt={item.name}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                      />
+                      <img src={getImageUrl(item.image)} alt={item.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <ImageIcon size={48} className="text-gray-500" />
+                      <div className="w-full h-full flex items-center justify-center text-slate-700">
+                        <ImageIcon size={48} />
                       </div>
                     )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent opacity-60" />
 
-                    <div className="absolute top-4 right-4">
-                      <button
-                        onClick={() => toggleStatus(item)}
-                        disabled={operationLoading === `status-${item.id}`}
-                        className={`px-3 py-1 rounded-full text-xs font-bold backdrop-blur-sm border transition-all ${
-                          item.status === 'active'
-                            ? 'bg-green-500/20 text-green-400 border-green-500/30'
-                            : 'bg-red-500/20 text-red-400 border-red-500/30'
-                        }`}
-                      >
-                        {operationLoading === `status-${item.id}` ? <Loader size={12} className="animate-spin" /> : null}
-                        {item.status === 'active' ? 'Active' : 'Inactive'}
-                      </button>
-                    </div>
-
-                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-3">
-                      <button onClick={() => openModal(item)} className="p-3 bg-blue-500 hover:bg-blue-600 rounded-xl"><Edit size={18} /></button>
-                      <button onClick={() => handleDelete(item.id)} className="p-3 bg-red-500 hover:bg-red-600 rounded-xl"><Trash2 size={18} /></button>
+                    <div className="absolute top-3 right-3">
+                      <span className={`px-2 py-1 rounded-full text-[10px] uppercase font-bold border backdrop-blur-md shadow-lg ${item.status === 'active'
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                        : 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                        }`}>
+                        {item.status}
+                      </span>
                     </div>
                   </div>
 
-                  <div className="p-5">
-                    <h3 className="font-bold text-lg mb-2 line-clamp-1">{item.name || 'Unnamed'}</h3>
-                    <p className="text-sm text-gray-400 mb-3">
-                      <span className="bg-gray-700/50 px-2 py-1 rounded-lg text-xs">
-                        {categoryName}
-                      </span>
-                    </p>
+                  <div className="p-5 relative">
+                    <div className="absolute -top-10 right-4 action-menu-container">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setActionMenu(actionMenu === item.id ? null : item.id); }}
+                        className="p-2 bg-slate-800/80 backdrop-blur-md hover:bg-white/10 rounded-xl text-white border border-white/10 shadow-lg transition-colors"
+                      >
+                        <MoreVertical size={18} />
+                      </button>
 
-                    <div className="flex justify-between items-center mt-4 pt-4 border-t border-gray-700/30">
-                      <div className="flex items-center gap-2 text-xs text-gray-400">
-                        <Calendar size={14} />
-                        <span>{formatDate(item.created_at)}</span>
-                      </div>
-                      <div className="flex gap-2">
-                        <button onClick={() => openModal(item)} className="p-2 bg-blue-500/20 hover:bg-blue-500/40 rounded-lg"><Edit size={14} /></button>
-                        <button onClick={() => handleDelete(item.id)} className="p-2 bg-red-500/20 hover:bg-red-500/40 rounded-lg"><Trash2 size={14} /></button>
-                      </div>
+                      <AnimatePresence>
+                        {actionMenu === item.id && (
+                          <motion.div
+                            initial={{ opacity: 0, scale: 0.9, y: 10, x: -50 }}
+                            animate={{ opacity: 1, scale: 1, y: 0, x: -100 }}
+                            exit={{ opacity: 0, scale: 0.9, y: 10, x: -50 }}
+                            className="absolute right-0 top-full mt-2 w-48 bg-slate-800 border border-white/10 rounded-xl shadow-2xl py-2 z-50 backdrop-blur-xl"
+                          >
+                            <button onClick={() => openModal(item)} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-slate-300 hover:bg-white/5 hover:text-teal-400 transition-colors">
+                              <Edit size={16} /> Edit Details
+                            </button>
+                            <button onClick={() => toggleStatus(item)} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-slate-300 hover:bg-white/5 hover:text-teal-400 transition-colors">
+                              {item.status === 'active' ? <EyeOff size={16} /> : <Eye size={16} />}
+                              {item.status === 'active' ? 'Deactivate' : 'Activate'}
+                            </button>
+                            <div className="my-1 border-t border-white/5"></div>
+                            <button onClick={() => handleDelete(item.id)} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-rose-400 hover:bg-rose-500/10 transition-colors">
+                              <Trash2 size={16} /> Delete
+                            </button>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+
+                    <div className="mb-1">
+                      <span className="text-xs font-bold text-teal-400 uppercase tracking-wide">
+                        {getSubCategoryName(item.sub_category_id)}
+                      </span>
+                      <h3 className="text-lg font-bold text-white group-hover:text-teal-400 transition-colors truncate">
+                        {item.name}
+                      </h3>
+                    </div>
+
+                    <div className="flex items-center gap-2 text-xs text-slate-500 mt-4 pt-4 border-t border-white/5">
+                      <Calendar size={12} />
+                      added {formatDate(item.created_at)}
                     </div>
                   </div>
                 </motion.div>
-              );
-            })}
+              ))}
+            </AnimatePresence>
           </motion.div>
+        )}
 
-          {/* Pagination */}
-          {pagination.last_page > 1 && (
-            <div className="flex justify-between items-center py-6 border-t border-gray-700/30">
-              <div className="text-sm text-gray-400">
-                Showing {(pagination.current_page - 1) * pagination.per_page + 1} to{' '}
-                {Math.min(pagination.current_page * pagination.per_page, pagination.total)} of {pagination.total}
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => handlePageChange(pagination.current_page - 1)}
-                  disabled={pagination.current_page === 1}
-                  className="px-4 py-2 rounded-xl border border-gray-600 disabled:opacity-50 flex items-center gap-2"
-                >
-                  Previous
-                </button>
+        {/* Empty State */}
+        {!loading && subItems.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-20 bg-white/5 rounded-3xl border border-white/10 border-dashed">
+            <div className="p-6 bg-slate-900 rounded-full mb-4">
+              <Package size={48} className="text-slate-600" />
+            </div>
+            <h3 className="text-2xl font-bold text-white mb-2">No items found</h3>
+            <p className="text-slate-400 max-w-md text-center mb-8">
+              {searchTerm ? "Try adjusting your search terms." : "Add sub-items to categories."}
+            </p>
+            <button
+              onClick={() => { searchTerm ? setSearchTerm('') : openModal(); }}
+              className="px-6 py-3 bg-teal-600 hover:bg-teal-500 text-white rounded-xl font-semibold transition-colors shadow-lg shadow-teal-900/20"
+            >
+              {searchTerm ? 'Clear Search' : 'Add First Item'}
+            </button>
+          </div>
+        )}
 
-                {Array.from({ length: Math.min(7, pagination.last_page) }, (_, i) => {
-                  let page;
-                  if (pagination.last_page <= 7) {
-                    page = i + 1;
-                  } else if (pagination.current_page <= 4) {
-                    page = i + 1;
-                  } else if (pagination.current_page > pagination.last_page - 4) {
-                    page = pagination.last_page - 6 + i;
-                  } else {
-                    page = pagination.current_page - 3 + i;
-                  }
-                  if (page < 1 || page > pagination.last_page) return null;
-
-                  const showDotsBefore = page > 1 && page > pagination.current_page + 3;
-                  const showDotsAfter = page < pagination.last_page && page < pagination.current_page - 3;
-
-                  return (
-                    <React.Fragment key={page}>
-                      {showDotsBefore && <span className="px-3">...</span>}
+        {/* Pagination */}
+        {!loading && pagination.total_pages > 1 && (
+          <div className="flex justify-center mt-12 pb-12">
+            <div className="flex items-center gap-2 bg-slate-900/50 p-2 rounded-2xl border border-white/10">
+              <button
+                onClick={() => handlePageChange(pagination.current_page - 1)}
+                disabled={pagination.current_page === 1}
+                className="p-3 hover:bg-white/10 rounded-xl disabled:opacity-30 disabled:hover:bg-transparent transition-colors text-white"
+              >
+                <ChevronLeft size={20} />
+              </button>
+              <div className="flex items-center gap-1 px-2">
+                {Array.from({ length: pagination.total_pages }, (_, i) => i + 1)
+                  .filter(p => p === 1 || p === pagination.total_pages || Math.abs(p - pagination.current_page) <= 1)
+                  .map((p, idx, arr) => (
+                    <React.Fragment key={p}>
+                      {idx > 0 && p - arr[idx - 1] > 1 && <span className="text-slate-600 px-1">...</span>}
                       <button
-                        onClick={() => handlePageChange(page)}
-                        className={`px-4 py-2 rounded-xl border ${pagination.current_page === page ? 'bg-blue-600 border-blue-500' : 'border-gray-600'}`}
+                        onClick={() => handlePageChange(p)}
+                        className={`w-10 h-10 rounded-xl text-sm font-bold transition-all ${pagination.current_page === p
+                          ? 'bg-teal-500 text-white shadow-lg shadow-teal-500/30'
+                          : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                          }`}
                       >
-                        {page}
+                        {p}
                       </button>
-                      {showDotsAfter && <span className="px-3">...</span>}
                     </React.Fragment>
-                  );
-                })}
-
-                <button
-                  onClick={() => handlePageChange(pagination.current_page + 1)}
-                  disabled={pagination.current_page === pagination.last_page}
-                  className="px-4 py-2 rounded-xl border border-gray-600 disabled:opacity-50 flex items-center gap-2"
-                >
-                  Next
-                </button>
+                  ))}
               </div>
+              <button
+                onClick={() => handlePageChange(pagination.current_page + 1)}
+                disabled={pagination.current_page === pagination.total_pages}
+                className="p-3 hover:bg-white/10 rounded-xl disabled:opacity-30 disabled:hover:bg-transparent transition-colors text-white"
+              >
+                <ChevronRight size={20} />
+              </button>
             </div>
-          )}
+          </div>
+        )}
+      </div>
 
-          {/* Empty State */}
-          {subItems.length === 0 && !loading && (
-            <div className="text-center py-20">
-              <Package size={64} className="mx-auto text-gray-600 mb-6" />
-              <h3 className="text-2xl font-bold mb-3">{searchTerm ? 'No sub-items found' : 'No sub-items yet'}</h3>
-              <p className="text-gray-400 mb-8">{searchTerm ? 'Try different keywords' : 'Create your first sub-item'}</p>
-              {!searchTerm && (
-                <button onClick={() => openModal()} className="bg-gradient-to-r from-blue-600 to-purple-600 px-8 py-3 rounded-xl font-bold">
-                  Create First Sub Item
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Modal */}
-        <AnimatePresence>
-          {showModal && (
+      {/* Modal */}
+      <AnimatePresence>
+        {showModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
               onClick={closeModal}
+              className="absolute inset-0 bg-black/80 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className="relative w-full max-w-lg bg-slate-900 rounded-3xl border border-white/10 shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto"
             >
-              <motion.div
-                initial={{ scale: 0.9 }}
-                animate={{ scale: 1 }}
-                exit={{ scale: 0.9 }}
-                className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-3xl p-8 max-w-md w-full border border-gray-700/50 shadow-2xl"
-                onClick={e => e.stopPropagation()}
-              >
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
-                    {editingItem ? 'Edit Sub Item' : 'Create Sub Item'}
-                  </h2>
-                  <button onClick={closeModal} className="p-2 hover:bg-gray-700 rounded-lg"><X size={24} /></button>
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-teal-400 to-cyan-600" />
+
+              <form onSubmit={handleSubmit}>
+                <div className="p-8 border-b border-white/5 flex justify-between items-center bg-slate-900 sticky top-0 z-10">
+                  <div>
+                    <h2 className="text-2xl font-bold text-white mb-1">
+                      {editingItem ? 'Edit Sub-Item' : 'New Sub-Item'}
+                    </h2>
+                    <p className="text-slate-400 text-sm">
+                      Configure item details.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={closeModal}
+                    className="p-2 hover:bg-white/10 rounded-xl transition-colors text-slate-400 hover:text-white"
+                  >
+                    <X size={24} />
+                  </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="space-y-6">
-                  <div>
-                    <label className="block text-sm font-semibold mb-3">Sub Category</label>
-                    <select
-                      name="sub_category_id"
-                      value={formData.sub_category_id}
-                      onChange={handleInputChange}
-                      className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-white"
-                    >
-                      <option value="">Select category (optional)</option>
-                      {subCategories.map(cat => (
-                        <option key={cat.id} value={cat.id}>{cat.name}</option>
-                      ))}
-                    </select>
+                <div className="p-8 space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-300">Category</label>
+                    <div className="relative">
+                      <select
+                        name="sub_category_id"
+                        value={formData.sub_category_id}
+                        onChange={handleInputChange}
+                        className="w-full bg-slate-800/50 border border-white/10 rounded-xl py-3.5 px-4 text-white focus:ring-2 focus:ring-teal-500/50 outline-none transition-all cursor-pointer appearance-none"
+                      >
+                        <option value="">Select sub-category...</option>
+                        {subCategories.map(c => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                        <ChevronLeft size={16} className="-rotate-90" />
+                      </div>
+                    </div>
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-semibold mb-3">Item Name *</label>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-300">Name *</label>
                     <input
                       type="text"
                       name="name"
                       value={formData.name}
                       onChange={handleInputChange}
-                      required
-                      className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-                      placeholder="Enter sub-item name"
+                      placeholder="Data Cable, Adapter, etc."
+                      className="w-full bg-slate-800/50 border border-white/10 rounded-xl py-3 px-4 text-white focus:ring-2 focus:ring-teal-500/50 outline-none transition-all"
                     />
-                    {errors.name && <p className="text-red-400 text-sm mt-1">{errors.name[0]}</p>}
+                    {errors.name && <p className="text-rose-400 text-xs mt-1">{errors.name[0]}</p>}
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-semibold mb-3">Item Image</label>
-                    <div className="border-2 border-dashed border-gray-600 rounded-xl p-6 text-center hover:border-blue-500 cursor-pointer">
-                      <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" id="subitem-img" />
-                      <label htmlFor="subitem-img" className="cursor-pointer">
-                        {imagePreview ? (
-                          <img src={imagePreview} alt="Preview" className="mx-auto h-32 object-cover rounded-lg" />
-                        ) : (
-                          <>
-                            <Upload size={32} className="mx-auto mb-2 text-gray-400" />
-                            <p className="text-sm text-gray-400">Click to upload (Max 2MB)</p>
-                          </>
-                        )}
-                      </label>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-300">Image</label>
+                    <div
+                      onClick={() => document.getElementById('si-modal-upload').click()}
+                      className="border-2 border-dashed border-white/10 rounded-2xl p-6 hover:border-teal-500/50 hover:bg-teal-500/5 transition-all cursor-pointer group text-center relative overflow-hidden"
+                    >
+                      <input
+                        id="si-modal-upload"
+                        type="file"
+                        hidden
+                        accept="image/*"
+                        onChange={handleImageChange}
+                      />
+
+                      {imagePreview ? (
+                        <div className="relative w-full h-40 rounded-xl overflow-hidden mx-auto shadow-xl bg-slate-900">
+                          <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            <RefreshCw className="text-white" size={24} />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="py-2">
+                          <Upload size={32} className="mx-auto mb-3 text-slate-400 group-hover:text-teal-400 transition-colors" />
+                          <p className="text-slate-300 font-medium text-sm">Click to upload image</p>
+                          <p className="text-slate-500 text-xs mt-1">JPEG, PNG, WebP up to 2MB</p>
+                        </div>
+                      )}
                     </div>
-                    {errors.image && <p className="text-red-400 text-sm mt-2">{errors.image}</p>}
+                    {errors.image && <p className="text-rose-400 text-xs mt-1">{errors.image[0]}</p>}
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-semibold mb-3">Status</label>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-300">Status</label>
                     <div className="grid grid-cols-2 gap-4">
-                      {['active', 'inactive'].map(st => (
-                        <label
-                          key={st}
-                          onClick={() => setFormData(prev => ({ ...prev, status: st }))}
-                          className={`p-4 border-2 rounded-xl text-center cursor-pointer transition ${formData.status === st ? (st === 'active' ? 'border-green-500 bg-green-500/10' : 'border-red-500 bg-red-500/10') : 'border-gray-600'}`}
+                      {['active', 'inactive'].map((status) => (
+                        <button
+                          key={status}
+                          type="button"
+                          onClick={() => setFormData(p => ({ ...p, status }))}
+                          className={`py-3 px-4 rounded-xl border flex items-center justify-center gap-2 transition-all ${formData.status === status
+                            ? status === 'active'
+                              ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300'
+                              : 'bg-rose-500/20 border-rose-500/50 text-rose-300'
+                            : 'bg-slate-800/30 border-white/5 text-slate-500 hover:bg-slate-800'
+                            }`}
                         >
-                          {st === 'active' ? <Eye size={20} className="mx-auto mb-2" /> : <EyeOff size={20} className="mx-auto mb-2" />}
-                          <span className="capitalize font-medium">{st}</span>
-                        </label>
+                          {status === 'active' ? <Check size={16} /> : <X size={16} />}
+                          <span className="capitalize font-medium text-sm">{status}</span>
+                        </button>
                       ))}
                     </div>
                   </div>
+                </div>
 
-                  <div className="flex justify-end gap-3 pt-4">
-                    <button type="button" onClick={closeModal} className="px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-xl">Cancel</button>
-                    <button
-                      type="submit"
-                      disabled={operationLoading === 'saving'}
-                      className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl font-bold flex items-center gap-2 disabled:opacity-70"
-                    >
-                      {operationLoading === 'saving' ? <Loader size={20} className="animate-spin" /> : <Check size={20} />}
-                      {editingItem ? 'Update' : 'Create'} Sub Item
-                    </button>
-                  </div>
-                </form>
-              </motion.div>
+                <div className="p-6 border-t border-white/5 bg-slate-900/50 flex justify-end gap-3 sticky bottom-0 z-10">
+                  <button
+                    type="button"
+                    onClick={closeModal}
+                    className="px-6 py-2.5 rounded-xl text-slate-300 hover:text-white hover:bg-white/5 transition-colors font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={operationLoading === 'saving'}
+                    className="px-8 py-2.5 bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-500 hover:to-cyan-500 text-white rounded-xl font-bold shadow-lg shadow-teal-900/20 disabled:opacity-50 flex items-center gap-2 transition-all transform active:scale-95"
+                  >
+                    {operationLoading === 'saving' ? <RefreshCw size={18} className="animate-spin" /> : (editingItem ? <Check size={18} /> : <Plus size={18} />)}
+                    {editingItem ? 'Save Changes' : 'Create Item'}
+                  </button>
+                </div>
+              </form>
             </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-    </>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 };
 

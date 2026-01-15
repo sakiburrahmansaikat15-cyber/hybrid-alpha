@@ -13,10 +13,12 @@ class TaxRateSeeder extends Seeder
         $faker = Faker::create();
 
         for ($i = 1; $i <= 10; $i++) {
-            TaxRate::create([
-                'name' => 'VAT ' . $i,
-                'rate' => $faker->randomFloat(2, 1, 20),
-            ]);
+            TaxRate::firstOrCreate(
+                ['name' => 'VAT ' . $i],
+                [
+                    'rate' => $faker->randomFloat(2, 1, 20),
+                ]
+            );
         }
     }
 }

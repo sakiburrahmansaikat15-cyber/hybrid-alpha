@@ -8,7 +8,14 @@ use Illuminate\Database\Eloquent\Model;
 class Salary extends Model
 {
     use HasFactory;
-    protected $guarded = [];
+    protected $fillable = [
+        'employee_id',
+        'basic_salary',
+        'allowances',
+        'deductions',
+        'effective_from',
+        'status',
+    ];
 
 
         public function employee()

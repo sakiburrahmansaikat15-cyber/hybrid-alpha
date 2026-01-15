@@ -7,8 +7,14 @@ use Illuminate\Database\Eloquent\Model;
 
 class Categories extends Model
 {
-    use HasFactory;
-    protected $guarded = [];
+    use HasFactory, \App\Traits\LogsActivity, \Illuminate\Database\Eloquent\SoftDeletes;
+
+    protected $fillable = [
+        'name',
+        'description',
+        'status',
+        'image',
+    ];
 
     protected $table = "categories";
 
@@ -17,9 +23,9 @@ class Categories extends Model
         return $this->hasMany(SubCategory::class, 'category_id');
     }
 
-        public function products()
+    public function products()
     {
-        return $this->hasMany(Prooducts::class, 'cat_id');
+        return $this->hasMany(Product::class, 'cat_id');
     }
 
 }

@@ -1,477 +1,346 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Plus,
-  Search,
-  Edit,
-  Trash2,
-  X,
-  Check,
-  MoreVertical,
-  Layers, // Icon for grouping taxes
-  Calendar,
-  Loader,
-  ChevronLeft,
-  ChevronRight,
+  Plus, Search, Edit, Trash2, X, Loader, ChevronLeft, ChevronRight,
+  Activity, Zap, Target, Layers, Calculator
 } from 'lucide-react';
 
-const API_URL = 'http://localhost:8000/api/pos/tax-groups';
+const API_URL = '/api/pos/tax-groups';
+const TAX_RATES_API = '/api/pos/tax-rates';
 
 const TaxGroups = () => {
-  const [taxGroups, setTaxGroups] = useState([]);
+  const [groups, setGroups] = useState([]);
+  const [rates, setRates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [operationLoading, setOperationLoading] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [editingGroup, setEditingGroup] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [actionMenu, setActionMenu] = useState(null);
-  const [formData, setFormData] = useState({
-    name: '',
-  });
+  const [formData, setFormData] = useState({ name: '', tax_rates: [] }); // array of rate IDs
   const [errors, setErrors] = useState({});
   const [notification, setNotification] = useState({ show: false, message: '', type: '' });
+  const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, per_page: 12, total_items: 0 });
 
-  const [pagination, setPagination] = useState({
-    current_page: 1,
-    last_page: 1,
-    per_page: 10,
-    total_items: 0,
-  });
+  const notificationTimerRef = useRef(null);
 
   const showNotification = useCallback((message, type = 'success') => {
+    if (notificationTimerRef.current) clearTimeout(notificationTimerRef.current);
     setNotification({ show: true, message, type });
-    setTimeout(() => setNotification({ show: false, message: '', type: '' }), 4000);
+    notificationTimerRef.current = setTimeout(() => setNotification({ show: false, message: '', type: '' }), 3500);
   }, []);
 
-  const handleApiError = useCallback((error, defaultMessage) => {
+  useEffect(() => () => { if (notificationTimerRef.current) clearTimeout(notificationTimerRef.current); }, []);
+
+  const handleApiError = useCallback((error) => {
     if (error.response?.status === 422) {
       const validationErrors = error.response.data.errors || {};
       setErrors(validationErrors);
-      const firstError = Object.values(validationErrors)[0]?.[0];
-      showNotification(firstError || 'Validation error', 'error');
-    } else if (error.response?.data?.message) {
-      showNotification(error.response.data.message, 'error');
-      setErrors({ _general: error.response.data.message });
+      showNotification(Object.values(validationErrors)[0]?.[0] || 'Check input fields', 'error');
     } else {
-      showNotification(defaultMessage || 'Something went wrong', 'error');
-      setErrors({ _general: defaultMessage });
+      const msg = error.response?.data?.message || 'Operation failed';
+      showNotification(msg, 'error');
     }
   }, [showNotification]);
 
-  // Fetch tax groups with server-side search & pagination
-  const fetchTaxGroups = useCallback(async (page = 1, perPage = 10, keyword = '') => {
+  const fetchGroups = useCallback(async (page = 1, keyword = searchTerm) => {
     setLoading(true);
     try {
-      const params = { page, limit: perPage };
+      const params = { page, limit: pagination.per_page };
       if (keyword.trim()) params.keyword = keyword.trim();
-
       const response = await axios.get(API_URL, { params });
       const res = response.data;
-
-      const groupData = res.pagination?.data || [];
-      const formattedGroups = groupData.map(item => ({
-        id: item.id,
-        name: item.name,
-        created_at: item.created_at,
-        updated_at: item.updated_at,
-      }));
-
-      setTaxGroups(formattedGroups);
+      setGroups(res.pagination?.data || res.data || []);
       setPagination({
-        current_page: res.pagination.current_page || 1,
-        last_page: res.pagination.total_pages || 1,
-        per_page: res.pagination.per_page || 10,
-        total_items: res.pagination.total_items || 0,
+        current_page: res.pagination?.current_page || res.current_page || 1,
+        last_page: res.pagination?.total_pages || res.last_page || 1,
+        per_page: res.pagination?.per_page || res.per_page || 12,
+        total_items: res.pagination?.total_items || res.total || 0,
       });
     } catch (error) {
-      handleApiError(error, 'Failed to fetch tax groups');
-      setTaxGroups([]);
-      setPagination({ current_page: 1, last_page: 1, per_page: 10, total_items: 0 });
+      handleApiError(error);
+      setGroups([]);
     } finally {
       setLoading(false);
     }
-  }, [handleApiError]);
+  }, [pagination.per_page, searchTerm, handleApiError]);
 
-  // Debounced search
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchTaxGroups(1, pagination.per_page, searchTerm);
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [searchTerm, pagination.per_page, fetchTaxGroups]);
-
-  // Initial load
-  useEffect(() => {
-    fetchTaxGroups(1, 10);
+  const fetchRates = useCallback(async () => {
+    try {
+      const response = await axios.get(TAX_RATES_API);
+      setRates(response.data.pagination?.data || response.data.data || []);
+    } catch (e) { console.error('Failed to load rates'); }
   }, []);
+
+  useEffect(() => {
+    fetchRates();
+    const timer = setTimeout(() => fetchGroups(1), 500);
+    return () => clearTimeout(timer);
+  }, [searchTerm, fetchGroups, fetchRates]);
 
   const handlePageChange = (newPage) => {
     if (newPage < 1 || newPage > pagination.last_page) return;
-    fetchTaxGroups(newPage, pagination.per_page, searchTerm);
-  };
-
-  const handleLimitChange = (newLimit) => {
-    const limit = parseInt(newLimit);
-    setPagination(prev => ({ ...prev, per_page: limit }));
-    fetchTaxGroups(1, limit, searchTerm);
-  };
-
-  const resetForm = () => {
-    setFormData({ name: '' });
-    setEditingGroup(null);
-    setErrors({});
+    fetchGroups(newPage);
   };
 
   const openModal = (group = null) => {
     if (group) {
       setEditingGroup(group);
       setFormData({
-        name: group.name || '',
+        name: group.name,
+        tax_rates: group.tax_rates ? group.tax_rates.map(r => r.id) : []
       });
     } else {
-      resetForm();
+      setEditingGroup(null);
+      setFormData({ name: '', tax_rates: [] });
     }
+    setErrors({});
     setShowModal(true);
   };
 
   const closeModal = () => {
     setShowModal(false);
-    setTimeout(resetForm, 300);
+    setEditingGroup(null);
   };
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-    if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
+  const toggleRateSelection = (rateId) => {
+    setFormData(prev => {
+      const newRates = prev.tax_rates.includes(rateId)
+        ? prev.tax_rates.filter(id => id !== rateId)
+        : [...prev.tax_rates, rateId];
+      return { ...prev, tax_rates: newRates };
+    });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setOperationLoading('saving');
-    setErrors({});
-
     try {
-      const submitData = {
-        name: formData.name.trim(),
-      };
-
-      let response;
       if (editingGroup) {
-        response = await axios.post(`${API_URL}/${editingGroup.id}`, submitData);
+        await axios.put(`${API_URL}/${editingGroup.id}`, formData);
+        showNotification('Tax group updated successfully');
       } else {
-        response = await axios.post(API_URL, submitData);
+        await axios.post(API_URL, formData);
+        showNotification('Tax group created successfully');
       }
-
-      showNotification(
-        response.data.message || `Tax group ${editingGroup ? 'updated' : 'created'} successfully!`
-      );
-      fetchTaxGroups(pagination.current_page, pagination.per_page, searchTerm);
+      fetchGroups(pagination.current_page);
       closeModal();
     } catch (error) {
-      handleApiError(error, 'Failed to save tax group');
+      handleApiError(error);
     } finally {
       setOperationLoading(null);
     }
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Delete this tax group permanently?')) return;
-    setOperationLoading(`delete-${id}`);
+    if (!window.confirm('Delete this tax group?')) return;
+    setOperationLoading(id);
     try {
       await axios.delete(`${API_URL}/${id}`);
       showNotification('Tax group deleted successfully');
-
-      const remainingItems = pagination.total_items - 1;
-      const maxPage = Math.ceil(remainingItems / pagination.per_page);
-      const targetPage = pagination.current_page > maxPage ? maxPage : pagination.current_page;
-
-      fetchTaxGroups(targetPage || 1, pagination.per_page, searchTerm);
+      fetchGroups(1);
     } catch (error) {
-      handleApiError(error, 'Delete failed');
+      handleApiError(error);
     } finally {
       setOperationLoading(null);
-      setActionMenu(null);
     }
   };
 
-  const formatDate = (date) => date ? new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
-
-  useEffect(() => {
-    const handler = () => setActionMenu(null);
-    document.addEventListener('click', handler);
-    return () => document.removeEventListener('click', handler);
-  }, []);
-
-  if (loading && taxGroups.length === 0) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="mb-8 flex justify-between">
-            <div className="h-10 bg-gray-800 rounded w-64 animate-pulse"></div>
-            <div className="h-12 bg-gray-800 rounded-xl w-40 animate-pulse"></div>
-          </div>
-          <div className="bg-gray-800/30 rounded-2xl p-6 mb-8 animate-pulse space-y-4">
-            <div className="h-12 bg-gray-700 rounded"></div>
-          </div>
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="bg-gray-800/30 rounded-2xl p-6 animate-pulse space-y-4">
-                <div className="h-8 bg-gray-700 rounded"></div>
-                <div className="h-20 bg-gray-700/50 rounded-lg"></div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-gray-100 py-8">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans">
       <AnimatePresence>
         {notification.show && (
-          <motion.div
-            initial={{ opacity: 0, x: 300 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 300 }}
-            className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-xl shadow-2xl ${notification.type === 'error' ? 'bg-red-600' : 'bg-green-600'} text-white font-medium`}
-          >
-            {notification.message}
+          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} className="fixed top-4 right-4 z-50">
+            <div className={`flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg backdrop-blur-sm border ${notification.type === 'error' ? 'bg-rose-500/10 border-rose-500/20 text-rose-600' : 'bg-sky-500/10 border-sky-500/20 text-sky-600'}`}>
+              <Zap size={16} />
+              <span className="font-semibold text-sm">{notification.message}</span>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-8 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+      <div className="max-w-7xl mx-auto px-4 py-6">
+        <header className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-cyan-500 bg-clip-text text-transparent">
-              Tax Groups Management
+            <h1 className="text-3xl font-bold tracking-tight dark:text-white mb-1 flex items-center gap-3">
+              <Layers className="text-sky-500" /> Tax Groups
             </h1>
-            <p className="text-gray-400 mt-2">Group multiple tax rates for complex tax rules</p>
+            <p className="text-sm text-slate-500">Combine multiple tax rates into groups</p>
           </div>
-          <button
-            onClick={() => openModal()}
-            className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 px-6 py-3 rounded-xl font-bold flex items-center gap-3 shadow-lg"
-          >
-            <Plus size={22} /> Add New Tax Group
+          <button onClick={() => openModal()} className="inline-flex items-center gap-2 px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-lg font-medium transition-colors shadow-lg shadow-sky-500/20">
+            <Plus size={18} />
+            <span>Create Group</span>
           </button>
-        </div>
+        </header>
 
-        {/* Search + Per Page */}
-        <div className="bg-gray-800/30 backdrop-blur-sm rounded-2xl p-6 mb-8 border border-gray-700/30">
-          <div className="flex flex-col lg:flex-row gap-6">
-            <div className="flex-1 relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-              <input
-                type="text"
-                placeholder="Search tax groups by name..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500/50 outline-none"
-              />
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6">
+          <div className="lg:col-span-3 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+            <input
+              type="text"
+              placeholder="Search groups..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 transition-all font-medium"
+            />
+          </div>
+          <div className="flex items-center justify-between px-5 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm">
+            <div className="flex items-center gap-2">
+              <Activity className="text-sky-500" size={18} />
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total</span>
             </div>
-            <div className="flex items-center gap-2 bg-gray-700/50 border border-gray-600/50 rounded-xl px-4 py-3">
-              <span className="text-sm text-gray-400">Show:</span>
-              <select
-                value={pagination.per_page}
-                onChange={(e) => handleLimitChange(e.target.value)}
-                className="bg-transparent border-0 text-white text-sm focus:ring-0 focus:outline-none"
-              >
-                <option value="5">5</option>
-                <option value="10">10</option>
-                <option value="25">25</option>
-                <option value="50">50</option>
-              </select>
-            </div>
+            <span className="text-xl font-bold text-sky-600">{pagination.total_items}</span>
           </div>
         </div>
 
-        {/* Tax Groups Grid */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1, transition: { staggerChildren: 0.1 } }}
-          className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mb-8"
-        >
-          {taxGroups.map(group => (
-            <motion.div
-              key={group.id}
-              whileHover={{ y: -8, scale: 1.02 }}
-              className="group bg-gray-800/30 backdrop-blur-sm rounded-2xl border border-gray-700/30 hover:border-blue-500/50 transition-all overflow-hidden"
-            >
-              <div className="p-6">
-                <div className="flex justify-between items-start mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-purple-500/10 rounded-lg">
-                      <Layers size={20} className="text-purple-400" />
-                    </div>
-                    <h3 className="text-xl font-bold">{group.name}</h3>
-                  </div>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setActionMenu(actionMenu === group.id ? null : group.id); }}
-                    className="p-2 hover:bg-gray-700/50 rounded-lg"
-                  >
-                    <MoreVertical size={18} />
-                  </button>
-                </div>
-
-                <div className="mb-6 text-center py-8">
-                  <Layers size={48} className="mx-auto text-purple-400/30" />
-                  <p className="text-sm text-gray-400 mt-3">Compound or inclusive tax grouping</p>
-                </div>
-
-                <div className="space-y-2 text-sm text-gray-400">
-                  <div className="flex items-center gap-2">
-                    <Calendar size={16} /> Created: {formatDate(group.created_at)}
-                  </div>
-                </div>
-
-                <div className="flex justify-between items-center mt-6 pt-4 border-t border-gray-700/30">
-                  <span className="text-xs text-gray-500">Updated: {formatDate(group.updated_at)}</span>
-                  <div className="flex gap-2">
-                    <button onClick={() => openModal(group)} className="p-2 bg-blue-500/20 hover:bg-blue-500/40 rounded-lg">
-                      <Edit size={14} />
-                    </button>
-                    <button onClick={() => handleDelete(group.id)} className="p-2 bg-red-500/20 hover:bg-red-500/40 rounded-lg">
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <AnimatePresence>
-                {actionMenu === group.id && (
+        {loading && groups.length === 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {[...Array(6)].map((_, i) => <div key={i} className="h-48 bg-white dark:bg-slate-900 rounded-2xl animate-pulse border border-slate-200 dark:border-slate-800" />)}
+          </div>
+        ) : groups.length > 0 ? (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-8">
+              {groups.map((group) => {
+                const totalRate = group.tax_rates?.reduce((acc, r) => acc + parseFloat(r.rate), 0) || 0;
+                return (
                   <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="absolute right-4 top-20 bg-gray-800 border border-gray-600 rounded-xl shadow-xl py-2 z-10 min-w-[160px]"
+                    key={group.id}
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    whileHover={{ y: -4 }}
+                    className="group bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-sky-500/40 rounded-2xl p-6 shadow-sm hover:shadow-lg transition-all flex flex-col"
                   >
-                    <button onClick={() => { openModal(group); setActionMenu(null); }} className="w-full text-left px-4 py-2 hover:bg-gray-700 flex items-center gap-3 text-sm">
-                      <Edit size={16} /> Edit
-                    </button>
-                    <button onClick={() => handleDelete(group.id)} className="w-full text-left px-4 py-2 hover:bg-red-500/20 text-red-400 flex items-center gap-3 text-sm">
-                      <Trash2 size={16} /> Delete
-                    </button>
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="p-2.5 rounded-xl bg-sky-50 dark:bg-sky-900/20 text-sky-600">
+                        <Layers size={20} />
+                      </div>
+                      <div className="flex gap-1">
+                        <button onClick={() => openModal(group)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 hover:text-sky-600 transition-colors">
+                          <Edit size={16} />
+                        </button>
+                        <button onClick={() => handleDelete(group.id)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 hover:text-rose-600 transition-colors">
+                          {operationLoading === group.id ? <Loader className="animate-spin" size={16} /> : <Trash2 size={16} />}
+                        </button>
+                      </div>
+                    </div>
+
+                    <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-3 truncate">{group.name}</h3>
+
+                    <div className="flex-1">
+                      <div className="flex flex-wrap gap-2 mb-4">
+                        {group.tax_rates?.map(rate => (
+                          <span key={rate.id} className="inline-flex items-center px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-[10px] font-bold text-slate-600 dark:text-slate-400">
+                            {rate.name} ({parseFloat(rate.rate)}%)
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-800 mt-auto">
+                      <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">Combined Rate</span>
+                      <div className="flex items-center gap-1 text-xl font-black text-sky-600 dark:text-sky-500">
+                        <Calculator size={16} /> {totalRate.toFixed(2)}%
+                      </div>
+                    </div>
                   </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.div>
-          ))}
-        </motion.div>
-
-        {/* Pagination */}
-        {pagination.last_page > 1 && (
-          <div className="flex justify-between items-center py-6 border-t border-gray-700/30">
-            <div className="text-sm text-gray-400">
-              Showing {(pagination.current_page - 1) * pagination.per_page + 1} to{' '}
-              {Math.min(pagination.current_page * pagination.per_page, pagination.total_items)} of {pagination.total_items}
+                );
+              })}
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => handlePageChange(pagination.current_page - 1)}
-                disabled={pagination.current_page === 1}
-                className="px-4 py-2 rounded-xl border border-gray-600 disabled:opacity-50 flex items-center gap-2"
-              >
-                <ChevronLeft size={16} /> Previous
-              </button>
-              {Array.from({ length: pagination.last_page }, (_, i) => i + 1)
-                .filter(p => p === 1 || p === pagination.last_page || Math.abs(p - pagination.current_page) <= 2)
-                .map((p, idx, arr) => (
-                  <React.Fragment key={p}>
-                    {idx > 0 && p - arr[idx - 1] > 1 && <span className="px-3">...</span>}
-                    <button
-                      onClick={() => handlePageChange(p)}
-                      className={`px-4 py-2 rounded-xl border ${pagination.current_page === p ? 'bg-blue-600 border-blue-500' : 'border-gray-600'}`}
-                    >
-                      {p}
-                    </button>
-                  </React.Fragment>
-                ))}
-              <button
-                onClick={() => handlePageChange(pagination.current_page + 1)}
-                disabled={pagination.current_page === pagination.last_page}
-                className="px-4 py-2 rounded-xl border border-gray-600 disabled:opacity-50 flex items-center gap-2"
-              >
-                Next <ChevronRight size={16} />
-              </button>
-            </div>
-          </div>
-        )}
 
-        {/* Empty State */}
-        {taxGroups.length === 0 && !loading && (
-          <div className="text-center py-20">
-            <Layers size={64} className="mx-auto text-gray-600 mb-6" />
-            <h3 className="text-2xl font-bold mb-3">{searchTerm ? 'No tax groups found' : 'No tax groups yet'}</h3>
-            <p className="text-gray-400 mb-8">{searchTerm ? 'Try different keywords' : 'Create your first tax group'}</p>
-            {!searchTerm && (
-              <button onClick={() => openModal()} className="bg-gradient-to-r from-blue-600 to-cyan-600 px-8 py-3 rounded-xl font-bold">
-                <Plus className="inline mr-2" /> Create First Tax Group
-              </button>
-            )}
+            <div className="flex items-center justify-between p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm">
+              <span className="text-sm font-medium text-slate-500">Page {pagination.current_page} of {pagination.last_page}</span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handlePageChange(pagination.current_page - 1)}
+                  disabled={pagination.current_page === 1}
+                  className="p-2 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-sky-500 hover:text-white disabled:opacity-50 transition-colors"
+                >
+                  <ChevronLeft size={20} />
+                </button>
+                <button
+                  onClick={() => handlePageChange(pagination.current_page + 1)}
+                  disabled={pagination.current_page === pagination.last_page}
+                  className="p-2 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-sky-500 hover:text-white disabled:opacity-50 transition-colors"
+                >
+                  <ChevronRight size={20} />
+                </button>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+            <Layers size={64} className="mb-4 opacity-50" />
+            <p className="font-semibold text-lg">No Tax Groups Found</p>
           </div>
         )}
       </div>
 
-      {/* Modal */}
       <AnimatePresence>
         {showModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-            onClick={closeModal}
-          >
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
             <motion.div
-              initial={{ scale: 0.9 }}
-              animate={{ scale: 1 }}
-              exit={{ scale: 0.9 }}
-              className="bg-gray-800 rounded-3xl p-8 max-w-lg w-full border border-gray-700"
-              onClick={e => e.stopPropagation()}
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden max-h-[80vh] flex flex-col"
             >
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-cyan-500 bg-clip-text text-transparent">
-                  {editingGroup ? 'Edit Tax Group' : 'Create New Tax Group'}
-                </h2>
-                <button onClick={closeModal} className="p-2 hover:bg-gray-700 rounded-lg">
-                  <X size={24} />
-                </button>
+              <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center shrink-0">
+                <h2 className="text-xl font-bold dark:text-white">{editingGroup ? 'Edit Tax Group' : 'New Tax Group'}</h2>
+                <button onClick={closeModal} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"><X size={20} /></button>
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-6">
+              <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto">
                 <div>
-                  <label className="block text-sm font-semibold mb-2">Group Name *</label>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Group Name</label>
                   <input
                     type="text"
-                    name="name"
                     value={formData.name}
-                    onChange={handleInputChange}
+                    onChange={e => setFormData({ ...formData, name: e.target.value })}
+                    className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border-none rounded-xl focus:ring-2 focus:ring-sky-500 outline-none transition-all"
+                    placeholder="GST + PST"
                     required
-                    placeholder="e.g., Standard VAT, Luxury Goods Tax"
-                    className={`w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none ${errors.name ? 'border-red-500' : ''}`}
                   />
-                  {errors.name && <p className="text-red-400 text-sm mt-1">{Array.isArray(errors.name) ? errors.name[0] : errors.name}</p>}
+                  {errors.name && <p className="text-rose-500 text-xs mt-1">{errors.name[0]}</p>}
                 </div>
 
-                <div className="flex justify-end gap-3 pt-4">
-                  <button type="button" onClick={closeModal} className="px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-xl">
-                    Cancel
-                  </button>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Select Tax Rates</label>
+                  <div className="grid grid-cols-2 gap-3 max-h-48 overflow-y-auto p-2 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
+                    {rates.map(rate => (
+                      <div
+                        key={rate.id}
+                        onClick={() => toggleRateSelection(rate.id)}
+                        className={`
+                            cursor-pointer p-3 rounded-lg border flex items-center justify-between transition-all
+                            ${formData.tax_rates.includes(rate.id)
+                            ? 'bg-sky-50 border-sky-500 text-sky-700 dark:bg-sky-900/20 dark:text-sky-300'
+                            : 'bg-white border-slate-200 dark:bg-slate-800 dark:border-slate-700 text-slate-600'}
+                          `}
+                      >
+                        <span className="font-medium text-sm">{rate.name}</span>
+                        <span className="text-xs font-bold bg-white dark:bg-slate-900 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">
+                          {parseFloat(rate.rate)}%
+                        </span>
+                      </div>
+                    ))}
+                    {rates.length === 0 && <p className="text-xs text-slate-400 col-span-2 text-center py-2">No tax rates available</p>}
+                  </div>
+                </div>
+
+                <div className="pt-4 flex gap-3">
+                  <button type="button" onClick={closeModal} className="flex-1 py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-medium hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">Cancel</button>
                   <button
                     type="submit"
                     disabled={operationLoading === 'saving'}
-                    className="px-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-xl font-bold flex items-center gap-2 disabled:opacity-70"
+                    className="flex-1 py-3 bg-sky-600 hover:bg-sky-700 text-white rounded-xl font-medium shadow-lg shadow-sky-500/20 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
                   >
-                    {operationLoading === 'saving' ? <Loader size={20} className="animate-spin" /> : <Check size={20} />}
-                    {editingGroup ? 'Update' : 'Create'} Tax Group
+                    {operationLoading === 'saving' ? <Loader className="animate-spin" size={18} /> : <Target size={18} />}
+                    {editingGroup ? 'Update Group' : 'Create Group'}
                   </button>
                 </div>
               </form>
             </motion.div>
-          </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

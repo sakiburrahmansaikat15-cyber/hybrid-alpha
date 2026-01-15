@@ -9,7 +9,12 @@ class PaymentMethod extends Model
 {
     use HasFactory;
 
-     protected $guarded = [];
+     protected $fillable = [
+        'name',
+        'code',
+        'description',
+        'is_active',
+    ];
 
 
      public function salePayments()

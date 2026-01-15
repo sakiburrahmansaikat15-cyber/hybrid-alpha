@@ -9,5 +9,12 @@ class GiftCard extends Model
 {
     use HasFactory;
     
-     protected $guarded = [];
+     protected $fillable = [
+        'code',
+        'balance',
+        'initial_balance',
+        'customer_id',
+        'expiry_date',
+        'status',
+    ];
 }

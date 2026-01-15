@@ -24,6 +24,11 @@ class PaymentMethodController extends Controller
             $query->where('name', 'like', "%{$keyword}%");
         }
 
+        // 🏷️ Apply status filter
+        if ($request->has('status') && $request->status !== 'all') {
+            $query->where('status', $request->status);
+        }
+
         // ⚙️ If no limit provided, return all data
         if (!$limit) {
             $data = $query->latest()->get();
@@ -62,8 +67,8 @@ class PaymentMethodController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'name'   => 'required|string|max:255|unique:payment_methods,name',
-            'type'   => 'required|in:cash,card,voucher,wallet',
+            'name' => 'required|string|max:255|unique:payment_methods,name',
+            'type' => 'required|in:cash,card,voucher,wallet',
             'status' => 'required|in:active,inactive',
         ]);
 
@@ -71,7 +76,7 @@ class PaymentMethodController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Validation failed',
-                'errors'  => $validator->errors(),
+                'errors' => $validator->errors(),
             ], 422);
         }
 
@@ -80,7 +85,7 @@ class PaymentMethodController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Payment method created successfully',
-            'data'    => $method,
+            'data' => $method,
         ], 201);
     }
 
@@ -119,8 +124,8 @@ class PaymentMethodController extends Controller
         }
 
         $data = $request->validate([
-            'name'   => 'sometimes|string|max:255|unique:payment_methods,name,' . $method->id,
-            'type'   => 'sometimes|in:cash,card,voucher,wallet',
+            'name' => 'sometimes|string|max:255|unique:payment_methods,name,' . $method->id,
+            'type' => 'sometimes|in:cash,card,voucher,wallet',
             'status' => 'sometimes|in:active,inactive',
         ]);
 

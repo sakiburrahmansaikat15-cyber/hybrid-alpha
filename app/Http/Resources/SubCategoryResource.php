@@ -14,15 +14,15 @@ class SubCategoryResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-            return [
+        return [
             'id' => $this->id,
             'name' => $this->name,
             'image' => $this->image,
             'status' => $this->status,
-            "category_id"=>$this->category_id,
+            "category_id" => $this->category_id,
             'category' => new ProductsResource($this->whenLoaded('category')),
-            'created_at' => $this->created_at->toDateTimeString(),
-            'updated_at' => $this->updated_at->toDateTimeString(),
+            'created_at' => $this->created_at?->toDateTimeString(),
+            'updated_at' => $this->updated_at?->toDateTimeString(),
         ];
     }
 }

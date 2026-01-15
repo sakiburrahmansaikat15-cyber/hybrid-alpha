@@ -9,7 +9,14 @@ class OpportunityStage extends Model
 {
     use HasFactory;
 
-      protected $guarded = [];
+      protected $fillable = [
+        'name',
+        'probability',
+        'order',
+        'is_closed',
+        'is_won',
+        'description',
+    ];
 
 
         public function opportunities()

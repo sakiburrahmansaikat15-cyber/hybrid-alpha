@@ -47,7 +47,44 @@ import {
   TrendingDown,
   AlertCircle,
   Download,
-  Plus
+  Plus,
+  ChevronLeft,
+  PanelLeftClose,
+  Edit2,
+  RefreshCw,
+  Grid,
+  Briefcase,
+  Scale,
+  ArrowDownLeft,
+  ArrowUpRight,
+  DollarSign,
+  CalendarClock,
+  CalendarCheck,
+  FileCheck,
+  PanelLeftOpen,
+  Building,
+  Building2,
+  Gift,
+  ShoppingCart,
+  BrainCircuit,
+  Box,
+  Tag,
+  Warehouse,
+  ClipboardList,
+  Barcode,
+  Truck,
+  Monitor,
+  History,
+  PauseCircle,
+  RotateCcw,
+  Target,
+  Megaphone,
+  LifeBuoy,
+  FileMinus,
+  BookOpen,
+  FileBarChart,
+  Key,
+  Sliders
 } from 'lucide-react';
 
 const iconComponents = {
@@ -60,6 +97,7 @@ const iconComponents = {
   Settings,
   ChevronDown,
   ChevronRight,
+  ChevronLeft,
   X,
   Bell,
   User,
@@ -85,9 +123,11 @@ const iconComponents = {
   UserX,
   UserMinus,
   LayoutGrid,
+  Grid,
   List,
   MessageCircle,
   Edit,
+  Edit2,
   Trash2,
   Package,
   TrendingUp,
@@ -99,16 +139,50 @@ const iconComponents = {
   TrendingDown,
   AlertCircle,
   Download,
-  Plus
+  Plus,
+  PanelLeftClose,
+  RefreshCw,
+  Briefcase,
+  Scale,
+  ArrowDownLeft,
+  ArrowUpRight,
+  DollarSign,
+  CalendarClock,
+  CalendarCheck,
+  FileCheck,
+  PanelLeftOpen,
+  Building,
+  Building2,
+  Gift,
+  ShoppingCart,
+  BrainCircuit,
+  Box,
+  Tag,
+  Warehouse,
+  ClipboardList,
+  Barcode,
+  Truck,
+  Monitor,
+  History,
+  PauseCircle,
+  RotateCcw,
+  Target,
+  Megaphone,
+  LifeBuoy,
+  FileMinus,
+  BookOpen,
+  FileBarChart,
+  Key,
+  Sliders
 };
 
 export const IconMapper = ({ name, size = 20, className = "" }) => {
   const IconComponent = iconComponents[name];
-  
+
   if (!IconComponent) {
     console.warn(`Icon "${name}" not found`);
     return <div className={`w-${size} h-${size} bg-gray-300 rounded`} />;
   }
-  
+
   return <IconComponent size={size} className={className} />;
 };

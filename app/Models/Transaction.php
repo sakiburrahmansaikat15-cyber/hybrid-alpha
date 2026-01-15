@@ -8,7 +8,15 @@ use Illuminate\Database\Eloquent\Model;
 class Transaction extends Model
 {
     use HasFactory;
-     protected $guarded = [];
+     protected $fillable = [
+        'transaction_type',
+        'amount',
+        'payment_type_id',
+        'reference_number',
+        'description',
+        'transaction_date',
+        'status',
+    ];
 
 
 

@@ -4,46 +4,56 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ProductsResource;
-use App\Models\Prooducts;
+use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
-use Illuminate\Support\Facades\Validator;
+use App\Http\Requests\Api\StoreProductRequest;
+use App\Http\Requests\Api\UpdateProductRequest;
 
 class ProductController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware('permission:products.view')->only(['index', 'show']);
+        $this->middleware('permission:products.create')->only(['store']);
+        $this->middleware('permission:products.edit')->only(['update']);
+        $this->middleware('permission:products.delete')->only(['destroy']);
+    }
     // ✅ List all products with pagination
-        public function index(Request $request)
+    public function index(Request $request)
     {
         $keyword = $request->query('keyword', '');
         $limit = $request->query('limit');
 
-        // Include related models
-          $query = Prooducts::with("category","brand","subCategory","subItem","unit","productType");
+        // Include related models & only select necessary columns from products
+        $query = Product::with([
+            "category:id,name",
+            "brand:id,name",
+            "subCategory:id,name",
+            "unit:id,name",
+            "productType:id,name"
+        ]);
 
+
+        $status = $request->query('status');
+        $cat_id = $request->query('cat_id');
 
         // 🔍 Apply search if keyword provided
         if ($keyword) {
             $query->where('name', 'like', "%{$keyword}%");
         }
 
-        // ⚙️ If no limit, return all results
-        if (!$limit) {
-            $data = $query->latest()->get();
-
-            return response()->json([
-                'message' => 'Products fetched successfully',
-                'pagination' => [
-                    'current_page' => 1,
-                    'per_page' => $data->count(),
-                    'total_items' => $data->count(),
-                    'total_pages' => 1,
-                    'data' => ProductsResource::collection($data),
-                ],
-            ]);
+        // 🏷️ Apply Filters
+        if ($status && $status !== 'all') {
+            $query->where('status', $status);
         }
 
-        // 📄 Otherwise, paginate results
-        $limit = (int) $limit ?: 10;
+        if ($cat_id && $cat_id !== 'all') {
+            $query->where('cat_id', $cat_id);
+        }
+
+        // 📄 Enforce pagination for better performance
+        $limit = (int) ($limit ?: 15);
         $products = $query->latest()->paginate($limit);
 
         return response()->json([
@@ -59,34 +69,11 @@ class ProductController extends Controller
     }
 
 
-    // ✅ Create a new product
-    public function store(Request $request)
+    public function store(StoreProductRequest $request)
     {
-        $validator = Validator::make($request->all(), [
-            'name' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'specification' => 'nullable|string',
-            'status' => 'required|in:active,inactive',
-            'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
-            'cat_id' => 'nullable|exists:categories,id',
-            'brand_id' => 'nullable|exists:brands,id',
-            'sub_cat_id' => 'nullable|exists:sub_categories,id',
-            'sub_item_id' => 'nullable|exists:sub_items,id',
-            'unit_id' => 'nullable|exists:units,id',
-            'product_type_id' => 'nullable|exists:product_types,id',
-        ]);
+        $data = $request->validated();
 
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $validator->errors()
-            ], 422);
-        }
-
-        $data = $validator->validated();
-
-        // ✅ Handle image upload
+        // ✅ Secure image upload with validation
         if ($request->hasFile('image')) {
             $folder = public_path('products');
             if (!File::exists($folder)) {
@@ -99,7 +86,7 @@ class ProductController extends Controller
             $data['image'] = 'products/' . $imageName;
         }
 
-        $product = Prooducts::create($data);
+        $product = Product::create($data);
 
         return response()->json([
             'success' => true,
@@ -111,7 +98,7 @@ class ProductController extends Controller
     // ✅ Show a single product
     public function show($id)
     {
-        $product = Prooducts::with(['category', 'brand','subCategory','subItem','unit','productType'])->find($id);
+        $product = Product::with(['category', 'brand', 'subCategory', 'subItem', 'unit', 'productType'])->find($id);
 
         if (!$product) {
             return response()->json([
@@ -126,10 +113,9 @@ class ProductController extends Controller
         ], 200);
     }
 
-    // ✅ Update product
-    public function update(Request $request, $id)
+    public function update(UpdateProductRequest $request, $id)
     {
-        $product = Prooducts::find($id);
+        $product = Product::find($id);
 
         if (!$product) {
             return response()->json([
@@ -138,21 +124,9 @@ class ProductController extends Controller
             ], 404);
         }
 
-        $data = $request->validate([
-            'name' => 'sometimes|string|max:255',
-            'description' => 'nullable|string',
-            'specification' => 'nullable|string',
-            'status' => 'sometimes|in:active,inactive',
-            'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
-            'cat_id' => 'nullable|exists:categories,id',
-            'brand_id' => 'nullable|exists:brands,id',
-            'sub_cat_id' => 'nullable|exists:sub_categories,id',
-            'sub_item_id' => 'nullable|exists:sub_items,id',
-            'unit_id' => 'nullable|exists:units,id',
-            'product_type_id' => 'nullable|exists:product_types,id',
-        ]);
+        $data = $request->validated();
 
-        // ✅ Handle image update
+        // ✅ Secure image update with validation
         if ($request->hasFile('image')) {
             if ($product->image && File::exists(public_path($product->image))) {
                 File::delete(public_path($product->image));
@@ -181,7 +155,7 @@ class ProductController extends Controller
     // ✅ Delete product
     public function destroy($id)
     {
-        $product = Prooducts::find($id);
+        $product = Product::find($id);
 
         if (!$product) {
             return response()->json([
@@ -190,6 +164,7 @@ class ProductController extends Controller
             ], 404);
         }
 
+        // Delete image using Storage
         if ($product->image && File::exists(public_path($product->image))) {
             File::delete(public_path($product->image));
         }

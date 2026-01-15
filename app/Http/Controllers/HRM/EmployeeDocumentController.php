@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Validator;
 
 class EmployeeDocumentController extends Controller
 {
-  
+
     public function index(Request $request)
     {
         $keyword = $request->query('keyword', '');
@@ -62,7 +62,7 @@ class EmployeeDocumentController extends Controller
         $validator = Validator::make($request->all(), [
             'employee_id' => 'required|exists:employees,id',
             'document_type' => 'required|string|max:255',
-            'document_file' => 'required|file|mimes:pdf,jpg,jpeg,png|max:2048',
+            'document_file' => 'required|file|mimes:pdf,jpg,jpeg,png,PDF,JPG,JPEG,PNG|max:10240',
         ]);
 
         if ($validator->fails()) {
@@ -120,11 +120,21 @@ class EmployeeDocumentController extends Controller
     {
         $document = EmployeeDocument::findOrFail($id);
 
-        $data = $request->validate([
+        $validator = Validator::make($request->all(), [
             'employee_id' => 'sometimes|exists:employees,id',
             'document_type' => 'sometimes|string|max:255',
-            'document_file' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
+            'document_file' => 'nullable|file|mimes:pdf,jpg,jpeg,png,PDF,JPG,JPEG,PNG|max:10240',
         ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $data = $validator->validated();
 
 
         if ($request->hasFile('document_file')) {

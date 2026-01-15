@@ -9,7 +9,13 @@ class HoldCart extends Model
 {
     use HasFactory;
 
-      protected $guarded = [];
+      protected $fillable = [
+        'terminal_id',
+        'customer_id',
+        'cart_data',
+        'notes',
+        'status',
+    ];
 
 
       public function terminal()

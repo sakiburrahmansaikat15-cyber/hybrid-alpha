@@ -1,6 +1,6 @@
 // components/Layout/Layout.jsx
 import { useState, useEffect } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import Header from './Header';
 import Sidebar from './Sidebar';
@@ -9,10 +9,11 @@ const Layout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const location = useLocation();
 
   useEffect(() => {
     const checkScreenSize = () => {
-      const mobile = window.innerWidth < 768;
+      const mobile = window.innerWidth < 1024; // Better breakpoint for complex ERPs
       setIsMobile(mobile);
       if (mobile) {
         setIsSidebarOpen(false);
@@ -36,35 +37,49 @@ const Layout = () => {
 
   const closeMobileSidebar = () => setMobileSidebarOpen(false);
 
-  const contentVariants = {
-    expanded: { width: "calc(100% - 280px)", marginLeft: "280px", transition: { duration: 0.3, ease: "easeInOut" } },
-    collapsed: { width: "calc(100% - 80px)", marginLeft: "80px", transition: { duration: 0.3, ease: "easeInOut" } },
-    mobile: { width: "100%", marginLeft: "0px", transition: { duration: 0.3, ease: "easeInOut" } }
-  };
+  // Layout constants
+  const sidebarWidth = isSidebarOpen ? 280 : 84;
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-950 overflow-hidden">
-      {!isMobile && (
-        <div className="fixed left-0 top-0 h-screen z-30">
-          <Sidebar isCollapsed={!isSidebarOpen} onToggle={toggleSidebar} mobileOpen={mobileSidebarOpen} onMobileClose={closeMobileSidebar} />
-        </div>
-      )}
-      {isMobile && <Sidebar isCollapsed={false} onToggle={toggleSidebar} mobileOpen={mobileSidebarOpen} onMobileClose={closeMobileSidebar} />}
-      <AnimatePresence>
-        {isMobile && mobileSidebarOpen && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={closeMobileSidebar} className="fixed inset-0 bg-black bg-opacity-50 z-20 lg:hidden" />
-        )}
-      </AnimatePresence>
-      <motion.div variants={contentVariants} initial={false} animate={isMobile ? "mobile" : isSidebarOpen ? "expanded" : "collapsed"} className="flex-1 flex flex-col min-w-0 relative z-10">
-        <div className="sticky top-0 z-20 w-full">
-          <Header onMenuToggle={toggleSidebar} isSidebarOpen={isMobile ? mobileSidebarOpen : isSidebarOpen} />
-        </div>
-        <main className="flex-1 overflow-auto">
-          <div className=" mx-auto  max-w-8xl">
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+    <div className="flex h-screen bg-slate-50 dark:bg-[#020617] transition-colors duration-500 overflow-hidden">
+      {/* Sidebar - Desktop & Mobile */}
+      <Sidebar
+        isCollapsed={!isSidebarOpen}
+        onToggle={toggleSidebar}
+        mobileOpen={mobileSidebarOpen}
+        onMobileClose={closeMobileSidebar}
+      />
+
+      {/* Main Content Area */}
+      <motion.div
+        animate={{
+          paddingLeft: isMobile ? 0 : sidebarWidth,
+          transition: { type: 'spring', damping: 25, stiffness: 120 }
+        }}
+        className="flex-1 flex flex-col min-w-0 h-screen"
+      >
+        {/* Header */}
+        <Header
+          onMenuToggle={toggleSidebar}
+          isSidebarOpen={isMobile ? mobileSidebarOpen : isSidebarOpen}
+        />
+
+        {/* Dynamic Route Content */}
+        <main className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar">
+          <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto w-full">
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, ease: "easeOut" }}
+              key={location.pathname} // Re-animate on route change
+            >
               <Outlet />
             </motion.div>
           </div>
+
+          {/* Subtle Ambient Glows */}
+          <div className="fixed top-[-10%] right-[-5%] w-[40%] h-[40%] bg-primary-500/5 blur-[120px] pointer-events-none z-0"></div>
+          <div className="fixed bottom-[-10%] left-[10%] w-[30%] h-[30%] bg-indigo-500/5 blur-[100px] pointer-events-none z-0"></div>
         </main>
       </motion.div>
     </div>

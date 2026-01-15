@@ -13,10 +13,12 @@ class ReceiptTemplateSeeder extends Seeder
         $faker = Faker::create();
 
         for ($i = 1; $i <= 5; $i++) {
-            ReceiptTemplate::create([
-                'name' => 'Template ' . $i,
-                'layout' => '<h1>' . $faker->company() . '</h1><p>Thank you for shopping!</p>',
-            ]);
+            ReceiptTemplate::firstOrCreate(
+                ['name' => 'Template ' . $i],
+                [
+                    'layout' => '<h1>' . $faker->company() . '</h1><p>Thank you for shopping!</p>',
+                ]
+            );
         }
     }
 }

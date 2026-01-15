@@ -1,28 +1,14 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Plus,
-  Search,
-  Edit,
-  Trash2,
-  X,
-  Check,
-  MoreVertical,
-  DollarSign,
-  Receipt,
-  Calendar,
-  User,
-  Loader,
-  ChevronLeft,
-  ChevronRight,
-  Package,
-  CreditCard,
+  Plus, Search, Edit, Trash2, X, Loader, ChevronLeft, ChevronRight,
+  Activity, Zap, Target, FileText, DollarSign, User, Monitor
 } from 'lucide-react';
 
-const API_URL = 'http://localhost:8000/api/pos/sales';
-const TERMINALS_API_URL = 'http://localhost:8000/api/pos/terminals';
-const CUSTOMERS_API_URL = 'http://localhost:8000/api/pos/customers';
+const API_URL = '/api/pos/sales';
+const TERMINALS_API_URL = '/api/pos/terminals';
+const CUSTOMERS_API_URL = '/api/pos/customers';
 
 const Sales = () => {
   const [sales, setSales] = useState([]);
@@ -33,139 +19,82 @@ const Sales = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingSale, setEditingSale] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [actionMenu, setActionMenu] = useState(null);
-  const [formData, setFormData] = useState({
-    terminal_id: '',
-    customer_id: '',
-    invoice_no: '',
-    total_amount: '',
-    status: 'pending',
-  });
+  const [formData, setFormData] = useState({ invoice_no: '', total_amount: '', status: 'pending', terminal_id: '', customer_id: '' });
   const [errors, setErrors] = useState({});
   const [notification, setNotification] = useState({ show: false, message: '', type: '' });
+  const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, per_page: 12, total_items: 0 });
 
-  const [pagination, setPagination] = useState({
-    current_page: 1,
-    last_page: 1,
-    per_page: 10,
-    total_items: 0,
-  });
-
+  const notificationTimerRef = useRef(null);
   const showNotification = useCallback((message, type = 'success') => {
+    if (notificationTimerRef.current) clearTimeout(notificationTimerRef.current);
     setNotification({ show: true, message, type });
-    setTimeout(() => setNotification({ show: false, message: '', type: '' }), 4000);
+    notificationTimerRef.current = setTimeout(() => setNotification({ show: false, message: '', type: '' }), 3500);
   }, []);
+
+  useEffect(() => () => { if (notificationTimerRef.current) clearTimeout(notificationTimerRef.current); }, []);
 
   const handleApiError = useCallback((error, defaultMessage) => {
     if (error.response?.status === 422) {
       const validationErrors = error.response.data.errors || {};
       setErrors(validationErrors);
-      const firstError = Object.values(validationErrors)[0]?.[0];
-      showNotification(firstError || 'Validation error', 'error');
-    } else if (error.response?.data?.message) {
-      showNotification(error.response.data.message, 'error');
-      setErrors({ _general: error.response.data.message });
+      showNotification(Object.values(validationErrors)[0]?.[0] || 'Please check your input', 'error');
     } else {
-      showNotification(defaultMessage || 'Something went wrong', 'error');
-      setErrors({ _general: defaultMessage });
+      showNotification(error.response?.data?.message || defaultMessage || 'Connection error', 'error');
     }
   }, [showNotification]);
 
-  // Fetch sales with server-side search & pagination
-  const fetchSales = useCallback(async (page = 1, perPage = 10, keyword = '') => {
+  const perPageValue = pagination.per_page;
+  const fetchSales = useCallback(async (page = 1, perPage = perPageValue, keyword = searchTerm) => {
     setLoading(true);
     try {
       const params = { page, limit: perPage };
       if (keyword.trim()) params.keyword = keyword.trim();
-
       const response = await axios.get(API_URL, { params });
       const res = response.data;
-
-      const saleData = res.pagination?.data || [];
-      const formattedSales = saleData.map(item => ({
-        id: item.id,
-        invoice_no: item.invoice_no,
-        total_amount: item.total_amount,
-        status: item.status,
-        terminal: item.terminal || null,
-        customer: item.customer || null,
-        created_at: item.created_at,
-        updated_at: item.updated_at,
-      }));
-
-      setSales(formattedSales);
+      setSales(res.pagination?.data || []);
       setPagination({
         current_page: res.pagination.current_page || 1,
         last_page: res.pagination.total_pages || 1,
-        per_page: res.pagination.per_page || 10,
+        per_page: res.pagination.per_page || 12,
         total_items: res.pagination.total_items || 0,
       });
     } catch (error) {
-      handleApiError(error, 'Failed to fetch sales');
+      handleApiError(error, 'Failed to load sales');
       setSales([]);
-      setPagination({ current_page: 1, last_page: 1, per_page: 10, total_items: 0 });
     } finally {
       setLoading(false);
     }
-  }, [handleApiError]);
+  }, [handleApiError, perPageValue, searchTerm]);
 
-  // Fetch terminals and customers for dropdowns
-  const fetchTerminals = useCallback(async () => {
+  const fetchSecondaryData = useCallback(async () => {
     try {
-      const response = await axios.get(TERMINALS_API_URL);
-      const res = response.data;
-      const terminalData = res.pagination?.data || res.data || [];
-      setTerminals(terminalData);
+      const [terminalsRes, customersRes] = await Promise.all([
+        axios.get(TERMINALS_API_URL),
+        axios.get(CUSTOMERS_API_URL)
+      ]);
+      setTerminals(terminalsRes.data.pagination?.data || terminalsRes.data.data || []);
+      setCustomers(customersRes.data.pagination?.data || customersRes.data.data || []);
     } catch (error) {
-      setTerminals([]);
+      console.error('Failed to load related data');
     }
   }, []);
 
-  const fetchCustomers = useCallback(async () => {
-    try {
-      const response = await axios.get(CUSTOMERS_API_URL);
-      const res = response.data;
-      const customerData = res.pagination?.data || res.data || [];
-      setCustomers(customerData);
-    } catch (error) {
-      setCustomers([]);
-    }
-  }, []);
-
-  // Debounced search
   useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchSales(1, pagination.per_page, searchTerm);
-    }, 500);
+    const timer = setTimeout(() => fetchSales(1), 500);
     return () => clearTimeout(timer);
-  }, [searchTerm, pagination.per_page, fetchSales]);
+  }, [searchTerm, perPageValue, fetchSales]);
 
-  // Initial load
   useEffect(() => {
-    fetchSales(1, 10);
-    fetchTerminals();
-    fetchCustomers();
-  }, []);
+    fetchSecondaryData();
+  }, [fetchSecondaryData]);
 
   const handlePageChange = (newPage) => {
     if (newPage < 1 || newPage > pagination.last_page) return;
-    fetchSales(newPage, pagination.per_page, searchTerm);
-  };
-
-  const handleLimitChange = (newLimit) => {
-    const limit = parseInt(newLimit);
-    setPagination(prev => ({ ...prev, per_page: limit }));
-    fetchSales(1, limit, searchTerm);
+    fetchSales(newPage);
   };
 
   const resetForm = () => {
-    setFormData({
-      terminal_id: '',
-      customer_id: '',
-      invoice_no: '',
-      total_amount: '',
-      status: 'pending',
-    });
+    setFormData({ invoice_no: '', total_amount: '', status: 'pending', terminal_id: '', customer_id: '' });
     setEditingSale(null);
     setErrors({});
   };
@@ -174,11 +103,11 @@ const Sales = () => {
     if (sale) {
       setEditingSale(sale);
       setFormData({
-        terminal_id: sale.terminal?.id || '',
-        customer_id: sale.customer?.id || '',
         invoice_no: sale.invoice_no || '',
         total_amount: sale.total_amount || '',
         status: sale.status || 'pending',
+        terminal_id: sale.terminal_id || '',
+        customer_id: sale.customer_id || '',
       });
     } else {
       resetForm();
@@ -188,7 +117,7 @@ const Sales = () => {
 
   const closeModal = () => {
     setShowModal(false);
-    setTimeout(resetForm, 300);
+    resetForm();
   };
 
   const handleInputChange = (e) => {
@@ -201,27 +130,15 @@ const Sales = () => {
     e.preventDefault();
     setOperationLoading('saving');
     setErrors({});
-
     try {
-      const submitData = {
-        terminal_id: formData.terminal_id,
-        customer_id: formData.customer_id || null,
-        invoice_no: formData.invoice_no.trim(),
-        total_amount: parseFloat(formData.total_amount),
-        status: formData.status,
-      };
-
       let response;
       if (editingSale) {
-        response = await axios.post(`${API_URL}/${editingSale.id}`, submitData);
+        response = await axios.post(`${API_URL}/${editingSale.id}`, { ...formData, _method: 'PUT' });
       } else {
-        response = await axios.post(API_URL, submitData);
+        response = await axios.post(API_URL, formData);
       }
-
-      showNotification(
-        response.data.message || `Sale ${editingSale ? 'updated' : 'created'} successfully!`
-      );
-      fetchSales(pagination.current_page, pagination.per_page, searchTerm);
+      showNotification(response.data.message || `Sale ${editingSale ? 'updated' : 'created'} successfully!`);
+      fetchSales(pagination.current_page);
       closeModal();
     } catch (error) {
       handleApiError(error, 'Failed to save sale');
@@ -231,396 +148,217 @@ const Sales = () => {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Delete this sale permanently?')) return;
+    if (!window.confirm('Delete this sale?')) return;
     setOperationLoading(`delete-${id}`);
     try {
       await axios.delete(`${API_URL}/${id}`);
       showNotification('Sale deleted successfully');
-
-      const remainingItems = pagination.total_items - 1;
-      const maxPage = Math.ceil(remainingItems / pagination.per_page);
-      const targetPage = pagination.current_page > maxPage ? maxPage : pagination.current_page;
-
-      fetchSales(targetPage || 1, pagination.per_page, searchTerm);
+      fetchSales(1);
     } catch (error) {
-      handleApiError(error, 'Delete failed');
+      handleApiError(error, 'Failed to delete sale');
     } finally {
       setOperationLoading(null);
-      setActionMenu(null);
     }
   };
-
-  const formatDate = (date) => date ? new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
-
-  const formatCurrency = (amount) => `$${parseFloat(amount).toFixed(2)}`;
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'completed': return 'bg-green-500/20 text-green-400';
-      case 'pending': return 'bg-yellow-500/20 text-yellow-400';
-      case 'cancelled': return 'bg-red-500/20 text-red-400';
-      default: return 'bg-gray-500/20 text-gray-400';
-    }
-  };
-
-  useEffect(() => {
-    const handler = () => setActionMenu(null);
-    document.addEventListener('click', handler);
-    return () => document.removeEventListener('click', handler);
-  }, []);
-
-  if (loading && sales.length === 0) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="mb-8 flex justify-between">
-            <div className="h-10 bg-gray-800 rounded w-64 animate-pulse"></div>
-            <div className="h-12 bg-gray-800 rounded-xl w-40 animate-pulse"></div>
-          </div>
-          <div className="bg-gray-800/30 rounded-2xl p-6 mb-8 animate-pulse space-y-4">
-            <div className="h-12 bg-gray-700 rounded"></div>
-          </div>
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="bg-gray-800/30 rounded-2xl p-6 animate-pulse space-y-4">
-                <div className="h-8 bg-gray-700 rounded"></div>
-                <div className="h-20 bg-gray-700/50 rounded-lg"></div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-gray-100 py-8">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
       <AnimatePresence>
         {notification.show && (
-          <motion.div
-            initial={{ opacity: 0, x: 300 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 300 }}
-            className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-xl shadow-2xl ${notification.type === 'error' ? 'bg-red-600' : 'bg-green-600'} text-white font-medium`}
-          >
-            {notification.message}
+          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} className="fixed top-4 right-4 z-50">
+            <div className={`flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg backdrop-blur-sm border ${notification.type === 'error' ? 'bg-rose-500/10 border-rose-500/20 text-rose-600' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600'}`}>
+              <Zap size={16} />
+              <span className="font-semibold text-sm">{notification.message}</span>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-8 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+      <div className="max-w-7xl mx-auto px-4 py-6">
+        <header className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-cyan-500 bg-clip-text text-transparent">
-              Sales Management
-            </h1>
-            <p className="text-gray-400 mt-2">Track and manage all point-of-sale transactions</p>
+            <h1 className="text-3xl font-bold tracking-tight dark:text-white mb-1">Sales</h1>
+            <p className="text-sm text-slate-500">Manage sales transactions</p>
           </div>
-          <button
-            onClick={() => openModal()}
-            className="bg-gradient-to-r from-blue-400 to-cyan-500 hover:from-green-700 hover:to-cyan-700 px-6 py-3 rounded-xl font-bold flex items-center gap-3 shadow-lg"
-          >
-            <Plus size={22} /> New Sale
+          <button onClick={() => openModal()} className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium transition-colors">
+            <Plus size={18} />
+            <span>Add Sale</span>
           </button>
-        </div>
+        </header>
 
-        {/* Search + Per Page */}
-        <div className="bg-gray-800/30 backdrop-blur-sm rounded-2xl p-6 mb-8 border border-gray-700/30">
-          <div className="flex flex-col lg:flex-row gap-6">
-            <div className="flex-1 relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-              <input
-                type="text"
-                placeholder="Search by invoice number or customer name..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-green-500/50 outline-none"
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6">
+          <div className="lg:col-span-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+              <input type="text" placeholder="Search sales..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
               />
             </div>
-            <div className="flex items-center gap-2 bg-gray-700/50 border border-gray-600/50 rounded-xl px-4 py-3">
-              <span className="text-sm text-gray-400">Show:</span>
-              <select
-                value={pagination.per_page}
-                onChange={(e) => handleLimitChange(e.target.value)}
-                className="bg-transparent border-0 text-white text-sm focus:ring-0 focus:outline-none"
-              >
-                <option value="5">5</option>
-                <option value="10">10</option>
-                <option value="25">25</option>
-                <option value="50">50</option>
-              </select>
+          </div>
+          <div className="flex items-center justify-between px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg">
+            <div className="flex items-center gap-2">
+              <Activity className="text-emerald-500" size={18} />
+              <span className="text-xs font-medium text-slate-500">Total</span>
             </div>
+            <span className="text-lg font-bold text-emerald-600">{pagination.total_items}</span>
           </div>
         </div>
 
-        {/* Sales Grid */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1, transition: { staggerChildren: 0.1 } }}
-          className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mb-8"
-        >
-          {sales.map(sale => (
-            <motion.div
-              key={sale.id}
-              whileHover={{ y: -8, scale: 1.02 }}
-              className="group bg-gray-800/30 backdrop-blur-sm rounded-2xl border border-gray-700/30 hover:border-green-500/50 transition-all overflow-hidden"
-            >
-              <div className="p-6">
-                <div className="flex justify-between items-start mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="p-3 bg-green-500/10 rounded-full">
-                      <Receipt size={24} className="text-green-400" />
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-bold">{sale.invoice_no}</h3>
-                      <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium mt-1 ${getStatusColor(sale.status)}`}>
-                        {sale.status.charAt(0).toUpperCase() + sale.status.slice(1)}
-                      </span>
-                    </div>
-                  </div>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setActionMenu(actionMenu === sale.id ? null : sale.id); }}
-                    className="p-2 hover:bg-gray-700/50 rounded-lg"
-                  >
-                    <MoreVertical size={18} />
-                  </button>
-                </div>
-
-                <div className="space-y-3 mt-4">
-                  <div className="flex items-center justify-between text-lg font-bold text-green-400">
-                    <span>Total Amount</span>
-                    <span>{formatCurrency(sale.total_amount)}</span>
-                  </div>
-
-                  {sale.terminal && (
-                    <div className="flex items-center gap-3 text-sm text-gray-300">
-                      <Package size={16} />
-                      <span>Terminal: {sale.terminal.name || sale.terminal.id}</span>
-                    </div>
-                  )}
-
-                  {sale.customer && (
-                    <div className="flex items-center gap-3 text-sm text-gray-300">
-                      <User size={16} />
-                      <span>Customer: {sale.customer.name}</span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="space-y-2 text-sm text-gray-400 mt-6">
-                  <div className="flex items-center gap-2">
-                    <Calendar size={16} /> Created: {formatDate(sale.created_at)}
-                  </div>
-                </div>
-
-                <div className="flex justify-between items-center mt-6 pt-4 border-t border-gray-700/30">
-                  <span className="text-xs text-gray-500">Updated: {formatDate(sale.updated_at)}</span>
-                  <div className="flex gap-2">
-                    <button onClick={() => openModal(sale)} className="p-2 bg-blue-500/20 hover:bg-blue-500/40 rounded-lg">
-                      <Edit size={14} />
-                    </button>
-                    <button onClick={() => handleDelete(sale.id)} className="p-2 bg-red-500/20 hover:bg-red-500/40 rounded-lg">
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <AnimatePresence>
-                {actionMenu === sale.id && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="absolute right-4 top-20 bg-gray-800 border border-gray-600 rounded-xl shadow-xl py-2 z-10 min-w-[160px]"
-                  >
-                    <button onClick={() => { openModal(sale); setActionMenu(null); }} className="w-full text-left px-4 py-2 hover:bg-gray-700 flex items-center gap-3 text-sm">
-                      <Edit size={16} /> Edit
-                    </button>
-                    <button onClick={() => handleDelete(sale.id)} className="w-full text-left px-4 py-2 hover:bg-red-500/20 text-red-400 flex items-center gap-3 text-sm">
-                      <Trash2 size={16} /> Delete
-                    </button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.div>
-          ))}
-        </motion.div>
-
-        {/* Pagination */}
-        {pagination.last_page > 1 && (
-          <div className="flex justify-between items-center py-6 border-t border-gray-700/30">
-            <div className="text-sm text-gray-400">
-              Showing {(pagination.current_page - 1) * pagination.per_page + 1} to{' '}
-              {Math.min(pagination.current_page * pagination.per_page, pagination.total_items)} of {pagination.total_items}
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => handlePageChange(pagination.current_page - 1)}
-                disabled={pagination.current_page === 1}
-                className="px-4 py-2 rounded-xl border border-gray-600 disabled:opacity-50 flex items-center gap-2"
-              >
-                <ChevronLeft size={16} /> Previous
-              </button>
-              {Array.from({ length: pagination.last_page }, (_, i) => i + 1)
-                .filter(p => p === 1 || p === pagination.last_page || Math.abs(p - pagination.current_page) <= 2)
-                .map((p, idx, arr) => (
-                  <React.Fragment key={p}>
-                    {idx > 0 && p - arr[idx - 1] > 1 && <span className="px-3">...</span>}
-                    <button
-                      onClick={() => handlePageChange(p)}
-                      className={`px-4 py-2 rounded-xl border ${pagination.current_page === p ? 'bg-green-600 border-green-500' : 'border-gray-600'}`}
-                    >
-                      {p}
-                    </button>
-                  </React.Fragment>
-                ))}
-              <button
-                onClick={() => handlePageChange(pagination.current_page + 1)}
-                disabled={pagination.current_page === pagination.last_page}
-                className="px-4 py-2 rounded-xl border border-gray-600 disabled:opacity-50 flex items-center gap-2"
-              >
-                Next <ChevronRight size={16} />
-              </button>
-            </div>
+        {loading && sales.length === 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {[...Array(8)].map((_, i) => <div key={i} className="h-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl animate-pulse" />)}
           </div>
-        )}
+        ) : sales.length > 0 ? (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-6">
+              {sales.map((s) => (
+                <motion.div key={s.id} whileHover={{ y: -4 }}
+                  className="group bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-emerald-500/40 rounded-xl p-4 transition-all"
+                >
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-600">
+                      <FileText size={20} />
+                    </div>
+                    <div className="flex gap-1">
+                      <button onClick={() => openModal(s)} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
+                        <Edit size={16} className="text-slate-400 hover:text-emerald-600" />
+                      </button>
+                      <button onClick={() => handleDelete(s.id)} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
+                        <Trash2 size={16} className="text-slate-400 hover:text-rose-600" />
+                      </button>
+                    </div>
+                  </div>
 
-        {/* Empty State */}
-        {sales.length === 0 && !loading && (
-          <div className="text-center py-20">
-            <CreditCard size={64} className="mx-auto text-gray-600 mb-6" />
-            <h3 className="text-2xl font-bold mb-3">{searchTerm ? 'No sales found' : 'No sales yet'}</h3>
-            <p className="text-gray-400 mb-8">{searchTerm ? 'Try different keywords' : 'Record your first sale'}</p>
-            {!searchTerm && (
-              <button onClick={() => openModal()} className="bg-gradient-to-r from-green-600 to-cyan-600 px-8 py-3 rounded-xl font-bold">
-                <Plus className="inline mr-2" /> Record First Sale
-              </button>
-            )}
+                  <div className="space-y-2">
+                    <h3 className="text-lg font-bold text-slate-900 dark:text-white truncate">{s.invoice_no}</h3>
+                    <div className="text-2xl font-bold text-emerald-600">
+                      ${parseFloat(s.total_amount).toLocaleString()}
+                    </div>
+
+                    <div className="space-y-1 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Customer</span>
+                        <span className="font-medium truncate ml-2">{s.customer?.name || 'Walk-in'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Terminal</span>
+                        <span className="font-medium truncate ml-2">{s.terminal?.name || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Status</span>
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${s.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : s.status === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-700'}`}>
+                          {s.status}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                    <span className="text-xs text-slate-400">{new Date(s.created_at).toLocaleDateString()}</span>
+                    <span className="text-xs font-medium text-emerald-600">#{s.id}</span>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-between p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl">
+              <div className="text-sm text-slate-500">Page {pagination.current_page} of {pagination.last_page}</div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => handlePageChange(pagination.current_page - 1)} disabled={pagination.current_page === 1}
+                  className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 disabled:opacity-30 hover:bg-emerald-500 hover:text-white transition-colors">
+                  <ChevronLeft size={20} />
+                </button>
+                {Array.from({ length: Math.min(pagination.last_page, 5) }, (_, i) => i + 1).map((p) => (
+                  <button key={p} onClick={() => handlePageChange(p)}
+                    className={`w-10 h-10 rounded-lg font-medium transition-all ${pagination.current_page === p ? 'bg-emerald-500 text-white' : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200'}`}>
+                    {p}
+                  </button>
+                ))}
+                <button onClick={() => handlePageChange(pagination.current_page + 1)} disabled={pagination.current_page === pagination.last_page}
+                  className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 disabled:opacity-30 hover:bg-emerald-500 hover:text-white transition-colors">
+                  <ChevronRight size={20} />
+                </button>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+            <FileText size={64} className="mb-4 opacity-20" />
+            <p className="font-medium">No sales found</p>
           </div>
         )}
       </div>
 
-      {/* Modal */}
       <AnimatePresence>
         {showModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-            onClick={closeModal}
-          >
-            <motion.div
-              initial={{ scale: 0.9 }}
-              animate={{ scale: 1 }}
-              exit={{ scale: 0.9 }}
-              className="bg-gray-800 rounded-3xl p-8 max-w-lg w-full border border-gray-700"
-              onClick={e => e.stopPropagation()}
-            >
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={closeModal} className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}
+              className="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-xl" onClick={e => e.stopPropagation()}>
               <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold bg-gradient-to-r from-green-400 to-cyan-500 bg-clip-text text-transparent">
-                  {editingSale ? 'Edit Sale' : 'Create New Sale'}
-                </h2>
-                <button onClick={closeModal} className="p-2 hover:bg-gray-700 rounded-lg">
-                  <X size={24} />
+                <h2 className="text-2xl font-bold">{editingSale ? 'Edit Sale' : 'New Sale'}</h2>
+                <button onClick={closeModal} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
+                  <X size={20} />
                 </button>
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-6">
+              <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-semibold mb-2">Terminal *</label>
-                  <select
-                    name="terminal_id"
-                    value={formData.terminal_id}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-green-500 outline-none"
-                  >
-                    <option value="">Select Terminal</option>
-                    {terminals.map(terminal => (
-                      <option key={terminal.id} value={terminal.id}>{terminal.name || `Terminal ${terminal.id}`}</option>
-                    ))}
-                  </select>
-                  {errors.terminal_id && <p className="text-red-400 text-sm mt-1">{Array.isArray(errors.terminal_id) ? errors.terminal_id[0] : errors.terminal_id}</p>}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold mb-2">Customer (Optional)</label>
-                  <select
-                    name="customer_id"
-                    value={formData.customer_id}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-green-500 outline-none"
-                  >
-                    <option value="">Walk-in / No Customer</option>
-                    {customers.map(customer => (
-                      <option key={customer.id} value={customer.id}>{customer.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold mb-2">Invoice Number *</label>
-                  <input
-                    type="text"
-                    name="invoice_no"
-                    value={formData.invoice_no}
-                    onChange={handleInputChange}
-                    required
-                    placeholder="INV-00123"
-                    className={`w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-green-500 outline-none ${errors.invoice_no ? 'border-red-500' : ''}`}
+                  <label className="block text-sm font-medium mb-1.5">Invoice Number *</label>
+                  <input type="text" name="invoice_no" value={formData.invoice_no} onChange={handleInputChange} required placeholder="INV-001"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
                   />
-                  {errors.invoice_no && <p className="text-red-400 text-sm mt-1">{Array.isArray(errors.invoice_no) ? errors.invoice_no[0] : errors.invoice_no}</p>}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold mb-2">Total Amount *</label>
-                  <input
-                    type="number"
-                    name="total_amount"
-                    value={formData.total_amount}
-                    onChange={handleInputChange}
-                    required
-                    min="0"
-                    step="0.01"
-                    placeholder="0.00"
-                    className={`w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-green-500 outline-none ${errors.total_amount ? 'border-red-500' : ''}`}
+                  <label className="block text-sm font-medium mb-1.5">Total Amount *</label>
+                  <input type="number" step="0.01" name="total_amount" value={formData.total_amount} onChange={handleInputChange} required placeholder="0.00"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
                   />
-                  {errors.total_amount && <p className="text-red-400 text-sm mt-1">{Array.isArray(errors.total_amount) ? errors.total_amount[0] : errors.total_amount}</p>}
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Terminal *</label>
+                    <select name="terminal_id" value={formData.terminal_id} onChange={handleInputChange} required
+                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20">
+                      <option value="">Select...</option>
+                      {terminals.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Customer</label>
+                    <select name="customer_id" value={formData.customer_id} onChange={handleInputChange}
+                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20">
+                      <option value="">Walk-in</option>
+                      {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold mb-2">Status</label>
-                  <select
-                    name="status"
-                    value={formData.status}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-green-500 outline-none"
-                  >
+                  <label className="block text-sm font-medium mb-1.5">Status *</label>
+                  <select name="status" value={formData.status} onChange={handleInputChange} required
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20">
                     <option value="pending">Pending</option>
                     <option value="completed">Completed</option>
                     <option value="cancelled">Cancelled</option>
                   </select>
                 </div>
 
-                <div className="flex justify-end gap-3 pt-4">
-                  <button type="button" onClick={closeModal} className="px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-xl">
+                <div className="flex gap-3 pt-4">
+                  <button type="button" onClick={closeModal} className="flex-1 px-4 py-2.5 bg-slate-100 dark:bg-slate-800 rounded-lg font-medium hover:bg-slate-200 transition-colors">
                     Cancel
                   </button>
-                  <button
-                    type="submit"
-                    disabled={operationLoading === 'saving'}
-                    className="px-6 py-3 bg-gradient-to-r from-green-600 to-cyan-600 rounded-xl font-bold flex items-center gap-2 disabled:opacity-70"
-                  >
-                    {operationLoading === 'saving' ? <Loader size={20} className="animate-spin" /> : <Check size={20} />}
-                    {editingSale ? 'Update' : 'Create'} Sale
+                  <button type="submit" disabled={operationLoading === 'saving'}
+                    className="flex-1 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium disabled:opacity-50 transition-colors inline-flex items-center justify-center gap-2">
+                    {operationLoading === 'saving' ? <Loader className="animate-spin" size={18} /> : <Target size={18} />}
+                    <span>{editingSale ? 'Update' : 'Create'}</span>
                   </button>
                 </div>
               </form>
             </motion.div>
-          </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

@@ -1,25 +1,36 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Plus, Search, Edit, Trash2, X, Check,
-  Store, Mail, Phone, MapPin, Upload, Shield,
-  ChevronLeft, ChevronRight, Loader, AlertCircle
+  Plus, Search, Edit, Trash2, X, Check, Eye, EyeOff,
+  MoreVertical, Store, Phone, Mail, MapPin, Upload,
+  Shield, Filter, RefreshCw, ChevronLeft, ChevronRight, Loader
 } from 'lucide-react';
 
-const API_URL = 'http://localhost:8000/api/vendors';
-const APP_URL = import.meta.env.VITE_APP_URL?.replace(/\/$/, '') || 'http://localhost:8000';
+const API_URL = '/api/vendors';
+const APP_URL = import.meta.env.VITE_APP_URL?.replace(/\/$/, '') || '';
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.1 }
+  }
+};
+
+const itemVariants = {
+  hidden: { y: 20, opacity: 0 },
+  visible: { y: 0, opacity: 1 }
+};
 
 const VendorManagement = () => {
   const [vendors, setVendors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [operationLoading, setOperationLoading] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingVendor, setEditingVendor] = useState(null);
-  const [deleteConfirm, setDeleteConfirm] = useState(null);
-  const [notification, setNotification] = useState({ show: false, message: '', type: '' });
-  const [errors, setErrors] = useState({});
+  const [searchTerm, setSearchTerm] = useState('');
+  const [actionMenu, setActionMenu] = useState(null);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -30,13 +41,13 @@ const VendorManagement = () => {
     status: 'active',
     image: null
   });
+
   const [imagePreview, setImagePreview] = useState(null);
+  const [errors, setErrors] = useState({});
+  const [notification, setNotification] = useState({ show: false, message: '', type: '' });
 
   const [pagination, setPagination] = useState({
-    current_page: 1,
-    last_page: 1,
-    per_page: 10,
-    total: 0
+    current_page: 1, per_page: 9, total_items: 0, total_pages: 1
   });
 
   const showNotification = useCallback((message, type = 'success') => {
@@ -45,7 +56,6 @@ const VendorManagement = () => {
   }, []);
 
   const handleApiError = useCallback((error, defaultMessage) => {
-    console.error('API Error:', error);
     if (error.response?.status === 422) {
       const validationErrors = error.response.data.errors || {};
       setErrors(validationErrors);
@@ -53,39 +63,40 @@ const VendorManagement = () => {
       showNotification(firstError || 'Validation error', 'error');
     } else if (error.response?.data?.message) {
       showNotification(error.response.data.message, 'error');
-      setErrors({ _general: error.response.data.message });
     } else {
       showNotification(defaultMessage || 'Something went wrong', 'error');
     }
   }, [showNotification]);
 
-  // Fixed: fetch with keyword + limit + page, no stale closure
-  const fetchVendors = useCallback(async (page = 1, perPage = 10, keyword = '') => {
+  const fetchVendors = useCallback(async (page = 1, limit = 9, keyword = '') => {
     setLoading(true);
     try {
-      const params = { page, limit: perPage };
+      const params = { page, limit };
       if (keyword.trim()) params.keyword = keyword.trim();
 
-      const res = await axios.get(API_URL, { params });
-      const data = res.data;
+      const response = await axios.get(API_URL, { params });
+      const data = response.data.pagination || response.data;
+      const itemList = data.data || [];
 
-      setVendors(data.pagination?.data || []);
+      setVendors(itemList);
       setPagination({
-        current_page: data.pagination?.current_page || 1,
-        last_page: data.pagination?.total_pages || 1,
-        per_page: data.pagination?.per_page || perPage,
-        total: data.pagination?.total_items || 0
+        current_page: data.current_page || 1,
+        per_page: data.per_page || limit,
+        total_items: data.total_items || data.total || itemList.length,
+        total_pages: data.total_pages || data.last_page || 1
       });
-      setErrors({});
-    } catch (err) {
-      handleApiError(err, 'Failed to fetch vendors');
+    } catch (error) {
+      handleApiError(error, 'Failed to fetch vendors');
       setVendors([]);
     } finally {
       setLoading(false);
     }
   }, [handleApiError]);
 
-  // Debounced search + reacts to per_page change
+  useEffect(() => {
+    fetchVendors(1, 9);
+  }, []);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       fetchVendors(1, pagination.per_page, searchTerm);
@@ -93,18 +104,24 @@ const VendorManagement = () => {
     return () => clearTimeout(timer);
   }, [searchTerm, pagination.per_page, fetchVendors]);
 
-  // Initial load
+  // Click outside listener for action menu
   useEffect(() => {
-    fetchVendors(1, 10);
-  }, []);
+    const handleClickOutside = (e) => {
+      if (actionMenu && !e.target.closest('.action-menu-container')) {
+        setActionMenu(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [actionMenu]);
 
   const handlePageChange = (newPage) => {
-    if (newPage < 1 || newPage > pagination.last_page) return;
+    if (newPage < 1 || newPage > pagination.total_pages || newPage === pagination.current_page) return;
     fetchVendors(newPage, pagination.per_page, searchTerm);
   };
 
   const handleLimitChange = (newLimit) => {
-    const limit = parseInt(newLimit, 10);
+    const limit = parseInt(newLimit);
     setPagination(prev => ({ ...prev, per_page: limit, current_page: 1 }));
     fetchVendors(1, limit, searchTerm);
   };
@@ -127,7 +144,7 @@ const VendorManagement = () => {
         email: vendor.email || '',
         contact: vendor.contact || '',
         address: vendor.address || '',
-        status: vendor.status === 'active' ? 'active' : 'inactive',
+        status: vendor.status || 'active',
         image: null
       });
       setImagePreview(vendor.image ? `${APP_URL}/${vendor.image}` : null);
@@ -135,6 +152,7 @@ const VendorManagement = () => {
       resetForm();
     }
     setShowModal(true);
+    setActionMenu(null);
   };
 
   const closeModal = () => {
@@ -142,17 +160,18 @@ const VendorManagement = () => {
     setTimeout(resetForm, 300);
   };
 
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+    if (errors[name]) setErrors(prev => ({ ...prev, [name]: undefined }));
+  };
+
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-    if (!validTypes.includes(file.type)) {
-      setErrors(prev => ({ ...prev, image: 'Only JPG, PNG, WebP allowed' }));
-      return;
-    }
     if (file.size > 2 * 1024 * 1024) {
-      setErrors(prev => ({ ...prev, image: 'Image must be less than 2MB' }));
+      setErrors(prev => ({ ...prev, image: ['Image must be < 2MB'] }));
       return;
     }
 
@@ -166,473 +185,531 @@ const VendorManagement = () => {
     setOperationLoading('saving');
     setErrors({});
 
-    const data = new FormData();
-    data.append('name', formData.name.trim());
-    data.append('shop_name', formData.shop_name.trim());
-    data.append('email', formData.email.trim());
-    data.append('contact', formData.contact.trim());
-    data.append('address', formData.address.trim());
-    data.append('status', formData.status);
-    if (formData.image) data.append('image', formData.image);
+    const submitData = new FormData();
+    Object.keys(formData).forEach(key => {
+      if (key === 'image' && !formData.image) return;
+      submitData.append(key, formData[key]);
+    });
 
     try {
       if (editingVendor) {
-        await axios.post(`${API_URL}/${editingVendor.id}`, data, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
-        showNotification('Vendor updated successfully!');
+        // Laravel update workaround for FormData
+        submitData.append('_method', 'POST');
+        await axios.post(`${API_URL}/${editingVendor.id}`, submitData);
       } else {
-        await axios.post(API_URL, data, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
-        showNotification('Vendor created successfully!');
+        await axios.post(API_URL, submitData);
       }
-
+      showNotification(editingVendor ? 'Vendor updated!' : 'Vendor created!');
       fetchVendors(pagination.current_page, pagination.per_page, searchTerm);
       closeModal();
-    } catch (err) {
-      handleApiError(err, 'Failed to save vendor');
-    } finally {
-      setOperationLoading(null);
-    }
-  };
-
-  const toggleStatus = async (vendor) => {
-    setOperationLoading(`status-${vendor.id}`);
-    const newStatus = vendor.status === 'active' ? 'inactive' : 'active';
-
-    const data = new FormData();
-    data.append('status', newStatus);
-    // Required fields must be sent even on status toggle
-    data.append('name', vendor.name);
-    data.append('shop_name', vendor.shop_name);
-    data.append('email', vendor.email);
-    data.append('contact', vendor.contact || '');
-    data.append('address', vendor.address || '');
-
-    try {
-      await axios.post(`${API_URL}/${vendor.id}`, data, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-      showNotification(`Vendor ${newStatus === 'active' ? 'activated' : 'deactivated'}`);
-      fetchVendors(pagination.current_page, pagination.per_page, searchTerm);
-    } catch (err) {
-      handleApiError(err, 'Failed to update status');
+    } catch (error) {
+      handleApiError(error, 'Failed to save');
     } finally {
       setOperationLoading(null);
     }
   };
 
   const handleDelete = async (id) => {
+    if (!window.confirm('Delete this vendor?')) return;
     setOperationLoading(`delete-${id}`);
     try {
       await axios.delete(`${API_URL}/${id}`);
-      showNotification('Vendor deleted successfully');
+      showNotification('Vendor deleted');
       if (vendors.length === 1 && pagination.current_page > 1) {
         fetchVendors(pagination.current_page - 1, pagination.per_page, searchTerm);
       } else {
         fetchVendors(pagination.current_page, pagination.per_page, searchTerm);
       }
-    } catch (err) {
-      handleApiError(err, 'Delete failed');
+    } catch (error) {
+      handleApiError(error, 'Failed to delete');
     } finally {
       setOperationLoading(null);
-      setDeleteConfirm(null);
+      setActionMenu(null);
     }
   };
 
-  const stats = useMemo(() => ({
-    total: pagination.total,
-    active: vendors.filter(v => v.status === 'active').length,
-    inactive: vendors.filter(v => v.status === 'inactive').length
-  }), [pagination.total, vendors]);
+  const toggleStatus = async (vendor) => {
+    const newStatus = vendor.status === 'active' ? 'inactive' : 'active';
+    setOperationLoading(`status-${vendor.id}`);
+    try {
+      // Re-send required fields for update validation if necessary, or just status
+      const data = new FormData();
+      data.append('status', newStatus);
+      data.append('_method', 'POST');
+      // Some APIs require all fields, but usually status patch is separate. 
+      // Assuming your API handles partial updates or we send everything.
+      // To be safe based on previous code:
+      data.append('name', vendor.name);
+      data.append('shop_name', vendor.shop_name);
+      data.append('email', vendor.email);
 
-  if (loading && vendors.length === 0) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center">
-        <div className="text-2xl text-gray-400 flex items-center gap-4">
-          <Loader className="animate-spin" size={32} />
-          Loading vendors...
-        </div>
-      </div>
-    );
-  }
+      await axios.post(`${API_URL}/${vendor.id}`, data);
+      showNotification(`Vendor ${newStatus}`);
+      fetchVendors(pagination.current_page, pagination.per_page, searchTerm);
+    } catch (error) {
+      handleApiError(error, 'Failed to update status');
+    } finally {
+      setOperationLoading(null);
+      setActionMenu(null);
+    }
+  };
+
+  const stats = {
+    total: pagination.total_items,
+    active: vendors.filter(v => v.status === 'active').length,
+    inactive: vendors.filter(v => v.status !== 'active').length
+  };
 
   return (
-    <>
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 p-4 md:p-8 font-sans selection:bg-violet-500/30 transition-colors duration-300">
       <AnimatePresence>
         {notification.show && (
           <motion.div
-            initial={{ opacity: 0, x: 100 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 100 }}
-            className={`fixed top-6 right-6 z-50 px-6 py-4 rounded-xl shadow-2xl text-white font-medium flex items-center gap-3 ${
-              notification.type === 'error' ? 'bg-red-600' : 'bg-green-600'
-            }`}
+            initial={{ opacity: 0, y: -20, x: '50%' }}
+            animate={{ opacity: 1, y: 0, x: '50%' }}
+            exit={{ opacity: 0, y: -20, x: '50%' }}
+            className={`fixed top-6 right-1/2 translate-x-1/2 z-[60] px-6 py-3 rounded-full shadow-2xl backdrop-blur-md border flex items-center gap-3 font-medium ${notification.type === 'error'
+              ? 'bg-rose-500/10 border-rose-500/50 text-rose-400'
+              : 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400'
+              }`}
           >
-            {notification.type === 'error' ? <AlertCircle size={22} /> : <Check size={22} />}
+            {notification.type === 'error' ? <Shield size={18} /> : <Check size={18} />}
             {notification.message}
           </motion.div>
         )}
       </AnimatePresence>
 
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-gray-100 py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Header */}
-          <div className="mb-10 flex justify-between items-center">
-            <div>
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-violet-400 to-purple-500 bg-clip-text text-transparent">
-                Vendor Management
-              </h1>
-              <p className="text-gray-400 mt-2">Manage all your vendors</p>
-            </div>
-            <button
-              onClick={() => openModal()}
-              className="bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white px-6 py-3 rounded-xl font-semibold flex items-center gap-3 shadow-lg"
-            >
-              <Plus size={22} /> Add Vendor
-            </button>
+      <div className="max-w-7xl mx-auto space-y-8">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+          <div className="space-y-1">
+            <h1 className="text-4xl md:text-5xl font-black tracking-tight text-white mb-2">
+              <span className="bg-clip-text text-transparent bg-gradient-to-r from-violet-400 to-purple-500">
+                Vendors
+              </span>
+            </h1>
+            <p className="text-slate-500 dark:text-slate-400 text-lg font-light">
+              Manage your supplier relationships
+            </p>
           </div>
 
-          {/* Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <div className="bg-gray-800/40 rounded-2xl p-6 border border-gray-700/40">
-              <div className="flex justify-between items-center">
-                <div>
-                  <p className="text-gray-400">Total</p>
-                  <p className="text-3xl font-bold">{stats.total}</p>
-                </div>
-                <Store className="text-violet-400" size={40} />
-              </div>
-            </div>
-            <div className="bg-gray-800/40 rounded-2xl p-6 border border-gray-700/40">
-              <div className="flex justify-between items-center">
-                <div>
-                  <p className="text-gray-400">Active</p>
-                  <p className="text-3xl font-bold text-green-400">{stats.active}</p>
-                </div>
-                <Check className="text-green-400" size={40} />
-              </div>
-            </div>
-            <div className="bg-gray-800/40 rounded-2xl p-6 border border-gray-700/40">
-              <div className="flex justify-between items-center">
-                <div>
-                  <p className="text-gray-400">Inactive</p>
-                  <p className="text-3xl font-bold text-red-400">{stats.inactive}</p>
-                </div>
-                <X className="text-red-400" size={40} />
-              </div>
-            </div>
-          </div>
-
-          {/* Search + Limit */}
-          <div className="mb-8 flex flex-col sm:flex-row gap-4">
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-              <input
-                type="text"
-                placeholder="Search vendors by name or shop..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 bg-gray-800/50 border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-500"
-              />
-            </div>
-            <select
-              value={pagination.per_page}
-              onChange={(e) => handleLimitChange(e.target.value)}
-              className="px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-violet-500"
-            >
-              <option value="5">5 per page</option>
-              <option value="10">10 per page</option>
-              <option value="25">25 per page</option>
-              <option value="50">50 per page</option>
-            </select>
-          </div>
-
-          {/* Table */}
-          <div className="bg-gray-800/30 rounded-2xl border border-gray-700/30 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-800/50">
-                  <tr className="text-left text-sm font-medium text-gray-400">
-                    <th className="px-6 py-4">Vendor</th>
-                    <th className="px-6 py-4">Shop</th>
-                    <th className="px-6 py-4">Contact</th>
-                    <th className="px-6 py-4">Status</th>
-                    <th className="px-6 py-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-700/20">
-                  {vendors.map((vendor) => (
-                    <tr key={vendor.id} className="hover:bg-gray-700/10 transition">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-4">
-                          {vendor.image ? (
-                            <img
-                              src={`${APP_URL}/${vendor.image}`}
-                              alt={vendor.name}
-                              className="w-12 h-12 rounded-lg object-cover border border-gray-600"
-                            />
-                          ) : (
-                            <div className="w-12 h-12 bg-gray-700 rounded-lg flex items-center justify-center">
-                              <Store size={20} className="text-gray-500" />
-                            </div>
-                          )}
-                          <div>
-                            <div className="font-semibold">{vendor.name}</div>
-                            <div className="text-sm text-gray-400">ID: #{vendor.id}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div>{vendor.shop_name}</div>
-                        {vendor.address && <div className="text-sm text-gray-400 mt-1">{vendor.address}</div>}
-                      </td>
-                      <td className="px-6 py-4 text-sm">
-                        <div>{vendor.email}</div>
-                        {vendor.contact && <div className="text-gray-400">{vendor.contact}</div>}
-                      </td>
-                      <td className="px-6 py-4">
-                        <button
-                          onClick={() => toggleStatus(vendor)}
-                          disabled={operationLoading === `status-${vendor.id}`}
-                          className={`px-4 py-2 rounded-full text-xs font-bold flex items-center gap-2 ${
-                            vendor.status === 'active'
-                              ? 'bg-green-500/20 text-green-400 border border-green-500/40'
-                              : 'bg-red-500/20 text-red-400 border border-red-500/40'
-                          }`}
-                        >
-                          {operationLoading === `status-${vendor.id}` && <Loader size={14} className="animate-spin" />}
-                          {vendor.status === 'active' ? 'Active' : 'Inactive'}
-                        </button>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <button onClick={() => openModal(vendor)} className="text-blue-400 hover:bg-blue-500/20 p-2 rounded">
-                          <Edit size={18} />
-                        </button>
-                        <button
-                          onClick={() => setDeleteConfirm(vendor.id)}
-                          className="text-red-400 hover:bg-red-500/20 p-2 rounded ml-2"
-                          disabled={operationLoading === `delete-${vendor.id}`}
-                        >
-                          {operationLoading === `delete-${vendor.id}` ? <Loader size={18} className="animate-spin" /> : <Trash2 size={18} />}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Pagination */}
-            {pagination.last_page > 1 && (
-              <div className="flex justify-between items-center px-6 py-4 border-t border-gray-700/30">
-                <div className="text-sm text-gray-400">
-                  Showing {(pagination.current_page - 1) * pagination.per_page + 1} to{' '}
-                  {Math.min(pagination.current_page * pagination.per_page, pagination.total)} of {pagination.total}
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handlePageChange(pagination.current_page - 1)}
-                    disabled={pagination.current_page === 1}
-                    className="px-4 py-2 rounded-xl border border-gray-600 disabled:opacity-50 flex items-center gap-2"
-                  >
-                    <ChevronLeft size={16} /> Previous
-                  </button>
-                  <button
-                    onClick={() => handlePageChange(pagination.current_page + 1)}
-                    disabled={pagination.current_page === pagination.last_page}
-                    className="px-4 py-2 rounded-xl border border-gray-600 disabled:opacity-50 flex items-center gap-2"
-                  >
-                    Next <ChevronRight size={16} />
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Empty State */}
-          {vendors.length === 0 && !loading && (
-            <div className="text-center py-20">
-              <Store size={80} className="mx-auto text-gray-600 mb-6" />
-              <h3 className="text-2xl font-bold mb-3">
-                {searchTerm ? 'No vendors found' : 'No vendors yet'}
-              </h3>
-              <p className="text-gray-400">
-                {searchTerm ? 'Try searching with different keywords' : 'Start by adding your first vendor'}
-              </p>
-            </div>
-          )}
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => openModal()}
+            className="group relative px-6 py-3 bg-gradient-to-r from-violet-600 to-purple-600 rounded-xl font-semibold text-white shadow-lg shadow-violet-500/20 hover:shadow-violet-500/40 transition-all flex items-center gap-2 overflow-hidden"
+          >
+            <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
+            <Plus size={20} className="relative z-10" />
+            <span className="relative z-10">Add Vendor</span>
+          </motion.button>
         </div>
 
-        {/* Modal */}
-        <AnimatePresence>
-          {showModal && (
-            <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4" onClick={closeModal}>
-              <motion.div
-                initial={{ scale: 0.9, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                className="bg-gray-800 rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-gray-700 p-8"
-                onClick={e => e.stopPropagation()}
+        {/* Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {[
+            { label: 'Total Vendors', value: stats.total, icon: Store, color: 'text-violet-400', bg: 'bg-violet-400/10', border: 'border-violet-400/20' },
+            { label: 'Active', value: stats.active, icon: Check, color: 'text-emerald-400', bg: 'bg-emerald-400/10', border: 'border-emerald-400/20' },
+            { label: 'Inactive', value: stats.inactive, icon: EyeOff, color: 'text-rose-400', bg: 'bg-rose-400/10', border: 'border-rose-400/20' },
+          ].map((stat, i) => (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.1 }}
+              key={i}
+              className={`relative overflow-hidden p-6 rounded-2xl border ${stat.border} bg-white dark:bg-white/5 backdrop-blur-sm group shadow-sm dark:shadow-none`}
+            >
+              <div className={`absolute top-0 right-0 p-32 opacity-10 rounded-full blur-3xl ${stat.bg}`} />
+              <div className="flex items-center justify-between relative z-10">
+                <div>
+                  <p className="text-slate-400 font-medium mb-1">{stat.label}</p>
+                  <h3 className="text-3xl font-bold text-white">{stat.value}</h3>
+                </div>
+                <div className={`p-4 rounded-xl ${stat.bg}`}>
+                  <stat.icon size={24} className={stat.color} />
+                </div>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+
+        {/* Controls */}
+        <div className="bg-white/70 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-4 backdrop-blur-md flex flex-col md:flex-row gap-4 items-center justify-between sticky top-4 z-40 shadow-xl dark:shadow-2xl dark:shadow-black/50">
+          <div className="relative w-full md:w-96 group">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-violet-400 transition-colors" size={20} />
+            <input
+              type="text"
+              placeholder="Search vendors..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white rounded-xl pl-12 pr-4 py-3 focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500/50 outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500"
+            />
+          </div>
+
+          <div className="flex items-center gap-3 w-full md:w-auto">
+            <div className="flex items-center gap-2 bg-slate-900/50 px-4 py-3 rounded-xl border border-white/10">
+              <Filter size={16} className="text-slate-400" />
+              <select
+                value={pagination.per_page}
+                onChange={(e) => handleLimitChange(e.target.value)}
+                className="bg-transparent border-none text-sm text-slate-300 focus:ring-0 cursor-pointer outline-none"
               >
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-2xl font-bold text-white">
-                    {editingVendor ? 'Edit Vendor' : 'Add New Vendor'}
-                  </h2>
-                  <button onClick={closeModal}><X size={28} className="text-gray-400" /></button>
+                <option value="9">9 per page</option>
+                <option value="18">18 per page</option>
+                <option value="27">27 per page</option>
+              </select>
+            </div>
+            <button
+              onClick={() => fetchVendors(pagination.current_page, pagination.per_page, searchTerm)}
+              className="p-3 bg-white dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-white/10 hover:border-violet-500/30 hover:text-violet-600 dark:hover:text-violet-400 transition-colors shadow-sm dark:shadow-none"
+              title="Refresh"
+            >
+              <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
+            </button>
+          </div>
+        </div>
+
+        {/* Grid */}
+        {loading && !vendors.length ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="h-64 rounded-2xl bg-white/5 animate-pulse border border-white/5" />
+            ))}
+          </div>
+        ) : (
+          <motion.div
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+          >
+            <AnimatePresence mode='popLayout'>
+              {vendors.map((vendor) => (
+                <motion.div
+                  layout
+                  variants={itemVariants}
+                  key={vendor.id}
+                  className="group relative bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-white/10 rounded-2xl overflow-hidden transition-all duration-300 hover:shadow-2xl hover:shadow-violet-900/10 hover:border-violet-500/30 shadow-sm dark:shadow-none"
+                >
+                  <div className="p-6">
+                    <div className="flex justify-between items-start mb-6">
+                      <div className="flex items-center gap-4">
+                        <div className="w-14 h-14 rounded-xl bg-slate-800 border border-white/5 overflow-hidden flex items-center justify-center shrink-0">
+                          {vendor.image ? (
+                            <img src={`${APP_URL}/${vendor.image}`} alt={vendor.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <Store size={24} className="text-violet-400" />
+                          )}
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-white text-lg leading-tight group-hover:text-violet-400 transition-colors truncate max-w-[150px]">
+                            {vendor.name}
+                          </h3>
+                          <p className="text-sm text-slate-400 truncate max-w-[150px]">{vendor.shop_name}</p>
+                        </div>
+                      </div>
+
+                      <div className="relative action-menu-container">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setActionMenu(actionMenu === vendor.id ? null : vendor.id); }}
+                          className="p-2 hover:bg-white/5 rounded-lg text-slate-400 hover:text-white transition-colors"
+                        >
+                          <MoreVertical size={20} />
+                        </button>
+
+                        <AnimatePresence>
+                          {actionMenu === vendor.id && (
+                            <motion.div
+                              initial={{ opacity: 0, scale: 0.9, y: 10, x: -50 }}
+                              animate={{ opacity: 1, scale: 1, y: 0, x: -100 }}
+                              exit={{ opacity: 0, scale: 0.9, y: 10, x: -50 }}
+                              className="absolute right-0 top-full mt-2 w-48 bg-slate-800 border border-white/10 rounded-xl shadow-2xl py-2 z-50 backdrop-blur-xl"
+                            >
+                              <button onClick={() => openModal(vendor)} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-slate-300 hover:bg-white/5 hover:text-violet-400 transition-colors">
+                                <Edit size={16} /> Edit Details
+                              </button>
+                              <button onClick={() => toggleStatus(vendor)} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-slate-300 hover:bg-white/5 hover:text-violet-400 transition-colors">
+                                {vendor.status === 'active' ? <EyeOff size={16} /> : <Eye size={16} />}
+                                {vendor.status === 'active' ? 'Deactivate' : 'Activate'}
+                              </button>
+                              <div className="my-1 border-t border-white/5"></div>
+                              <button onClick={() => handleDelete(vendor.id)} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-rose-400 hover:bg-rose-500/10 transition-colors">
+                                <Trash2 size={16} /> Delete
+                              </button>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3 mb-4">
+                      {vendor.email && (
+                        <div className="flex items-center gap-3 text-sm text-slate-300 bg-white/5 p-2 rounded-lg">
+                          <Mail size={16} className="text-violet-400 shrink-0" />
+                          <span className="truncate">{vendor.email}</span>
+                        </div>
+                      )}
+                      {vendor.contact && (
+                        <div className="flex items-center gap-3 text-sm text-slate-300 bg-white/5 p-2 rounded-lg">
+                          <Phone size={16} className="text-violet-400 shrink-0" />
+                          <span>{vendor.contact}</span>
+                        </div>
+                      )}
+                      {vendor.address && (
+                        <div className="flex items-start gap-3 text-sm text-slate-300 bg-white/5 p-2 rounded-lg">
+                          <MapPin size={16} className="text-violet-400 shrink-0 mt-0.5" />
+                          <span className="line-clamp-2">{vendor.address}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex justify-end pt-2">
+                      <span className={`px-2 py-1 rounded-full text-xs font-bold border ${vendor.status === 'active'
+                        ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+                        : 'bg-rose-500/10 text-rose-300 border-rose-500/20'
+                        }`}>
+                        {vendor.status}
+                      </span>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </motion.div>
+        )}
+
+        {/* Empty State */}
+        {!loading && vendors.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-20 bg-white/5 rounded-3xl border border-white/10 border-dashed">
+            <div className="p-6 bg-slate-900 rounded-full mb-4">
+              <Store size={48} className="text-slate-600" />
+            </div>
+            <h3 className="text-2xl font-bold text-white mb-2">No vendors found</h3>
+            <p className="text-slate-400 max-w-md text-center mb-8">
+              {searchTerm ? "Try different keywords." : "Start adding your trusted suppliers."}
+            </p>
+            <button
+              onClick={() => { searchTerm ? setSearchTerm('') : openModal(); }}
+              className="px-6 py-3 bg-violet-600 hover:bg-violet-500 text-white rounded-xl font-semibold transition-colors shadow-lg shadow-violet-900/20"
+            >
+              {searchTerm ? 'Clear Search' : 'Add First Vendor'}
+            </button>
+          </div>
+        )}
+
+        {/* Pagination */}
+        {!loading && pagination.total_pages > 1 && (
+          <div className="flex justify-center mt-12 pb-12">
+            <div className="flex items-center gap-2 bg-slate-900/50 p-2 rounded-2xl border border-white/10">
+              <button
+                onClick={() => handlePageChange(pagination.current_page - 1)}
+                disabled={pagination.current_page === 1}
+                className="p-3 hover:bg-white/10 rounded-xl disabled:opacity-30 disabled:hover:bg-transparent transition-colors text-white"
+              >
+                <ChevronLeft size={20} />
+              </button>
+              <div className="flex items-center gap-1 px-2">
+                {Array.from({ length: pagination.total_pages }, (_, i) => i + 1)
+                  .filter(p => p === 1 || p === pagination.total_pages || Math.abs(p - pagination.current_page) <= 1)
+                  .map((p, idx, arr) => (
+                    <React.Fragment key={p}>
+                      {idx > 0 && p - arr[idx - 1] > 1 && <span className="text-slate-600 px-1">...</span>}
+                      <button
+                        onClick={() => handlePageChange(p)}
+                        className={`w-10 h-10 rounded-xl text-sm font-bold transition-all ${pagination.current_page === p
+                          ? 'bg-violet-500 text-white shadow-lg shadow-violet-500/30'
+                          : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                          }`}
+                      >
+                        {p}
+                      </button>
+                    </React.Fragment>
+                  ))}
+              </div>
+              <button
+                onClick={() => handlePageChange(pagination.current_page + 1)}
+                disabled={pagination.current_page === pagination.total_pages}
+                className="p-3 hover:bg-white/10 rounded-xl disabled:opacity-30 disabled:hover:bg-transparent transition-colors text-white"
+              >
+                <ChevronRight size={20} />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Modal */}
+      <AnimatePresence>
+        {showModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={closeModal}
+              className="absolute inset-0 bg-black/80 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className="relative w-full max-w-2xl bg-slate-900 rounded-3xl border border-white/10 shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto"
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-violet-400 to-purple-600" />
+
+              <form onSubmit={handleSubmit}>
+                <div className="p-8 border-b border-white/5 flex justify-between items-center bg-slate-900 sticky top-0 z-10">
+                  <div>
+                    <h2 className="text-2xl font-bold text-white mb-1">
+                      {editingVendor ? 'Edit Vendor' : 'New Vendor'}
+                    </h2>
+                    <p className="text-slate-400 text-sm">
+                      Configure vendor details.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={closeModal}
+                    className="p-2 hover:bg-white/10 rounded-xl transition-colors text-slate-400 hover:text-white"
+                  >
+                    <X size={24} />
+                  </button>
                 </div>
 
-                {errors._general && (
-                  <div className="mb-4 p-4 bg-red-900/50 border border-red-700 rounded-xl text-red-300">
-                    {errors._general}
-                  </div>
-                )}
-
-                <form onSubmit={handleSubmit} className="space-y-6">
-                  <div>
-                    <label className="block text-sm font-medium mb-3">Image</label>
-                    <div className="border-2 border-dashed border-gray-600 rounded-xl p-8 text-center hover:border-violet-500 cursor-pointer transition">
-                      <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" id="vendor-img" />
-                      <label htmlFor="vendor-img" className="cursor-pointer">
-                        <Upload className="mx-auto mb-3 text-gray-400" size={32} />
-                        <span className="text-gray-400">Click to upload (Max 2MB)</span>
-                      </label>
-                    </div>
-                    {imagePreview && (
-                      <div className="mt-4 relative inline-block">
-                        <img src={imagePreview} alt="Preview" className="w-32 h-32 object-cover rounded-lg border border-gray-600" />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setImagePreview(null);
-                            setFormData(prev => ({ ...prev, image: null }));
-                          }}
-                          className="absolute -top-2 -right-2 bg-red-500 p-1 rounded-full"
-                        >
-                          <X size={14} />
-                        </button>
+                <div className="p-8 space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-300">Image</label>
+                      <div
+                        onClick={() => document.getElementById('vm-upload').click()}
+                        className="border-2 border-dashed border-white/10 rounded-xl p-4 h-32 flex items-center justify-center cursor-pointer hover:border-violet-500/50 hover:bg-violet-500/5 transition-all text-center group"
+                      >
+                        <input type="file" id="vm-upload" hidden accept="image/*" onChange={handleImageChange} />
+                        {imagePreview ? (
+                          <img src={imagePreview} alt="Preview" className="h-full object-contain rounded-lg" />
+                        ) : (
+                          <div className="space-y-2">
+                            <div className="p-2 bg-slate-800 rounded-full w-fit mx-auto group-hover:bg-violet-500/20 transition-colors">
+                              <Upload size={18} className="text-slate-400 group-hover:text-violet-400" />
+                            </div>
+                            <p className="text-xs text-slate-500">Upload Image</p>
+                          </div>
+                        )}
                       </div>
-                    )}
-                    {errors.image && <p className="text-red-400 text-sm mt-2">{errors.image}</p>}
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-slate-300">Name *</label>
+                        <input
+                          type="text"
+                          name="name"
+                          value={formData.name}
+                          onChange={handleInputChange}
+                          placeholder="Vendor Name"
+                          className="w-full bg-slate-800/50 border border-white/10 rounded-xl py-3 px-4 text-white focus:ring-2 focus:ring-violet-500/50 outline-none transition-all"
+                        />
+                        {errors.name && <p className="text-rose-400 text-xs mt-1">{errors.name[0]}</p>}
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-slate-300">Shop Name *</label>
+                        <input
+                          type="text"
+                          name="shop_name"
+                          value={formData.shop_name}
+                          onChange={handleInputChange}
+                          placeholder="Shop Name"
+                          className="w-full bg-slate-800/50 border border-white/10 rounded-xl py-3 px-4 text-white focus:ring-2 focus:ring-violet-500/50 outline-none transition-all"
+                        />
+                        {errors.shop_name && <p className="text-rose-400 text-xs mt-1">{errors.shop_name[0]}</p>}
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <input
-                        type="text"
-                        placeholder="Name *"
-                        value={formData.name}
-                        onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                        required
-                        className={`w-full px-4 py-3 bg-gray-700/50 border rounded-xl text-white ${errors.name ? 'border-red-500' : 'border-gray-600'}`}
-                      />
-                      {errors.name && <p className="text-red-400 text-xs mt-1">{errors.name[0]}</p>}
-                    </div>
-                    <div>
-                      <input
-                        type="text"
-                        placeholder="Shop Name *"
-                        value={formData.shop_name}
-                        onChange={e => setFormData(prev => ({ ...prev, shop_name: e.target.value }))}
-                        required
-                        className={`w-full px-4 py-3 bg-gray-700/50 border rounded-xl text-white ${errors.shop_name ? 'border-red-500' : 'border-gray-600'}`}
-                      />
-                      {errors.shop_name && <p className="text-red-400 text-xs mt-1">{errors.shop_name[0]}</p>}
-                    </div>
-                    <div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-300">Email *</label>
                       <input
                         type="email"
-                        placeholder="Email *"
+                        name="email"
                         value={formData.email}
-                        onChange={e => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                        required
-                        className={`w-full px-4 py-3 bg-gray-700/50 border rounded-xl text-white ${errors.email ? 'border-red-500' : 'border-gray-600'}`}
+                        onChange={handleInputChange}
+                        placeholder="vendor@example.com"
+                        className="w-full bg-slate-800/50 border border-white/10 rounded-xl py-3 px-4 text-white focus:ring-2 focus:ring-violet-500/50 outline-none transition-all"
                       />
-                      {errors.email && <p className="text-red-400 text-xs mt-1">{errors.email[0]}</p>}
+                      {errors.email && <p className="text-rose-400 text-xs mt-1">{errors.email[0]}</p>}
                     </div>
-                    <div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-300">Contact</label>
                       <input
                         type="text"
-                        placeholder="Contact"
+                        name="contact"
                         value={formData.contact}
-                        onChange={e => setFormData(prev => ({ ...prev, contact: e.target.value }))}
-                        className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-xl text-white"
-                      />
-                    </div>
-                    <div className="col-span-2">
-                      <textarea
-                        placeholder="Address"
-                        value={formData.address}
-                        onChange={e => setFormData(prev => ({ ...prev, address: e.target.value }))}
-                        rows={3}
-                        className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-xl text-white"
+                        onChange={handleInputChange}
+                        placeholder="+1 234 567 890"
+                        className="w-full bg-slate-800/50 border border-white/10 rounded-xl py-3 px-4 text-white focus:ring-2 focus:ring-violet-500/50 outline-none transition-all"
                       />
                     </div>
                   </div>
 
-                  <div className="flex gap-6">
-                    {['active', 'inactive'].map(st => (
-                      <label
-                        key={st}
-                        onClick={() => setFormData(prev => ({ ...prev, status: st }))}
-                        className={`flex-1 p-4 rounded-xl border-2 cursor-pointer text-center transition ${
-                          formData.status === st
-                            ? st === 'active'
-                              ? 'border-green-500 bg-green-500/10'
-                              : 'border-red-500 bg-red-500/10'
-                            : 'border-gray-600'
-                        }`}
-                      >
-                        <span className={`font-medium ${st === 'active' ? 'text-green-400' : 'text-red-400'}`}>
-                          {st.charAt(0).toUpperCase() + st.slice(1)}
-                        </span>
-                      </label>
-                    ))}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-300">Address</label>
+                    <textarea
+                      name="address"
+                      value={formData.address}
+                      onChange={handleInputChange}
+                      rows="2"
+                      className="w-full bg-slate-800/50 border border-white/10 rounded-xl py-3 px-4 text-white focus:ring-2 focus:ring-violet-500/50 outline-none transition-all resize-none"
+                      placeholder="Full Address"
+                    />
                   </div>
 
-                  <div className="flex justify-end gap-4">
-                    <button type="button" onClick={closeModal} className="px-6 py-3 bg-gray-700 rounded-xl">
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={operationLoading === 'saving'}
-                      className="px-8 py-3 bg-gradient-to-r from-violet-600 to-purple-600 rounded-xl text-white font-bold flex items-center gap-2"
-                    >
-                      {operationLoading === 'saving' ? <Loader size={20} className="animate-spin" /> : <Check size={20} />}
-                      {editingVendor ? 'Update' : 'Create'} Vendor
-                    </button>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-300">Status</label>
+                    <div className="grid grid-cols-2 gap-4">
+                      {['active', 'inactive'].map((status) => (
+                        <button
+                          key={status}
+                          type="button"
+                          onClick={() => setFormData(p => ({ ...p, status }))}
+                          className={`py-3 px-4 rounded-xl border flex items-center justify-center gap-2 transition-all ${formData.status === status
+                            ? status === 'active'
+                              ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300'
+                              : 'bg-rose-500/20 border-rose-500/50 text-rose-300'
+                            : 'bg-slate-800/30 border-white/5 text-slate-500 hover:bg-slate-800'
+                            }`}
+                        >
+                          {status === 'active' ? <Check size={16} /> : <X size={16} />}
+                          <span className="capitalize font-medium text-sm">{status}</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </form>
-              </motion.div>
-            </div>
-          )}
-        </AnimatePresence>
+                </div>
 
-        {/* Delete Confirm */}
-        <AnimatePresence>
-          {deleteConfirm && (
-            <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50" onClick={() => setDeleteConfirm(null)}>
-              <div className="bg-gray-800 rounded-2xl p-8 max-w-sm border border-gray-700">
-                <h3 className="text-xl font-bold mb-4">Delete Vendor?</h3>
-                <p className="text-gray-400 mb-6">This action cannot be undone.</p>
-                <div className="flex gap-4">
-                  <button onClick={() => setDeleteConfirm(null)} className="flex-1 py-3 bg-gray-700 rounded-xl">
+                <div className="p-6 border-t border-white/5 bg-slate-900/50 flex justify-end gap-3 sticky bottom-0 z-10">
+                  <button
+                    type="button"
+                    onClick={closeModal}
+                    className="px-6 py-2.5 rounded-xl text-slate-300 hover:text-white hover:bg-white/5 transition-colors font-medium"
+                  >
                     Cancel
                   </button>
                   <button
-                    onClick={() => handleDelete(deleteConfirm)}
-                    className="flex-1 py-3 bg-red-600 rounded-xl text-white font-bold"
+                    type="submit"
+                    disabled={operationLoading === 'saving'}
+                    className="px-8 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white rounded-xl font-bold shadow-lg shadow-violet-900/20 disabled:opacity-50 flex items-center gap-2 transition-all transform active:scale-95"
                   >
-                    Delete
+                    {operationLoading === 'saving' ? <RefreshCw size={18} className="animate-spin" /> : (editingVendor ? <Check size={18} /> : <Plus size={18} />)}
+                    {editingVendor ? 'Save Changes' : 'Create Vendor'}
                   </button>
                 </div>
-              </div>
-            </div>
-          )}
-        </AnimatePresence>
-      </div>
-    </>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 };
 

@@ -9,9 +9,13 @@ class EmployeeDocument extends Model
 {
     use HasFactory;
 
-    protected $guarded = [];
+    protected $fillable = [
+        'employee_id',
+        'document_type',
+        'document_file',
+    ];
 
-      public function employee()
+    public function employee()
     {
         return $this->belongsTo(Employee::class, 'employee_id');
     }

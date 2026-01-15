@@ -1,13 +1,34 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Plus, Search, Edit, Trash2, X, Check, AlertCircle, MoreVertical,
-  Eye, EyeOff, CreditCard, Smartphone, Building, Wallet, QrCode,
-  Upload, ChevronLeft, ChevronRight, Loader, FileText, Calendar
+  Plus, Search, Edit, Trash2, X, Check, Eye, EyeOff,
+  MoreVertical, CreditCard, Smartphone, Building, Wallet,
+  QrCode, Upload, Layers, Filter, RefreshCw, ChevronLeft, ChevronRight,
+  Shield, Calendar, FileText, Loader
 } from 'lucide-react';
 
-const API_URL = 'http://localhost:8000/api/payment-types';
+const API_URL = '/api/payment-types';
+const APP_URL = import.meta.env.VITE_APP_URL?.replace(/\/$/, '') || '';
+
+const getImageUrl = (path) => {
+  if (!path) return null;
+  if (path.startsWith('http')) return path;
+  return `${APP_URL}/${path.replace(/^\//, '')}`;
+};
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.1 }
+  }
+};
+
+const itemVariants = {
+  hidden: { y: 20, opacity: 0 },
+  visible: { y: 0, opacity: 1 }
+};
 
 const PaymentTypes = () => {
   const [paymentTypes, setPaymentTypes] = useState([]);
@@ -16,17 +37,7 @@ const PaymentTypes = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingPaymentType, setEditingPaymentType] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all');
-  const [sortBy, setSortBy] = useState('newest');
   const [actionMenu, setActionMenu] = useState(null);
-
-  const [pagination, setPagination] = useState({
-    current_page: 1,
-    last_page: 1,
-    per_page: 10,
-    total: 0
-  });
-
   const [formData, setFormData] = useState({
     name: '',
     type: 'mobile',
@@ -35,10 +46,16 @@ const PaymentTypes = () => {
     status: 'active',
     image: null
   });
-
   const [imagePreview, setImagePreview] = useState(null);
   const [errors, setErrors] = useState({});
   const [notification, setNotification] = useState({ show: false, message: '', type: '' });
+
+  const [pagination, setPagination] = useState({
+    current_page: 1,
+    per_page: 9,
+    total_items: 0,
+    total_pages: 1
+  });
 
   const paymentTypeIcons = {
     mobile: Smartphone,
@@ -54,7 +71,6 @@ const PaymentTypes = () => {
   }, []);
 
   const handleApiError = useCallback((error, defaultMessage) => {
-    console.error('API Error:', error);
     if (error.response?.status === 422) {
       const validationErrors = error.response.data.errors || {};
       setErrors(validationErrors);
@@ -67,33 +83,35 @@ const PaymentTypes = () => {
     }
   }, [showNotification]);
 
-  // Fixed: Removed pagination.per_page from deps, pass explicitly
-  const fetchPaymentTypes = useCallback(async (page = 1, perPage = 10, keyword = '') => {
+  const fetchPaymentTypes = useCallback(async (page = 1, limit = 9, keyword = '') => {
     setLoading(true);
     try {
-      const params = { page, limit: perPage };
+      const params = { page, limit };
       if (keyword.trim()) params.keyword = keyword.trim();
 
       const response = await axios.get(API_URL, { params });
-      const res = response.data;
+      const data = response.data.pagination || response.data;
+      const itemList = data.data || [];
 
-      setPaymentTypes(res.pagination?.data || []);
+      setPaymentTypes(itemList);
       setPagination({
-        current_page: res.pagination?.current_page || 1,
-        last_page: res.pagination?.total_pages || 1,
-        per_page: res.pagination?.per_page || perPage,
-        total: res.pagination?.total_items || 0
+        current_page: data.current_page || 1,
+        per_page: data.per_page || limit,
+        total_items: data.total_items || data.total || itemList.length,
+        total_pages: data.total_pages || data.last_page || 1
       });
     } catch (error) {
       handleApiError(error, 'Failed to fetch payment types');
       setPaymentTypes([]);
-      setPagination(prev => ({ ...prev, total: 0, last_page: 1 }));
     } finally {
       setLoading(false);
     }
   }, [handleApiError]);
 
-  // Debounced search + reacts to per_page change
+  useEffect(() => {
+    fetchPaymentTypes(1, 9);
+  }, []);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       fetchPaymentTypes(1, pagination.per_page, searchTerm);
@@ -101,24 +119,25 @@ const PaymentTypes = () => {
     return () => clearTimeout(timer);
   }, [searchTerm, pagination.per_page, fetchPaymentTypes]);
 
-  // Initial load
+  // Click outside listener for action menu
   useEffect(() => {
-    fetchPaymentTypes(1, 10);
-  }, [fetchPaymentTypes]);
+    const handleClickOutside = (e) => {
+      if (actionMenu && !e.target.closest('.action-menu-container')) {
+        setActionMenu(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [actionMenu]);
 
   const handlePageChange = (newPage) => {
-    if (newPage < 1 || newPage > pagination.last_page) return;
+    if (newPage < 1 || newPage > pagination.total_pages || newPage === pagination.current_page) return;
     fetchPaymentTypes(newPage, pagination.per_page, searchTerm);
   };
 
-  // Fixed: Now properly updates per_page and resets to page 1
   const handleLimitChange = (newLimit) => {
-    const limit = parseInt(newLimit, 10);
-    setPagination(prev => ({
-      ...prev,
-      per_page: limit,
-      current_page: 1
-    }));
+    const limit = parseInt(newLimit);
+    setPagination(prev => ({ ...prev, per_page: limit, current_page: 1 }));
     fetchPaymentTypes(1, limit, searchTerm);
   };
 
@@ -142,11 +161,12 @@ const PaymentTypes = () => {
         status: pt.status || 'active',
         image: null
       });
-      setImagePreview(pt.image ? `http://localhost:8000/${pt.image}` : null);
+      setImagePreview(getImageUrl(pt.image));
     } else {
       resetForm();
     }
     setShowModal(true);
+    setActionMenu(null);
   };
 
   const closeModal = () => {
@@ -166,11 +186,11 @@ const PaymentTypes = () => {
 
     const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
     if (!validTypes.includes(file.type)) {
-      setErrors(prev => ({ ...prev, image: 'Only JPEG, PNG, WebP allowed' }));
+      setErrors(prev => ({ ...prev, image: ['Only JPEG, PNG, WebP allowed'] }));
       return;
     }
     if (file.size > 2 * 1024 * 1024) {
-      setErrors(prev => ({ ...prev, image: 'Image must be < 2MB' }));
+      setErrors(prev => ({ ...prev, image: ['Image must be less than 2MB'] }));
       return;
     }
 
@@ -188,48 +208,59 @@ const PaymentTypes = () => {
     fd.append('name', formData.name.trim());
     fd.append('type', formData.type);
     fd.append('account_number', formData.account_number.trim());
-    if (formData.notes.trim()) fd.append('notes', formData.notes.trim());
+    if (formData.notes) fd.append('notes', formData.notes.trim());
     fd.append('status', formData.status);
-    if (formData.image instanceof File) fd.append('image', formData.image);
+    if (formData.image instanceof File) {
+      fd.append('image', formData.image);
+    }
 
     try {
       if (editingPaymentType) {
-        await axios.post(`${API_URL}/${editingPaymentType.id}`, fd, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
+        fd.append('_method', 'POST');
+        await axios.post(`${API_URL}/${editingPaymentType.id}`, fd);
       } else {
-        await axios.post(API_URL, fd, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
+        await axios.post(API_URL, fd);
       }
-
-      showNotification(`Payment type ${editingPaymentType ? 'updated' : 'created'} successfully!`);
+      showNotification(editingPaymentType ? 'Payment type updated!' : 'Payment type created!');
       fetchPaymentTypes(pagination.current_page, pagination.per_page, searchTerm);
       closeModal();
     } catch (error) {
-      handleApiError(error, 'Failed to save payment type');
+      handleApiError(error, 'Failed to save');
     } finally {
       setOperationLoading(null);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Delete this payment type?')) return;
+    setOperationLoading(`delete-${id}`);
+    try {
+      await axios.delete(`${API_URL}/${id}`);
+      showNotification('Payment type deleted');
+      if (paymentTypes.length === 1 && pagination.current_page > 1) {
+        fetchPaymentTypes(pagination.current_page - 1, pagination.per_page, searchTerm);
+      } else {
+        fetchPaymentTypes(pagination.current_page, pagination.per_page, searchTerm);
+      }
+    } catch (error) {
+      handleApiError(error, 'Failed to delete');
+    } finally {
+      setOperationLoading(null);
+      setActionMenu(null);
     }
   };
 
   const toggleStatus = async (pt) => {
     const newStatus = pt.status === 'active' ? 'inactive' : 'active';
     setOperationLoading(`status-${pt.id}`);
-
-    const fd = new FormData();
-    fd.append('name', pt.name);
-    fd.append('type', pt.type);
-    fd.append('account_number', pt.account_number);
-    if (pt.notes) fd.append('notes', pt.notes);
-    fd.append('status', newStatus);
-    if (pt.image) fd.append('existing_image', pt.image);
-
     try {
-      await axios.post(`${API_URL}/${pt.id}`, fd, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-      showNotification(`Payment type ${newStatus === 'active' ? 'activated' : 'deactivated'}`);
+      const fd = new FormData();
+      fd.append('status', newStatus);
+      fd.append('name', pt.name);
+      fd.append('_method', 'POST');
+
+      await axios.post(`${API_URL}/${pt.id}`, fd);
+      showNotification(`Payment type ${newStatus}`);
       fetchPaymentTypes(pagination.current_page, pagination.per_page, searchTerm);
     } catch (error) {
       handleApiError(error, 'Failed to update status');
@@ -239,331 +270,294 @@ const PaymentTypes = () => {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Delete this payment type permanently?')) return;
-    setOperationLoading(`delete-${id}`);
-    try {
-      await axios.delete(`${API_URL}/${id}`);
-      showNotification('Payment type deleted successfully');
-      if (paymentTypes.length === 1 && pagination.current_page > 1) {
-        fetchPaymentTypes(pagination.current_page - 1, pagination.per_page, searchTerm);
-      } else {
-        fetchPaymentTypes(pagination.current_page, pagination.per_page, searchTerm);
-      }
-    } catch (error) {
-      handleApiError(error, 'Delete failed');
-    } finally {
-      setOperationLoading(null);
-      setActionMenu(null);
-    }
+
+  const formatDate = (date) => date ? new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A';
+  const maskAccount = (num) => num && num.length > 4 ? `•••• ${num.slice(-4)}` : num || 'N/A';
+
+  const stats = {
+    total: pagination.total_items,
+    active: paymentTypes.filter(pt => pt.status === 'active').length,
+    inactive: paymentTypes.filter(pt => pt.status !== 'active').length
   };
 
-  const stats = useMemo(() => ({
-    total: pagination.total,
-    active: paymentTypes.filter(pt => pt.status === 'active').length,
-    inactive: paymentTypes.filter(pt => pt.status === 'inactive').length
-  }), [pagination.total, paymentTypes]);
-
-  const formatDate = (date) => date ? new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
-  const getImageUrl = (path) => path ? `http://localhost:8000/${path}` : null;
-  const maskAccount = (num) => num && num.length > 4 ? `•••• ${num.slice(-4)}` : num || '';
-
-  useEffect(() => {
-    const handler = () => setActionMenu(null);
-    document.addEventListener('click', handler);
-    return () => document.removeEventListener('click', handler);
-  }, []);
-
-  const filteredAndSorted = useMemo(() => {
-    let list = [...paymentTypes];
-    if (filterStatus !== 'all') list = list.filter(pt => pt.status === filterStatus);
-    list.sort((a, b) => {
-      if (sortBy === 'name') return a.name.localeCompare(b.name);
-      if (sortBy === 'type') return a.type.localeCompare(b.type);
-      if (sortBy === 'status') return (b.status === 'active' ? 1 : -1) - (a.status === 'active' ? 1 : -1);
-      if (sortBy === 'newest') return new Date(b.created_at) - new Date(a.created_at);
-      if (sortBy === 'oldest') return new Date(a.created_at) - new Date(b.created_at);
-      return 0;
-    });
-    return list;
-  }, [paymentTypes, filterStatus, sortBy]);
-
-  if (loading && paymentTypes.length === 0) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="animate-pulse space-y-8">
-            <div className="h-12 bg-gray-800 rounded w-96"></div>
-            <div className="grid grid-cols-3 gap-6">
-              {[...Array(3)].map((_, i) => <div key={i} className="bg-gray-800/40 rounded-2xl p-6 h-32"></div>)}
-            </div>
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {[...Array(6)].map((_, i) => <div key={i} className="bg-gray-800/30 rounded-2xl p-6 h-64"></div>)}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-gray-100 py-8">
+    <div className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-8 font-sans selection:bg-amber-500/30">
       <AnimatePresence>
         {notification.show && (
           <motion.div
-            initial={{ opacity: 0, x: 300 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 300 }}
-            className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-xl shadow-2xl ${notification.type === 'error' ? 'bg-red-600' : 'bg-green-600'} text-white font-medium flex items-center gap-3`}
+            initial={{ opacity: 0, y: -20, x: '50%' }}
+            animate={{ opacity: 1, y: 0, x: '50%' }}
+            exit={{ opacity: 0, y: -20, x: '50%' }}
+            className={`fixed top-6 right-1/2 translate-x-1/2 z-[60] px-6 py-3 rounded-full shadow-2xl backdrop-blur-md border flex items-center gap-3 font-medium ${notification.type === 'error'
+              ? 'bg-rose-500/10 border-rose-500/50 text-rose-400'
+              : 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400'
+              }`}
           >
-            {notification.type === 'error' ? <AlertCircle size={20} /> : <Check size={20} />}
+            {notification.type === 'error' ? <Shield size={18} /> : <Check size={18} />}
             {notification.message}
           </motion.div>
         )}
       </AnimatePresence>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto space-y-8">
         {/* Header */}
-        <div className="mb-8 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-          <div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-cyan-500 bg-clip-text text-transparent">
-              Payment Types Management
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+          <div className="space-y-1">
+            <h1 className="text-4xl md:text-5xl font-black tracking-tight text-white mb-2">
+              <span className="bg-clip-text text-transparent bg-gradient-to-r from-amber-400 to-orange-500">
+                Payment Types
+              </span>
             </h1>
-            <p className="text-gray-400 mt-2 text-lg">Manage all payment methods & accounts</p>
+            <p className="text-slate-400 text-lg font-light">
+              Manage accepted payment methods & accounts
+            </p>
           </div>
+
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => openModal()}
-            className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white px-6 py-3 rounded-xl font-semibold shadow-lg flex items-center gap-3"
+            className="group relative px-6 py-3 bg-gradient-to-r from-amber-600 to-orange-600 rounded-xl font-semibold text-white shadow-lg shadow-amber-500/20 hover:shadow-amber-500/40 transition-all flex items-center gap-2 overflow-hidden"
           >
-            <Plus size={22} /> Add Payment Type
+            <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
+            <Plus size={20} className="relative z-10" />
+            <span className="relative z-10">Add Payment Type</span>
           </motion.button>
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {[
-            { label: 'Total Methods', value: stats.total, icon: CreditCard, color: 'blue' },
-            { label: 'Active', value: stats.active, icon: Eye, color: 'green' },
-            { label: 'Inactive', value: stats.inactive, icon: EyeOff, color: 'red' },
-          ].map((s, i) => (
-            <div key={i} className="bg-gray-800/40 backdrop-blur-sm rounded-2xl p-6 border border-gray-700/40">
-              <div className="flex items-center justify-between">
+            { label: 'Total Methods', value: stats.total, icon: Layers, color: 'text-orange-400', bg: 'bg-orange-400/10', border: 'border-orange-400/20' },
+            { label: 'Active', value: stats.active, icon: Check, color: 'text-emerald-400', bg: 'bg-emerald-400/10', border: 'border-emerald-400/20' },
+            { label: 'Inactive', value: stats.inactive, icon: EyeOff, color: 'text-rose-400', bg: 'bg-rose-400/10', border: 'border-rose-400/20' },
+          ].map((stat, i) => (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.1 }}
+              key={i}
+              className={`relative overflow-hidden p-6 rounded-2xl border ${stat.border} bg-white/5 backdrop-blur-sm group`}
+            >
+              <div className={`absolute top-0 right-0 p-32 opacity-10 rounded-full blur-3xl ${stat.bg}`} />
+              <div className="flex items-center justify-between relative z-10">
                 <div>
-                  <p className="text-gray-400 text-sm">{s.label}</p>
-                  <p className="text-3xl font-bold mt-1">{s.value}</p>
+                  <p className="text-slate-400 font-medium mb-1">{stat.label}</p>
+                  <h3 className="text-3xl font-bold text-white">{stat.value}</h3>
                 </div>
-                <div className={`p-3 bg-${s.color}-500/10 rounded-xl`}>
-                  <s.icon size={28} className={`text-${s.color}-400`} />
+                <div className={`p-4 rounded-xl ${stat.bg}`}>
+                  <stat.icon size={24} className={stat.color} />
                 </div>
               </div>
-            </div>
+            </motion.div>
           ))}
         </div>
 
-        {/* Filters */}
-        <div className="bg-gray-800/30 backdrop-blur-sm rounded-2xl p-6 mb-8 border border-gray-700/30">
-          <div className="flex flex-col lg:flex-row gap-6">
-            <div className="flex-1 relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-              <input
-                type="text"
-                placeholder="Search by name, type, account number..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-              />
-            </div>
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="flex items-center gap-2 bg-gray-700/50 border border-gray-600/50 rounded-xl px-4 py-3">
-                Show:
-                <select
-                  value={pagination.per_page}
-                  onChange={(e) => handleLimitChange(e.target.value)}
-                  className="bg-transparent border-0 text-white text-sm focus:ring-0 cursor-pointer"
-                >
-                  <option value="5">5</option>
-                  <option value="10">10</option>
-                  <option value="25">25</option>
-                  <option value="50">50</option>
-                  <option value="100">100</option>
-                </select>
-               
-              </div>
+        {/* Controls */}
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-4 backdrop-blur-md flex flex-col md:flex-row gap-4 items-center justify-between sticky top-4 z-40 shadow-2xl shadow-black/50">
+          <div className="relative w-full md:w-96 group">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-amber-400 transition-colors" size={20} />
+            <input
+              type="text"
+              placeholder="Search methods..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full bg-slate-900/50 border border-white/10 text-white rounded-xl pl-12 pr-4 py-3 focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 outline-none transition-all placeholder:text-slate-500"
+            />
+          </div>
+
+          <div className="flex items-center gap-3 w-full md:w-auto">
+            <div className="flex items-center gap-2 bg-slate-900/50 px-4 py-3 rounded-xl border border-white/10">
+              <Filter size={16} className="text-slate-400" />
               <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                className="px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                value={pagination.per_page}
+                onChange={(e) => handleLimitChange(e.target.value)}
+                className="bg-transparent border-none text-sm text-slate-300 focus:ring-0 cursor-pointer outline-none"
               >
-                <option value="all">All Status</option>
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </select>
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-              >
-                <option value="newest">Newest First</option>
-                <option value="oldest">Oldest First</option>
-                <option value="name">Name A-Z</option>
-                <option value="type">Type</option>
-                <option value="status">Status</option>
+                <option value="9">9 per page</option>
+                <option value="18">18 per page</option>
+                <option value="27">27 per page</option>
               </select>
             </div>
+            <button
+              onClick={() => fetchPaymentTypes(pagination.current_page, pagination.per_page, searchTerm)}
+              className="p-3 bg-slate-900/50 rounded-xl border border-white/10 hover:border-amber-500/30 hover:text-amber-400 transition-colors"
+              title="Refresh"
+            >
+              <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
+            </button>
           </div>
         </div>
 
         {/* Grid */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mb-8"
-        >
-          {filteredAndSorted.map(pt => {
-            const Icon = paymentTypeIcons[pt.type] || CreditCard;
-            return (
-              <motion.div
-                key={pt.id}
-                whileHover={{ y: -8, scale: 1.02 }}
-                className="group relative bg-gray-800/30 backdrop-blur-sm rounded-2xl overflow-hidden border border-gray-700/30 hover:border-blue-500/50 transition-all duration-300"
-              >
-                <div className="p-6">
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-blue-500/10 rounded-lg">
-                        <Icon size={20} className="text-blue-400" />
-                      </div>
-                      <div>
-                        <h3 className="text-xl font-bold text-white truncate max-w-[180px]">{pt.name}</h3>
-                        <p className="text-sm text-gray-400 capitalize">{pt.type.replace('_', ' ')}</p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setActionMenu(actionMenu === pt.id ? null : pt.id); }}
-                      className="p-2 hover:bg-gray-700/50 rounded-lg"
-                    >
-                      <MoreVertical size={18} />
-                    </button>
-                  </div>
-
-                  <div className="mb-4">
-                    {pt.image ? (
-                      <img src={getImageUrl(pt.image)} alt={pt.name} className="w-full h-32 object-cover rounded-lg border border-gray-600" />
-                    ) : (
-                      <div className="w-full h-32 bg-gray-700/50 rounded-lg border border-dashed border-gray-600 flex items-center justify-center">
-                        <Icon size={36} className="text-gray-500" />
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="space-y-3 mb-4 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Account:</span>
-                      <span className="font-mono text-white">{maskAccount(pt.account_number)}</span>
-                    </div>
-                    {pt.notes && (
-                      <div className="flex gap-2 text-gray-300">
-                        <FileText size={16} className="text-gray-500 mt-0.5" />
-                        <p className="line-clamp-2">{pt.notes}</p>
-                      </div>
-                    )}
-                  </div>
-
-                  <button
-                    onClick={() => toggleStatus(pt)}
-                    disabled={operationLoading === `status-${pt.id}`}
-                    className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold mb-4 ${pt.status === 'active' ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'}`}
-                  >
-                    {operationLoading === `status-${pt.id}` ? <Loader size={12} className="animate-spin" /> : null}
-                    {pt.status === 'active' ? 'Active' : 'Inactive'}
-                  </button>
-
-                  <div className="flex justify-between items-end pt-4 border-t border-gray-700/30">
-                    <div className="text-xs text-gray-500 flex items-center gap-1">
-                      <Calendar size={14} /> {formatDate(pt.created_at)}
-                    </div>
-                    <div className="flex gap-2">
-                      <button onClick={() => openModal(pt)} className="p-2 bg-blue-500/20 hover:bg-blue-500/30 rounded-lg"><Edit size={14} /></button>
-                      <button onClick={() => handleDelete(pt.id)} className="p-2 bg-red-500/20 hover:bg-red-500/30 rounded-lg"><Trash2 size={14} /></button>
-                    </div>
-                  </div>
-                </div>
-
-                <AnimatePresence>
-                  {actionMenu === pt.id && (
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.9 }}
-                      className="absolute right-4 top-20 bg-gray-800 border border-gray-600 rounded-xl shadow-2xl py-2 z-10 min-w-[160px]"
-                    >
-                      <button onClick={() => { openModal(pt); setActionMenu(null); }} className="w-full text-left px-4 py-2 hover:bg-gray-700 flex items-center gap-3 text-sm"><Edit size={16} /> Edit</button>
-                      <button onClick={() => toggleStatus(pt)} className="w-full text-left px-4 py-2 hover:bg-gray-700 flex items-center gap-3 text-sm">
-                        {pt.status === 'active' ? <EyeOff size={16} /> : <Eye size={16} />}
-                        {pt.status === 'active' ? 'Deactivate' : 'Activate'}
-                      </button>
-                      <button onClick={() => handleDelete(pt.id)} className="w-full text-left px-4 py-2 hover:bg-red-500/20 text-red-400 flex items-center gap-3 text-sm"><Trash2 size={16} /> Delete</button>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </motion.div>
-            );
-          })}
-        </motion.div>
-
-        {/* Pagination */}
-        {pagination.last_page > 1 && (
-          <div className="flex flex-col sm:flex-row justify-between items-center py-6 border-t border-gray-700/30">
-            <div className="text-sm text-gray-400 mb-4 sm:mb-0">
-              Showing {((pagination.current_page - 1) * pagination.per_page) + 1} to {Math.min(pagination.current_page * pagination.per_page, pagination.total)} of {pagination.total} entries
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => handlePageChange(pagination.current_page - 1)}
-                disabled={pagination.current_page === 1}
-                className="px-4 py-2 rounded-xl border border-gray-600 disabled:opacity-50 flex items-center gap-2"
-              >
-                <ChevronLeft size={16} /> Previous
-              </button>
-
-              {Array.from({ length: pagination.last_page }, (_, i) => i + 1)
-                .filter(p => p === 1 || p === pagination.last_page || Math.abs(p - pagination.current_page) <= 2)
-                .map((p, idx, arr) => (
-                  <React.Fragment key={p}>
-                    {idx > 0 && p - arr[idx - 1] > 1 && <span className="px-3 py-2">...</span>}
-                    <button
-                      onClick={() => handlePageChange(p)}
-                      className={`px-4 py-2 rounded-xl border ${pagination.current_page === p ? 'bg-blue-600 border-blue-500' : 'border-gray-600'}`}
-                    >
-                      {p}
-                    </button>
-                  </React.Fragment>
-                ))}
-
-              <button
-                onClick={() => handlePageChange(pagination.current_page + 1)}
-                disabled={pagination.current_page === pagination.last_page}
-                className="px-4 py-2 rounded-xl border border-gray-600 disabled:opacity-50 flex items-center gap-2"
-              >
-                Next <ChevronRight size={16} />
-              </button>
-            </div>
+        {loading && !paymentTypes.length ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="h-64 rounded-2xl bg-white/5 animate-pulse border border-white/5" />
+            ))}
           </div>
+        ) : (
+          <motion.div
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+          >
+            <AnimatePresence mode='popLayout'>
+              {paymentTypes.map((pt) => {
+                const Icon = paymentTypeIcons[pt.type] || CreditCard;
+                return (
+                  <motion.div
+                    layout
+                    variants={itemVariants}
+                    key={pt.id}
+                    className="group relative bg-slate-900/40 border border-white/10 rounded-2xl overflow-hidden hover:border-amber-500/30 transition-all duration-300 hover:shadow-2xl hover:shadow-orange-900/10"
+                  >
+                    <div className="p-6 relative">
+                      {/* Header Section */}
+                      <div className="flex justify-between items-start mb-6">
+                        <div className="p-3 bg-slate-800 rounded-xl border border-white/5 group-hover:border-amber-500/30 transition-colors">
+                          {pt.image ? (
+                            <img src={getImageUrl(pt.image)} alt={pt.name} className="w-10 h-10 object-contain" />
+                          ) : (
+                            <Icon size={24} className="text-amber-400" />
+                          )}
+                        </div>
+
+                        <div className="relative action-menu-container">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setActionMenu(actionMenu === pt.id ? null : pt.id); }}
+                            className="p-2 hover:bg-white/5 rounded-lg text-slate-400 hover:text-white transition-colors"
+                          >
+                            <MoreVertical size={20} />
+                          </button>
+
+                          <AnimatePresence>
+                            {actionMenu === pt.id && (
+                              <motion.div
+                                initial={{ opacity: 0, scale: 0.9, y: 10, x: -50 }}
+                                animate={{ opacity: 1, scale: 1, y: 0, x: -100 }}
+                                exit={{ opacity: 0, scale: 0.9, y: 10, x: -50 }}
+                                className="absolute right-0 top-full mt-2 w-48 bg-slate-800 border border-white/10 rounded-xl shadow-2xl py-2 z-50 backdrop-blur-xl"
+                              >
+                                <button onClick={() => openModal(pt)} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-slate-300 hover:bg-white/5 hover:text-amber-400 transition-colors">
+                                  <Edit size={16} /> Edit Details
+                                </button>
+                                <button onClick={() => toggleStatus(pt)} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-slate-300 hover:bg-white/5 hover:text-amber-400 transition-colors">
+                                  {pt.status === 'active' ? <EyeOff size={16} /> : <Eye size={16} />}
+                                  {pt.status === 'active' ? 'Deactivate' : 'Activate'}
+                                </button>
+                                <div className="my-1 border-t border-white/5"></div>
+                                <button onClick={() => handleDelete(pt.id)} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-rose-400 hover:bg-rose-500/10 transition-colors">
+                                  <Trash2 size={16} /> Delete
+                                </button>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      </div>
+
+                      {/* Main Info */}
+                      <div className="mb-6">
+                        <h3 className="text-xl font-bold text-white group-hover:text-amber-400 transition-colors mb-1 truncate">
+                          {pt.name}
+                        </h3>
+                        <div className="flex items-center gap-2 mb-3">
+                          <span className="text-xs uppercase font-bold tracking-wider text-slate-500 bg-slate-800/50 px-2 py-1 rounded">
+                            {pt.type.replace('_', ' ')}
+                          </span>
+                          <span className={`px-2 py-1 rounded-full text-xs font-bold border ${pt.status === 'active'
+                            ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+                            : 'bg-rose-500/10 text-rose-300 border-rose-500/20'
+                            }`}>
+                            {pt.status === 'active' ? 'Active' : 'Inactive'}
+                          </span>
+                        </div>
+
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between text-sm bg-black/20 p-3 rounded-lg border border-white/5">
+                            <span className="text-slate-400">Account</span>
+                            <span className="font-mono text-amber-200">{maskAccount(pt.account_number)}</span>
+                          </div>
+                          {pt.notes && (
+                            <div className="flex gap-2 text-xs text-slate-400 px-1">
+                              <FileText size={14} className="shrink-0 mt-0.5" />
+                              <p className="line-clamp-2">{pt.notes}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Footer */}
+                      <div className="flex items-center justify-between pt-4 border-t border-white/5 text-xs text-slate-500">
+                        <span className="flex items-center gap-1">
+                          <Calendar size={12} /> {formatDate(pt.created_at)}
+                        </span>
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+          </motion.div>
         )}
 
         {/* Empty State */}
-        {paymentTypes.length === 0 && !loading && (
-          <div className="text-center py-20">
-            <CreditCard size={80} className="mx-auto text-gray-600 mb-6" />
-            <h3 className="text-2xl font-bold mb-3">{searchTerm ? 'No payment types found' : 'No payment types yet'}</h3>
-            <p className="text-gray-400 mb-8">{searchTerm ? 'Try adjusting your search' : 'Create your first payment method'}</p>
-            {!searchTerm && (
-              <button onClick={() => openModal()} className="bg-gradient-to-r from-blue-600 to-cyan-600 px-8 py-3 rounded-xl font-bold">
-                <Plus className="inline mr-2" /> Create First Payment Type
+        {!loading && paymentTypes.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-20 bg-white/5 rounded-3xl border border-white/10 border-dashed">
+            <div className="p-6 bg-slate-900 rounded-full mb-4">
+              <CreditCard size={48} className="text-slate-600" />
+            </div>
+            <h3 className="text-2xl font-bold text-white mb-2">No payment methods found</h3>
+            <p className="text-slate-400 max-w-md text-center mb-8">
+              {searchTerm ? "Try adjusting your search." : "Configure payment methods to handle transactions."}
+            </p>
+            <button
+              onClick={() => { searchTerm ? setSearchTerm('') : openModal(); }}
+              className="px-6 py-3 bg-amber-600 hover:bg-amber-500 text-white rounded-xl font-semibold transition-colors shadow-lg shadow-amber-900/20"
+            >
+              {searchTerm ? 'Clear Search' : 'Add Payment Method'}
+            </button>
+          </div>
+        )}
+
+        {/* Pagination */}
+        {!loading && pagination.total_pages > 1 && (
+          <div className="flex justify-center mt-12 pb-12">
+            <div className="flex items-center gap-2 bg-slate-900/50 p-2 rounded-2xl border border-white/10">
+              <button
+                onClick={() => handlePageChange(pagination.current_page - 1)}
+                disabled={pagination.current_page === 1}
+                className="p-3 hover:bg-white/10 rounded-xl disabled:opacity-30 disabled:hover:bg-transparent transition-colors text-white"
+              >
+                <ChevronLeft size={20} />
               </button>
-            )}
+              <div className="flex items-center gap-1 px-2">
+                {Array.from({ length: pagination.total_pages }, (_, i) => i + 1)
+                  .filter(p => p === 1 || p === pagination.total_pages || Math.abs(p - pagination.current_page) <= 1)
+                  .map((p, idx, arr) => (
+                    <React.Fragment key={p}>
+                      {idx > 0 && p - arr[idx - 1] > 1 && <span className="text-slate-600 px-1">...</span>}
+                      <button
+                        onClick={() => handlePageChange(p)}
+                        className={`w-10 h-10 rounded-xl text-sm font-bold transition-all ${pagination.current_page === p
+                          ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/30'
+                          : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                          }`}
+                      >
+                        {p}
+                      </button>
+                    </React.Fragment>
+                  ))}
+              </div>
+              <button
+                onClick={() => handlePageChange(pagination.current_page + 1)}
+                disabled={pagination.current_page === pagination.total_pages}
+                className="p-3 hover:bg-white/10 rounded-xl disabled:opacity-30 disabled:hover:bg-transparent transition-colors text-white"
+              >
+                <ChevronRight size={20} />
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -571,136 +565,171 @@ const PaymentTypes = () => {
       {/* Modal */}
       <AnimatePresence>
         {showModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto"
-            onClick={closeModal}
-          >
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <motion.div
-              initial={{ scale: 0.9 }}
-              animate={{ scale: 1 }}
-              exit={{ scale: 0.9 }}
-              className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-gray-700/50 shadow-2xl"
-              onClick={e => e.stopPropagation()}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={closeModal}
+              className="absolute inset-0 bg-black/80 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className="relative w-full max-w-lg bg-slate-900 rounded-3xl border border-white/10 shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto"
             >
-              <div className="p-8">
-                <div className="flex justify-between items-center mb-8">
-                  <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-cyan-500 bg-clip-text text-transparent">
-                    {editingPaymentType ? 'Edit Payment Type' : 'Add New Payment Type'}
-                  </h2>
-                  <button onClick={closeModal} className="text-gray-400 hover:text-white p-2 rounded-xl hover:bg-gray-700/50">
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-400 to-orange-600" />
+
+              <form onSubmit={handleSubmit}>
+                <div className="p-8 border-b border-white/5 flex justify-between items-center bg-slate-900 sticky top-0 z-10">
+                  <div>
+                    <h2 className="text-2xl font-bold text-white mb-1">
+                      {editingPaymentType ? 'Edit Method' : 'New Method'}
+                    </h2>
+                    <p className="text-slate-400 text-sm">
+                      Configure payment details.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={closeModal}
+                    className="p-2 hover:bg-white/10 rounded-xl transition-colors text-slate-400 hover:text-white"
+                  >
                     <X size={24} />
                   </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="space-y-6">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-300 mb-3">Name *</label>
-                    <input 
-                      type="text" 
-                      name="name" 
-                      value={formData.name} 
-                      onChange={handleInputChange} 
-                      required 
-                      className={`w-full px-4 py-3 bg-gray-700/50 border ${errors.name ? 'border-red-500' : 'border-gray-600/50'} rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50`} 
-                      placeholder="e.g., M-Pesa, Visa Card" 
+                <div className="p-8 space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-300">Method Name</label>
+                    <input
+                      type="text"
+                      name="name"
+                      value={formData.name}
+                      onChange={handleInputChange}
+                      placeholder="e.g. PayPal, Visa ending 4242"
+                      className="w-full bg-slate-800/50 border border-white/10 rounded-xl py-3.5 px-4 text-white focus:ring-2 focus:ring-amber-500/50 outline-none transition-all hover:border-white/20 placeholder:text-slate-600"
                     />
-                    {errors.name && <p className="text-red-400 text-xs mt-1">{errors.name[0]}</p>}
+                    {errors.name && <p className="text-rose-400 text-xs mt-1">{errors.name[0]}</p>}
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-300 mb-3">Type</label>
-                    <select name="type" value={formData.type} onChange={handleInputChange} className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50">
-                      <option value="mobile">Mobile Money</option>
-                      <option value="card">Card</option>
-                      <option value="bank">Bank Transfer</option>
-                      <option value="wallet">E-Wallet</option>
-                      <option value="qr">QR Code</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-300 mb-3">Account Number / ID *</label>
-                    <input 
-                      type="text" 
-                      name="account_number" 
-                      value={formData.account_number} 
-                      onChange={handleInputChange} 
-                      required 
-                      className={`w-full px-4 py-3 bg-gray-700/50 border ${errors.account_number ? 'border-red-500' : 'border-gray-600/50'} rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50`} 
-                      placeholder="e.g., 0712345678" 
-                    />
-                    {errors.account_number && <p className="text-red-400 text-xs mt-1">{errors.account_number[0]}</p>}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-300 mb-3">Notes (Optional)</label>
-                    <textarea 
-                      name="notes" 
-                      value={formData.notes} 
-                      onChange={handleInputChange} 
-                      rows={3} 
-                      className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-xl text-white resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/50" 
-                      placeholder="Any additional info..." 
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-300 mb-3">Logo / QR Code</label>
-                    <div className="border-2 border-dashed border-gray-600 rounded-xl p-8 text-center hover:border-blue-500 transition-colors cursor-pointer">
-                      <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" id="img-upload" />
-                      <label htmlFor="img-upload" className="cursor-pointer block">
-                        <Upload size={40} className="mx-auto mb-3 text-gray-400" />
-                        <p className="text-gray-400">Click to upload logo</p>
-                        <p className="text-xs text-gray-500 mt-1">PNG, JPG, WebP up to 2MB</p>
-                      </label>
+                  <div className="grid grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-300">Type</label>
+                      <select
+                        name="type"
+                        value={formData.type}
+                        onChange={handleInputChange}
+                        className="w-full bg-slate-800/50 border border-white/10 rounded-xl py-3.5 px-4 text-white focus:ring-2 focus:ring-amber-500/50 outline-none transition-all cursor-pointer"
+                      >
+                        <option value="mobile">Mobile Money</option>
+                        <option value="card">Credit/Debit Card</option>
+                        <option value="bank">Bank Transfer</option>
+                        <option value="wallet">E-Wallet</option>
+                        <option value="qr">QR Code</option>
+                      </select>
                     </div>
-                    {errors.image && <p className="text-red-400 text-xs mt-2">{errors.image}</p>}
-                    {imagePreview && (
-                      <div className="mt-4 relative inline-block">
-                        <img src={imagePreview} alt="Preview" className="w-32 h-32 object-cover rounded-lg border border-gray-600" />
-                        <button type="button" onClick={() => { setImagePreview(null); setFormData(prev => ({ ...prev, image: null })); }} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600">
-                          <X size={14} />
-                        </button>
-                      </div>
-                    )}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-300">Account / ID</label>
+                      <input
+                        type="text"
+                        name="account_number"
+                        value={formData.account_number}
+                        onChange={handleInputChange}
+                        placeholder="e.g. 123456789"
+                        className="w-full bg-slate-800/50 border border-white/10 rounded-xl py-3.5 px-4 text-white focus:ring-2 focus:ring-amber-500/50 outline-none transition-all hover:border-white/20 placeholder:text-slate-600 font-mono"
+                      />
+                      {errors.account_number && <p className="text-rose-400 text-xs mt-1">{errors.account_number[0]}</p>}
+                    </div>
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-300 mb-3">Status</label>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-300">Logo / QR (Optional)</label>
+                    <div
+                      onClick={() => document.getElementById('pt-modal-upload').click()}
+                      className="border-2 border-dashed border-white/10 rounded-2xl p-6 hover:border-amber-500/50 hover:bg-amber-500/5 transition-all cursor-pointer group text-center relative overflow-hidden"
+                    >
+                      <input
+                        id="pt-modal-upload"
+                        type="file"
+                        hidden
+                        accept="image/*"
+                        onChange={handleImageChange}
+                      />
+
+                      {imagePreview ? (
+                        <div className="relative w-full h-24 rounded-xl overflow-hidden mx-auto max-w-xs shadow-xl bg-white/5 p-2">
+                          <img src={imagePreview} alt="Preview" className="w-full h-full object-contain" />
+                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            <RefreshCw className="text-white" size={24} />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="py-2">
+                          <Upload size={32} className="mx-auto mb-3 text-slate-400 group-hover:text-amber-400 transition-colors" />
+                          <p className="text-slate-300 font-medium text-sm">Click to upload logo</p>
+                        </div>
+                      )}
+                    </div>
+                    {errors.image && <p className="text-rose-400 text-xs mt-1">{errors.image[0]}</p>}
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-300">Notes</label>
+                    <textarea
+                      name="notes"
+                      value={formData.notes}
+                      onChange={handleInputChange}
+                      rows="2"
+                      placeholder="Additional details..."
+                      className="w-full bg-slate-800/50 border border-white/10 rounded-xl py-3 px-4 text-white focus:ring-2 focus:ring-amber-500/50 outline-none transition-all resize-none placeholder:text-slate-600"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-300">Status</label>
                     <div className="grid grid-cols-2 gap-4">
-                      {['active', 'inactive'].map(st => (
-                        <label
-                          key={st}
-                          onClick={() => setFormData(prev => ({ ...prev, status: st }))}
-                          className={`p-4 border-2 rounded-xl text-center cursor-pointer transition-all ${formData.status === st ? (st === 'active' ? 'border-green-500 bg-green-500/10' : 'border-red-500 bg-red-500/10') : 'border-gray-600 hover:border-gray-500'}`}
+                      {['active', 'inactive'].map((status) => (
+                        <button
+                          key={status}
+                          type="button"
+                          onClick={() => setFormData(p => ({ ...p, status }))}
+                          className={`py-3 px-4 rounded-xl border flex items-center justify-center gap-2 transition-all ${formData.status === status
+                            ? status === 'active'
+                              ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300'
+                              : 'bg-rose-500/20 border-rose-500/50 text-rose-300'
+                            : 'bg-slate-800/30 border-white/5 text-slate-500 hover:bg-slate-800'
+                            }`}
                         >
-                          {st === 'active' ? <Eye size={24} className="mx-auto mb-2 text-green-400" /> : <EyeOff size={24} className="mx-auto mb-2 text-red-400" />}
-                          <span className="capitalize font-medium">{st}</span>
-                        </label>
+                          {status === 'active' ? <Check size={16} /> : <X size={16} />}
+                          <span className="capitalize font-medium text-sm">{status}</span>
+                        </button>
                       ))}
                     </div>
                   </div>
+                </div>
 
-                  <div className="flex justify-end gap-3 pt-6 border-t border-gray-700/50">
-                    <button type="button" onClick={closeModal} className="px-6 py-3 text-sm font-medium text-gray-300 hover:text-white bg-gray-700/50 hover:bg-gray-600/50 rounded-xl border border-gray-600/50">
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={operationLoading === 'saving'}
-                      className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white px-6 py-3 rounded-xl font-semibold flex items-center gap-2 disabled:opacity-70"
-                    >
-                      {operationLoading === 'saving' ? <Loader size={20} className="animate-spin" /> : <Check size={20} />}
-                      {editingPaymentType ? 'Update' : 'Create'} Payment Type
-                    </button>
-                  </div>
-                </form>
-              </div>
+                <div className="p-6 border-t border-white/5 bg-slate-900/50 flex justify-end gap-3 sticky bottom-0 z-10">
+                  <button
+                    type="button"
+                    onClick={closeModal}
+                    className="px-6 py-2.5 rounded-xl text-slate-300 hover:text-white hover:bg-white/5 transition-colors font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={operationLoading === 'saving'}
+                    className="px-8 py-2.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white rounded-xl font-bold shadow-lg shadow-amber-900/20 disabled:opacity-50 flex items-center gap-2 transition-all transform active:scale-95"
+                  >
+                    {operationLoading === 'saving' && <Loader size={18} className="animate-spin" />}
+                    {editingPaymentType ? 'Save Changes' : 'Create Method'}
+                  </button>
+                </div>
+              </form>
             </motion.div>
-          </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

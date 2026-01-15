@@ -8,7 +8,13 @@ use Illuminate\Database\Eloquent\Model;
 class TaxRate extends Model
 {
     use HasFactory;
-     protected $guarded = [];
+     protected $fillable = [
+        'name',
+        'rate',
+        'tax_group_id',
+        'is_compound',
+        'is_active',
+    ];
 
 
      public function saleTaxes()

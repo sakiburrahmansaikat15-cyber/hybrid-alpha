@@ -1,469 +1,180 @@
 // data/menuData.js
 export const menuData = {
   menuItems: [
+    // --- DASHBOARD (Group 1) ---
     {
       id: 1,
       title: "Dashboard",
       icon: "LayoutDashboard",
       path: "/",
-      badge: "New"
+      badge: "New",
+      submenu: [
+        { id: 11, title: "Overview", path: "/", icon: "LayoutDashboard" },
+        { id: 12, title: "AI Analytics", path: "/analytics", icon: "BrainCircuit", badge: "Beta" }
+      ]
     },
+
+    // --- INVENTORY MANAGEMENT (Group 2) ---
     {
       id: 2,
-       title: "Inventory-Setup",
-      icon: "FolderOpen",
-      path: "/inventory-setup",
-      submenu: [
-        {
-          id: 24,
-          title: "units",
-          path: "/units",
-          description: "View all your projects",
-          icon: "Folder"
-        },
-        {
-          id: 25,
-          title: "categories",
-          path: "/categories",
-          description: "View all your projects",
-          icon: "Folder"
-        },
-        {
-          id: 26,
-          title: "ProductType",
-          path: "/ProductType",
-          description: "View all your projects",
-          icon: "Folder"
-        },
-        {
-          id: 27,
-          title: "Brands",
-          path: "/Brands",
-          description: "View all your projects",
-          icon: "Folder"
-        },
-        {
-          id: 28,
-          title: "PaymentTypes",
-          path: "/PaymentTypes",
-          description: "View all your projects",
-          icon: "Folder"
-        },
-        {
-          id: 29,
-          title: "Warehouses",
-          path: "/Warehouses",
-          description: "View all your projects",
-          icon: "Folder"
-        },
-
-        {
-          id: 31,
-          title: "SubCategories",
-          path: "/SubCategories",
-          description: "View all your projects",
-          icon: "Folder"
-        },
-        {
-          id: 32,
-          title: "Subitems",
-          path: "/Subitems",
-          description: "View all your projects",
-          icon: "Folder"
-        },
-
-        {
-          id: 34,
-          title: "Variants",
-          path: "/Variants",
-          description: "View all your projects",
-          icon: "Folder"
-        },
-      ]
-    },
-    {
-      id: 3,
-       title: "Inventory",
-      icon: "FolderOpen",
+      title: "Inventory",
+      icon: "Package",
       path: "/inventory",
       submenu: [
-
-        {
-          id: 30,
-          title: "Vendor",
-          path: "/Vendor",
-          description: "View all your projects",
-          icon: "Folder"
-        },
-
-        {
-          id: 33,
-          title: "Products",
-          path: "/Products",
-          description: "View all your projects",
-          icon: "Folder"
-        },
-
-        {
-          id: 35,
-          title: "Stocks",
-          path: "/Stocks",
-          description: "View all your projects",
-          icon: "Folder"
-        },
-
-        {
-          id: 37,
-          title: "Serial-List",
-          path: "/serial-list",
-          description: "View all your projects",
-          icon: "Folder"
-        },
+        { id: 21, title: "Products", path: "/Products", icon: "Box" },
+        { id: 22, title: "Categories", path: "/categories", icon: "Layers" },
+        { id: 23, title: "Brands", path: "/Brands", icon: "Tag" },
+        { id: 24, title: "Warehouses", path: "/Warehouses", icon: "Warehouse" },
+        { id: 25, title: "Stock Management", path: "/Stocks", icon: "ClipboardList" },
+        { id: 26, title: "Serial Numbers", path: "/serial-list", icon: "Barcode" },
+        { id: 27, title: "Suppliers", path: "/Vendor", icon: "Truck" },
+        { id: 28, title: "Procurement", path: "/procurement", icon: "ShoppingCart" }
       ]
     },
+
+    // --- SALES & POS (Group 3) ---
     {
-      id: 10,
-      title: "HR Management",
-      icon: "Users",
-      path: "/hr",
+      id: 3,
+      title: "Sales & POS",
+      icon: "ShoppingCart",
+      path: "/pos",
       submenu: [
-        {
-          id: 101,
-          title: "Employees",
-          path: "/employees",
-          description: "Manage employee records",
-          icon: "User"
-        },
-        {
-          id: 102,
-          title: "Departments",
-          path: "/departments",
-          description: "Manage departments",
-          icon: "Building"
-        },
-        {
-          id: 103,
-          title: "Designations",
-          path: "/designations",
-          description: "Manage job titles",
-          icon: "Briefcase"
-        },
-        {
-          id: 104,
-          title: "Employee Documents",
-          path: "/employee_documents",
-          description: "Employee documentation",
-          icon: "FileText"
-        },
-        {
-          id: 105,
-          title: "Attendance",
-          path: "/attendance",
-          description: "Track employee attendance",
-          icon: "Clock"
-        },
-        {
-          id: 106,
-          title: "Shifts",
-          path: "/shifts",
-          description: "Manage work shifts",
-          icon: "CalendarClock"
-        },
-        {
-          id: 107,
-          title: "Leave Types",
-          path: "/leave_types",
-          description: "Configure leave types",
-          icon: "CalendarCheck"
-        },
-        {
-          id: 108,
-          title: "Leave Applications",
-          path: "/leave_applications",
-          description: "Manage leave requests",
-          icon: "FileCheck"
-        },
-        {
-          id: 109,
-          title: "Salaries",
-          path: "/salaries",
-          description: "Employee salary details",
-          icon: "DollarSign"
-        },
-        {
-          id: 110,
-          title: "Payroll",
-          path: "/payroll",
-          description: "Process payroll",
-          icon: "CreditCard"
-        }
+        { id: 301, title: "POS Terminal", path: "/checkout", icon: "Monitor", badge: "Live" },
+        { id: 302, title: "POS Terminal List", path: "/pos-terminals", icon: "List" },
+        { id: 303, title: "Sales History", path: "/sales", icon: "History" },
+        { id: 304, title: "Payment Methods", path: "/Payment-Methods", icon: "CreditCard" },
+        { id: 305, title: "Held Carts", path: "/hold-carts", icon: "PauseCircle" },
+        { id: 306, title: "Sale Returns", path: "/sale-returns", icon: "RotateCcw" },
+        { id: 307, title: "Gift Cards", path: "/gift-cards", icon: "Gift" }
       ]
     },
-      {
-      id: 11,
-      title: "CRM Management",
+
+    // --- CRM SOLUTION (Group 4) ---
+    {
+      id: 4,
+      title: "CRM Solution",
       icon: "Users",
       path: "/crm",
       submenu: [
-        {
-          id: 101,
-          title: "Lead",
-          path: "/lead",
-          icon: "User"
-        },
-        {
-          id: 102,
-          title: "Lead-Source",
-          path: "/lead-source",
-          icon: "Building"
-        },
-        {
-          id: 103,
-          title: "Lead-Status",
-          path: "/lead-status",
-
-          icon: "Briefcase"
-        },
-        {
-          id: 104,
-          title: "Customer",
-          path: "/customer",
-
-          icon: "FileText"
-        },
-        {
-          id: 105,
-          title: "Company",
-          path: "/company",
-
-          icon: "Clock"
-        },
-        {
-          id: 106,
-          title: "Contact",
-          path: "/contact",
-
-          icon: "CalendarClock"
-        },
-        {
-          id: 107,
-          title: "Opportunity",
-          path: "/opportunity",
-
-          icon: "CalendarCheck"
-        },
-        {
-          id: 108,
-          title: "Opportunity-Stage",
-          path: "/opportunity-stage",
-
-          icon: "FileCheck"
-        },
-        {
-          id: 109,
-          title: "Activity",
-          path: "/activity",
-
-          icon: "DollarSign"
-        },
-        {
-          id: 110,
-          title: "Campaign",
-          path: "/campaign",
-
-          icon: "CreditCard"
-        },
-        {
-          id: 111,
-          title: "Ticket",
-          path: "/ticket",
-
-          icon: "CreditCard"
-        }
+        { id: 401, title: "Dashboard", path: "/crm/dashboard", icon: "LayoutDashboard" },
+        { id: 402, title: "Customers", path: "/customer", icon: "UserCheck" },
+        { id: 403, title: "Leads", path: "/lead", icon: "UserPlus" },
+        { id: 404, title: "Deals", path: "/opportunity", icon: "Target" },
+        { id: 405, title: "Activities", path: "/activity", icon: "Calendar" },
+        { id: 406, title: "Campaigns", path: "/campaign", icon: "Megaphone" },
+        { id: 407, title: "Support Tickets", path: "/ticket", icon: "LifeBuoy" }
       ]
     },
+
+    // --- HRM MANAGEMENT (Group 5) ---
     {
-      id: 12,
-      title: "POS Management",
-      icon: "Users",
-      path: "/pos",
-      submenu: [
-        {
-          id: 101,
-          title: "Pos-Terminals",
-          path: "/pos-terminals",
-          icon: "User"
-        },
-        {
-          id: 102,
-          title: "Pos-Sessions",
-          path: "/pos-sessions",
-          icon: "Building"
-        },
-        {
-          id: 103,
-          title: "Sales",
-          path: "/sales",
-
-          icon: "Briefcase"
-        },
-        {
-          id: 104,
-          title: "Sale-Items",
-          path: "/sale-items",
-
-          icon: "FileText"
-        },
-        {
-          id: 105,
-          title: "Sale-Payments",
-          path: "/sale-payments",
-
-          icon: "Clock"
-        },
-        {
-          id: 106,
-          title: "Sale-Taxes",
-          path: "/sale-taxes",
-
-          icon: "CalendarClock"
-        },
-        {
-          id: 107,
-          title: "Sale-Discounts",
-          path: "/sale-discounts",
-
-          icon: "CalendarCheck"
-        },
-        {
-          id: 108,
-          title: "Customers",
-          path: "/customers",
-
-          icon: "FileCheck"
-        },
-        {
-          id: 109,
-          title: "Customer-Groups",
-          path: "/customer-groups",
-
-          icon: "DollarSign"
-        },
-        {
-          id: 110,
-          title: "Customer-Addresses",
-          path: "/customer-addresses",
-
-          icon: "CreditCard"
-        },
-        {
-          id: 111,
-          title: "Hold-Carts",
-          path: "/hold-carts",
-
-          icon: "CreditCard"
-        },
-         {
-          id: 112,
-          title: "Gift-Cards",
-          path: "/gift-cards",
-
-          icon: "CreditCard"
-        },
-         {
-          id: 113,
-          title: "Vouchers",
-          path: "/vouchers",
-
-          icon: "CreditCard"
-        },
-         {
-          id: 114,
-          title: "Payment-Methods",
-          path: "/Payment-Methods",
-
-          icon: "CreditCard"
-        },
-         {
-          id: 115,
-          title: "Payment-Gateways",
-          path: "/payment-gateways",
-
-          icon: "CreditCard"
-        },
-         {
-          id: 116,
-          title: "Receipts",
-          path: "/receipts",
-
-          icon: "CreditCard"
-        },
-         {
-          id: 117,
-          title: "Receipt-Templates",
-          path: "/receipt-templates",
-
-          icon: "CreditCard"
-        },
-         {
-          id: 118,
-          title: "Tax-Rates",
-          path: "/tax-rates",
-
-          icon: "CreditCard"
-        },
-          {
-          id: 119,
-          title: "Tax-Groups",
-          path: "/tax-groups",
-
-          icon: "CreditCard"
-        },
-        {
-          id: 119,
-          title: "Checkout",
-          path: "/checkout",
-
-          icon: "CreditCard"
-        }
-      ]
-    },
-    {
-      id: 4,
-      title: "User-Management",
-      icon: "FolderOpen",
-      path: "/user-management",
-      submenu: [
-       {
-          id: 21,
-          title: "Roles",
-          path: "/roles",
-          description: "View all your roles",
-          icon: "Folder"
-        },
-        {
-          id: 21,
-          title: "User",
-          path: "/user",
-          description: "View all your user",
-          icon: "Folder"
-        },
-      ]
-    },
-       {
       id: 5,
-      title: "Account-Management",
-      icon: "FolderOpen",
+      title: "HR Management",
+      icon: "Briefcase",
+      path: "/hr",
+      submenu: [
+        { id: 501, title: "Dashboard", path: "/hrm/dashboard", icon: "LayoutDashboard" },
+        { id: 502, title: "Employees", path: "/employees", icon: "User" },
+        { id: 503, title: "Departments", path: "/departments", icon: "Building" },
+        { id: 504, title: "Attendance", path: "/attendance", icon: "Clock" },
+        { id: 505, title: "Leave Requests", path: "/leave_applications", icon: "FileMinus" },
+        { id: 506, title: "Payroll", path: "/payroll", icon: "DollarSign" }
+      ]
+    },
+
+    // --- FINANCE & ACCOUNTING (Group 6) ---
+    {
+      id: 6,
+      title: "Finance",
+      icon: "PieChart",
       path: "/account-management",
       submenu: [
+        { id: 601, title: "Dashboard", path: "/accounting/dashboard", icon: "LayoutDashboard" },
+        { id: 602, title: "Chart of Accounts", path: "/accounting/chart-of-accounts", icon: "List" },
+        { id: 603, title: "Journal Entries", path: "/accounting/journals", icon: "BookOpen" },
+        { id: 604, title: "Transactions", path: "/Transactions", icon: "FileText" },
         {
-          id: 36,
-          title: "Transactions",
-          path: "/Transactions",
-          description: "View all your projects",
-          icon: "Folder"
+          id: 605,
+          title: "Reports",
+          path: "/accounting/reports", 
+          icon: "FileBarChart",
+          submenu: [
+            { id: 6051, title: "Balance Sheet", path: "/accounting/reports/balance-sheet", icon: "FileText" },
+            { id: 6052, title: "Income Statement", path: "/accounting/reports/income-statement", icon: "FileText" },
+            { id: 6053, title: "Trial Balance", path: "/accounting/reports/trial-balance", icon: "FileText" },
+            { id: 6054, title: "Aged Payables", path: "/accounting/reports/aged-payables", icon: "FileText" },
+            { id: 6055, title: "Aged Receivables", path: "/accounting/reports/aged-receivables", icon: "FileText" }
+          ]
         }
       ]
     },
+
+    // --- USER ACCESS (Group 7) ---
+    {
+      id: 7,
+      title: "User Access",
+      icon: "Shield",
+      path: "/user-management",
+      submenu: [
+        { id: 701, title: "Users", path: "/users", icon: "User" },
+        { id: 702, title: "Roles & Permissions", path: "/roles", icon: "Key" },
+        { id: 703, title: "Audit Logs", path: "/audit-logs", icon: "FileText" }
+      ]
+    },
+
+    // --- SYSTEM SETTINGS (Group 8) ---
+    {
+      id: 8,
+      title: "System Settings",
+      icon: "Settings",
+      path: "/settings",
+      submenu: [
+        { id: 801, title: "General", path: "/settings/general", icon: "Sliders" },
+        {
+          id: 802,
+          title: "Inventory Config",
+          path: "/inventory-setup",
+          icon: "Package",
+          submenu: [
+            { id: 821, title: "Units", path: "/units" },
+            { id: 822, title: "Product Types", path: "/ProductType" },
+            { id: 823, title: "Variants", path: "/Variants" }
+          ]
+        },
+        {
+          id: 803,
+          title: "CRM Config",
+          path: "/crm-setup",
+          icon: "Users",
+          submenu: [
+            { id: 831, title: "Lead Sources", path: "/lead-source" },
+            { id: 832, title: "Lead Statuses", path: "/lead-status" },
+            { id: 833, title: "Pipelines", path: "/opportunity-stage" }
+          ]
+        },
+        {
+          id: 804,
+          title: "POS Config",
+          path: "/pos-setup",
+          icon: "CreditCard",
+          submenu: [
+            { id: 841, title: "Payment Methods", path: "/Payment-Methods" },
+            { id: 842, title: "Tax Rates", path: "/tax-rates" },
+            { id: 843, title: "Receipt Templates", path: "/receipt-templates" }
+          ]
+        },
+        {
+          id: 805,
+          title: "HR Config",
+          path: "/hr-setup",
+          icon: "Briefcase",
+          submenu: [
+            { id: 851, title: "Designations", path: "/designations" },
+            { id: 852, title: "Shifts", path: "/shifts" },
+            { id: 853, title: "Leave Types", path: "/leave_types" }
+          ]
+        }
+      ]
+    }
   ]
 };

@@ -2,27 +2,33 @@ import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Plus,
-  Search,
-  Edit,
-  Trash2,
-  X,
-  Check,
-  AlertCircle,
-  MoreVertical,
-  Eye,
-  EyeOff,
-  Image as ImageIcon,
-  Tag,
-  Calendar,
-  Shield,
-  Upload,
-  ChevronLeft,
-  ChevronRight,
-  Loader
+  Plus, Search, Edit, Trash2, X, Check, Eye, EyeOff,
+  MoreVertical, Tag, Image as ImageIcon, Upload,
+  Shield, Calendar, ChevronLeft, ChevronRight, Loader,
+  Layers, Filter, RefreshCw
 } from 'lucide-react';
 
-const API_URL = 'http://localhost:8000/api/brands';
+const API_URL = '/api/brands';
+const APP_URL = import.meta.env.VITE_APP_URL?.replace(/\/$/, '') || '';
+
+const getImageUrl = (path) => {
+  if (!path) return null;
+  if (path.startsWith('http')) return path;
+  return `${APP_URL}/${path.replace(/^\//, '')}`;
+};
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.1 }
+  }
+};
+
+const itemVariants = {
+  hidden: { y: 20, opacity: 0 },
+  visible: { y: 0, opacity: 1 }
+};
 
 const Brands = () => {
   const [brands, setBrands] = useState([]);
@@ -31,8 +37,6 @@ const Brands = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingBrand, setEditingBrand] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all');
-  const [sortBy, setSortBy] = useState('newest');
   const [actionMenu, setActionMenu] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
@@ -45,9 +49,9 @@ const Brands = () => {
 
   const [pagination, setPagination] = useState({
     current_page: 1,
-    last_page: 1,
-    per_page: 10,
-    total_items: 0
+    per_page: 9,
+    total_items: 0,
+    total_pages: 1
   });
 
   const showNotification = useCallback((message, type = 'success') => {
@@ -63,79 +67,69 @@ const Brands = () => {
       showNotification(firstError || 'Validation error', 'error');
     } else if (error.response?.data?.message) {
       showNotification(error.response.data.message, 'error');
-      setErrors({ _general: error.response.data.message });
     } else {
       showNotification(defaultMessage || 'Something went wrong', 'error');
-      setErrors({ _general: defaultMessage });
     }
   }, [showNotification]);
 
-  // Fetch brands with server-side search & pagination
-  const fetchBrands = useCallback(async (page = 1, perPage = 10, keyword = '') => {
+  const fetchBrands = useCallback(async (page = 1, limit = 9, keyword = '') => {
     setLoading(true);
     try {
-      const params = { page, limit: perPage };
+      const params = { page, limit };
       if (keyword.trim()) params.keyword = keyword.trim();
 
       const response = await axios.get(API_URL, { params });
-      const res = response.data;
+      const data = response.data.pagination || response.data;
+      const itemList = data.data || [];
 
-      // Extract data from BrandResource collection
-      const brandData = res.pagination?.data || [];
-      const formattedBrands = brandData.map(item => ({
-        id: item.id,
-        name: item.name,
-        image: item.image,
-        status: item.status,
-        created_at: item.created_at,
-        updated_at: item.updated_at
-      }));
-
-      setBrands(formattedBrands);
+      setBrands(itemList);
       setPagination({
-        current_page: res.pagination.current_page || 1,
-        last_page: res.pagination.total_pages || 1,
-        per_page: res.pagination.per_page || 10,
-        total_items: res.pagination.total_items || 0
+        current_page: data.current_page || 1,
+        per_page: data.per_page || limit,
+        total_items: data.total_items || data.total || itemList.length,
+        total_pages: data.total_pages || data.last_page || 1
       });
-
     } catch (error) {
       handleApiError(error, 'Failed to fetch brands');
       setBrands([]);
-      setPagination({ current_page: 1, last_page: 1, per_page: 10, total_items: 0 });
     } finally {
       setLoading(false);
     }
   }, [handleApiError]);
 
-  // Debounced search + refetch on search change
+  useEffect(() => {
+    fetchBrands(1, 9);
+  }, []);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       fetchBrands(1, pagination.per_page, searchTerm);
     }, 500);
-
     return () => clearTimeout(timer);
   }, [searchTerm, pagination.per_page, fetchBrands]);
 
-  // Initial load
+  // Click outside listener for action menu
   useEffect(() => {
-    fetchBrands(1, 10);
-  }, []);
+    const handleClickOutside = (e) => {
+      if (actionMenu && !e.target.closest('.action-menu-container')) {
+        setActionMenu(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [actionMenu]);
 
-  // Handle page change
   const handlePageChange = (newPage) => {
-    if (newPage < 1 || newPage > pagination.last_page) return;
+    if (newPage < 1 || newPage > pagination.total_pages || newPage === pagination.current_page) return;
     fetchBrands(newPage, pagination.per_page, searchTerm);
   };
 
-  // Handle per page change
   const handleLimitChange = (newLimit) => {
     const limit = parseInt(newLimit);
-    setPagination(prev => ({ ...prev, per_page: limit }));
+    setPagination(prev => ({ ...prev, per_page: limit, current_page: 1 }));
     fetchBrands(1, limit, searchTerm);
   };
 
-  // Form handlers
   const resetForm = () => {
     setFormData({ name: '', image: null, status: 'active' });
     setImagePreview(null);
@@ -149,13 +143,14 @@ const Brands = () => {
       setFormData({
         name: brand.name || '',
         image: null,
-        status: brand.status
+        status: brand.status || 'active'
       });
-      setImagePreview(brand.image ? `http://localhost:8000/${brand.image}` : null);
+      setImagePreview(getImageUrl(brand.image));
     } else {
       resetForm();
     }
     setShowModal(true);
+    setActionMenu(null);
   };
 
   const closeModal = () => {
@@ -166,7 +161,7 @@ const Brands = () => {
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-    if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
+    if (errors[name]) setErrors(prev => ({ ...prev, [name]: undefined }));
   };
 
   const handleImageChange = (e) => {
@@ -175,17 +170,17 @@ const Brands = () => {
 
     const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
     if (!validTypes.includes(file.type)) {
-      setErrors(prev => ({ ...prev, image: 'Only JPEG, PNG, WebP allowed' }));
+      setErrors(prev => ({ ...prev, image: ['Only JPEG, PNG, WebP allowed'] }));
       return;
     }
     if (file.size > 2 * 1024 * 1024) {
-      setErrors(prev => ({ ...prev, image: 'Image must be < 2MB' }));
+      setErrors(prev => ({ ...prev, image: ['Image must be less than 2MB'] }));
       return;
     }
 
     setFormData(prev => ({ ...prev, image: file }));
     setImagePreview(URL.createObjectURL(file));
-    if (errors.image) setErrors(prev => ({ ...prev, image: '' }));
+    if (errors.image) setErrors(prev => ({ ...prev, image: undefined }));
   };
 
   const handleSubmit = async (e) => {
@@ -193,30 +188,25 @@ const Brands = () => {
     setOperationLoading('saving');
     setErrors({});
 
+    const submitData = new FormData();
+    submitData.append('name', formData.name.trim());
+    submitData.append('status', formData.status);
+    if (formData.image instanceof File) {
+      submitData.append('image', formData.image);
+    }
+
     try {
-      const submitData = new FormData();
-      submitData.append('name', formData.name.trim());
-      submitData.append('status', formData.status);
-      if (formData.image instanceof File) {
-        submitData.append('image', formData.image);
-      }
-
-      let response;
       if (editingBrand) {
-        response = await axios.post(`${API_URL}/${editingBrand.id}`, submitData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
+        submitData.append('_method', 'POST');
+        await axios.post(`${API_URL}/${editingBrand.id}`, submitData);
       } else {
-        response = await axios.post(API_URL, submitData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
+        await axios.post(API_URL, submitData);
       }
-
-      showNotification(response.data.message || `Brand ${editingBrand ? 'updated' : 'created'} successfully!`);
+      showNotification(editingBrand ? 'Brand updated!' : 'Brand created!');
       fetchBrands(pagination.current_page, pagination.per_page, searchTerm);
       closeModal();
     } catch (error) {
-      handleApiError(error, 'Failed to save brand');
+      handleApiError(error, 'Failed to save');
     } finally {
       setOperationLoading(null);
     }
@@ -227,16 +217,14 @@ const Brands = () => {
     setOperationLoading(`delete-${id}`);
     try {
       await axios.delete(`${API_URL}/${id}`);
-      showNotification('Brand deleted successfully');
-      
-      // Adjust page if last item on page was deleted
-      const remainingItems = pagination.total_items - 1;
-      const maxPage = Math.ceil(remainingItems / pagination.per_page);
-      const targetPage = pagination.current_page > maxPage ? maxPage : pagination.current_page;
-      
-      fetchBrands(targetPage || 1, pagination.per_page, searchTerm);
+      showNotification('Brand deleted');
+      if (brands.length === 1 && pagination.current_page > 1) {
+        fetchBrands(pagination.current_page - 1, pagination.per_page, searchTerm);
+      } else {
+        fetchBrands(pagination.current_page, pagination.per_page, searchTerm);
+      }
     } catch (error) {
-      handleApiError(error, 'Delete failed');
+      handleApiError(error, 'Failed to delete');
     } finally {
       setOperationLoading(null);
       setActionMenu(null);
@@ -247,15 +235,14 @@ const Brands = () => {
     const newStatus = brand.status === 'active' ? 'inactive' : 'active';
     setOperationLoading(`status-${brand.id}`);
     try {
+      // Create FormData to handle potential image requirements or simple consistent structure
       const form = new FormData();
+      form.append('name', brand.name);
       form.append('status', newStatus);
-      form.append('name', brand.name); // Required field on update
+      form.append('_method', 'POST');
 
-      await axios.post(`${API_URL}/${brand.id}`, form, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-
-      showNotification(`Brand ${newStatus === 'active' ? 'activated' : 'deactivated'}`);
+      await axios.post(`${API_URL}/${brand.id}`, form);
+      showNotification(`Brand ${newStatus}`);
       fetchBrands(pagination.current_page, pagination.per_page, searchTerm);
     } catch (error) {
       handleApiError(error, 'Failed to update status');
@@ -265,279 +252,280 @@ const Brands = () => {
     }
   };
 
+
+  const formatDate = (date) => date ? new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A';
+
   const stats = {
     total: pagination.total_items,
     active: brands.filter(b => b.status === 'active').length,
-    inactive: brands.filter(b => b.status === 'inactive').length
+    inactive: brands.filter(b => b.status !== 'active').length
   };
 
-  const formatDate = (date) => date ? new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
-  const getImageUrl = (path) => path ? `http://localhost:8000/${path}` : null;
-
-  useEffect(() => {
-    const handler = () => setActionMenu(null);
-    document.addEventListener('click', handler);
-    return () => document.removeEventListener('click', handler);
-  }, []);
-
-  if (loading && brands.length === 0) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="mb-8 flex justify-between">
-            <div className="h-10 bg-gray-800 rounded w-64 animate-pulse"></div>
-            <div className="h-12 bg-gray-800 rounded-xl w-40 animate-pulse"></div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="bg-gray-800/40 rounded-2xl p-6 animate-pulse">
-                <div className="h-12 bg-gray-700 rounded"></div>
-              </div>
-            ))}
-          </div>
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="bg-gray-800/30 rounded-2xl p-6 animate-pulse space-y-4">
-                <div className="h-32 bg-gray-700/50 rounded-lg"></div>
-                <div className="h-8 bg-gray-700 rounded"></div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-gray-100 py-8">
+    <div className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-8 font-sans selection:bg-purple-500/30">
       <AnimatePresence>
         {notification.show && (
           <motion.div
-            initial={{ opacity: 0, x: 300 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 300 }}
-            className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-xl shadow-2xl ${notification.type === 'error' ? 'bg-red-600' : 'bg-green-600'} text-white font-medium`}
+            initial={{ opacity: 0, y: -20, x: '50%' }}
+            animate={{ opacity: 1, y: 0, x: '50%' }}
+            exit={{ opacity: 0, y: -20, x: '50%' }}
+            className={`fixed top-6 right-1/2 translate-x-1/2 z-[60] px-6 py-3 rounded-full shadow-2xl backdrop-blur-md border flex items-center gap-3 font-medium ${notification.type === 'error'
+              ? 'bg-rose-500/10 border-rose-500/50 text-rose-400'
+              : 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400'
+              }`}
           >
+            {notification.type === 'error' ? <Shield size={18} /> : <Check size={18} />}
             {notification.message}
           </motion.div>
         )}
       </AnimatePresence>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto space-y-8">
         {/* Header */}
-        <div className="mb-8 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-          <div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-cyan-500 bg-clip-text text-transparent">
-              Brands Management
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+          <div className="space-y-1">
+            <h1 className="text-4xl md:text-5xl font-black tracking-tight text-white mb-2">
+              <span className="bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-fuchsia-500">
+                Brands
+              </span>
             </h1>
-            <p className="text-gray-400 mt-2">Manage product brands and their information</p>
+            <p className="text-slate-400 text-lg font-light">
+              Manage your product manufacturers and partners
+            </p>
           </div>
-          <button
+
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
             onClick={() => openModal()}
-            className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 px-6 py-3 rounded-xl font-bold flex items-center gap-3 shadow-lg"
+            className="group relative px-6 py-3 bg-gradient-to-r from-purple-600 to-fuchsia-600 rounded-xl font-semibold text-white shadow-lg shadow-purple-500/20 hover:shadow-purple-500/40 transition-all flex items-center gap-2 overflow-hidden"
           >
-            <Plus size={22} /> Add New Brand
-          </button>
+            <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
+            <Plus size={20} className="relative z-10" />
+            <span className="relative z-10">Add New Brand</span>
+          </motion.button>
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {[
-            { label: 'Total Brands', value: stats.total, icon: Tag, color: 'blue' },
-            { label: 'Active', value: stats.active, icon: Eye, color: 'green' },
-            { label: 'Inactive', value: stats.inactive, icon: EyeOff, color: 'red' },
-          ].map((s, i) => (
-            <div key={i} className="bg-gray-800/40 backdrop-blur-sm rounded-2xl p-6 border border-gray-700/40">
-              <div className="flex items-center justify-between">
+            { label: 'Total Brands', value: stats.total, icon: Layers, color: 'text-fuchsia-400', bg: 'bg-fuchsia-400/10', border: 'border-fuchsia-400/20' },
+            { label: 'Active', value: stats.active, icon: Check, color: 'text-emerald-400', bg: 'bg-emerald-400/10', border: 'border-emerald-400/20' },
+            { label: 'Inactive', value: stats.inactive, icon: EyeOff, color: 'text-rose-400', bg: 'bg-rose-400/10', border: 'border-rose-400/20' },
+          ].map((stat, i) => (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.1 }}
+              key={i}
+              className={`relative overflow-hidden p-6 rounded-2xl border ${stat.border} bg-white/5 backdrop-blur-sm group`}
+            >
+              <div className={`absolute top-0 right-0 p-32 opacity-10 rounded-full blur-3xl ${stat.bg}`} />
+              <div className="flex items-center justify-between relative z-10">
                 <div>
-                  <p className="text-gray-400 text-sm">{s.label}</p>
-                  <p className="text-3xl font-bold mt-1">{s.value}</p>
+                  <p className="text-slate-400 font-medium mb-1">{stat.label}</p>
+                  <h3 className="text-3xl font-bold text-white">{stat.value}</h3>
                 </div>
-                <div className={`p-3 bg-${s.color}-500/10 rounded-xl`}>
-                  <s.icon size={28} className={`text-${s.color}-400`} />
+                <div className={`p-4 rounded-xl ${stat.bg}`}>
+                  <stat.icon size={24} className={stat.color} />
                 </div>
               </div>
-            </div>
+            </motion.div>
           ))}
         </div>
 
-        {/* Search + Filters */}
-        <div className="bg-gray-800/30 backdrop-blur-sm rounded-2xl p-6 mb-8 border border-gray-700/30">
-          <div className="flex flex-col lg:flex-row gap-6">
-            <div className="flex-1 relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-              <input
-                type="text"
-                placeholder="Search brands by name..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500/50 outline-none"
-              />
-            </div>
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="flex items-center gap-2 bg-gray-700/50 border border-gray-600/50 rounded-xl px-4 py-3">
-                <span className="text-sm text-gray-400">Show:</span>
-                <select
-                  value={pagination.per_page}
-                  onChange={(e) => handleLimitChange(e.target.value)}
-                  className="bg-transparent border-0 text-white text-sm focus:ring-0 focus:outline-none"
-                >
-                  <option value="5">5</option>
-                  <option value="10">10</option>
-                  <option value="25">25</option>
-                  <option value="50">50</option>
-                </select>
-              </div>
+        {/* Controls */}
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-4 backdrop-blur-md flex flex-col md:flex-row gap-4 items-center justify-between sticky top-4 z-40 shadow-2xl shadow-black/50">
+          <div className="relative w-full md:w-96 group">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-purple-400 transition-colors" size={20} />
+            <input
+              type="text"
+              placeholder="Search brands..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full bg-slate-900/50 border border-white/10 text-white rounded-xl pl-12 pr-4 py-3 focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 outline-none transition-all placeholder:text-slate-500"
+            />
+          </div>
+
+          <div className="flex items-center gap-3 w-full md:w-auto">
+            <div className="flex items-center gap-2 bg-slate-900/50 px-4 py-3 rounded-xl border border-white/10">
+              <Filter size={16} className="text-slate-400" />
               <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                className="px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 backdrop-blur-sm min-w-[140px]"
+                value={pagination.per_page}
+                onChange={(e) => handleLimitChange(e.target.value)}
+                className="bg-transparent border-none text-sm text-slate-300 focus:ring-0 cursor-pointer outline-none"
               >
-                <option value="all">All Status</option>
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </select>
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 backdrop-blur-sm min-w-[140px]"
-              >
-                <option value="newest">Newest First</option>
-                <option value="oldest">Oldest First</option>
-                <option value="name">Name A-Z</option>
-                <option value="status">Status</option>
+                <option value="9">9 per page</option>
+                <option value="18">18 per page</option>
+                <option value="27">27 per page</option>
               </select>
             </div>
+            <button
+              onClick={() => fetchBrands(pagination.current_page, pagination.per_page, searchTerm)}
+              className="p-3 bg-slate-900/50 rounded-xl border border-white/10 hover:border-purple-500/30 hover:text-purple-400 transition-colors"
+              title="Refresh"
+            >
+              <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
+            </button>
           </div>
         </div>
 
-        {/* Brands Grid */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1, transition: { staggerChildren: 0.1 } }}
-          className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mb-8"
-        >
-          {brands
-            .filter(b => filterStatus === 'all' || b.status === filterStatus)
-            .sort((a, b) => {
-              if (sortBy === 'name') return a.name.localeCompare(b.name);
-              if (sortBy === 'status') return (b.status === 'active' ? 1 : -1) - (a.status === 'active' ? 1 : -1);
-              if (sortBy === 'newest') return new Date(b.created_at) - new Date(a.created_at);
-              if (sortBy === 'oldest') return new Date(a.created_at) - new Date(b.created_at);
-              return 0;
-            })
-            .map(brand => (
-              <motion.div
-                key={brand.id}
-                whileHover={{ y: -8, scale: 1.02 }}
-                className="group bg-gray-800/30 backdrop-blur-sm rounded-2xl border border-gray-700/30 hover:border-blue-500/50 transition-all overflow-hidden"
-              >
-                <div className="p-6">
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-blue-500/10 rounded-lg"><Tag size={20} className="text-blue-400" /></div>
-                      <h3 className="text-xl font-bold">{brand.name}</h3>
-                    </div>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setActionMenu(actionMenu === brand.id ? null : brand.id); }}
-                      className="p-2 hover:bg-gray-700/50 rounded-lg"
-                    >
-                      <MoreVertical size={18} />
-                    </button>
-                  </div>
-
-                  <div className="mb-4">
+        {/* Grid */}
+        {loading && !brands.length ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="h-64 rounded-2xl bg-white/5 animate-pulse border border-white/5" />
+            ))}
+          </div>
+        ) : (
+          <motion.div
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+          >
+            <AnimatePresence mode='popLayout'>
+              {brands.map((brand) => (
+                <motion.div
+                  layout
+                  variants={itemVariants}
+                  key={brand.id}
+                  className="group relative bg-slate-900/40 border border-white/10 rounded-2xl overflow-hidden hover:border-purple-500/30 transition-all duration-300 hover:shadow-2xl hover:shadow-purple-900/20"
+                >
+                  {/* Image Area */}
+                  <div className="h-40 overflow-hidden relative bg-slate-800 flex items-center justify-center p-6">
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent z-10 opacity-60" />
                     {brand.image ? (
-                      <img src={getImageUrl(brand.image)} alt={brand.name} className="w-full h-32 object-cover rounded-lg border border-gray-600" />
+                      <img
+                        src={getImageUrl(brand.image)}
+                        alt={brand.name}
+                        className="w-full h-full object-contain transform group-hover:scale-105 transition-transform duration-500 z-0"
+                      />
                     ) : (
-                      <div className="w-full h-32 bg-gray-700/50 rounded-lg flex items-center justify-center">
-                        <ImageIcon size={32} className="text-gray-500" />
+                      <div className="text-slate-600 bg-slate-800/80 rounded-full p-4">
+                        <Tag size={40} strokeWidth={1} />
                       </div>
                     )}
-                  </div>
 
-                  <button
-                    onClick={() => toggleStatus(brand)}
-                    disabled={operationLoading === `status-${brand.id}`}
-                    className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold mb-4 ${brand.status === 'active' ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'}`}
-                  >
-                    {operationLoading === `status-${brand.id}` ? <Loader size={12} className="animate-spin" /> : null}
-                    {brand.status === 'active' ? 'Active' : 'Inactive'}
-                  </button>
+                    <div className="absolute top-4 left-4 z-20">
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold backdrop-blur-md border ${brand.status === 'active'
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                        : 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                        }`}>
+                        {brand.status === 'active' ? 'Active' : 'Inactive'}
+                      </span>
+                    </div>
 
-                  <div className="space-y-2 text-sm text-gray-400">
-                    <div className="flex items-center gap-2"><Shield size={16} /> ID: #{brand.id}</div>
-                    <div className="flex items-center gap-2"><Calendar size={16} /> Created: {formatDate(brand.created_at)}</div>
-                  </div>
+                    <div className="absolute top-4 right-4 z-30 action-menu-container">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setActionMenu(actionMenu === brand.id ? null : brand.id); }}
+                        className="p-2 bg-black/40 backdrop-blur-md rounded-lg text-white hover:bg-purple-500 transition-colors"
+                      >
+                        <MoreVertical size={18} />
+                      </button>
 
-                  <div className="flex justify-between items-center mt-6 pt-4 border-t border-gray-700/30">
-                    <span className="text-xs text-gray-500">Updated: {formatDate(brand.updated_at)}</span>
-                    <div className="flex gap-2">
-                      <button onClick={() => openModal(brand)} className="p-2 bg-blue-500/20 hover:bg-blue-500/40 rounded-lg"><Edit size={14} /></button>
-                      <button onClick={() => handleDelete(brand.id)} className="p-2 bg-red-500/20 hover:bg-red-500/40 rounded-lg"><Trash2 size={14} /></button>
+                      <AnimatePresence>
+                        {actionMenu === brand.id && (
+                          <motion.div
+                            initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.9, y: 10 }}
+                            className="absolute right-0 top-full mt-2 w-48 bg-slate-800 border border-white/10 rounded-xl shadow-2xl py-2 z-50 backdrop-blur-xl"
+                          >
+                            <button onClick={() => openModal(brand)} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-slate-300 hover:bg-white/5 hover:text-purple-400 transition-colors">
+                              <Edit size={16} /> Edit Details
+                            </button>
+                            <button onClick={() => toggleStatus(brand)} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-slate-300 hover:bg-white/5 hover:text-purple-400 transition-colors">
+                              {brand.status === 'active' ? <EyeOff size={16} /> : <Eye size={16} />}
+                              {brand.status === 'active' ? 'Deactivate' : 'Activate'}
+                            </button>
+                            <div className="my-1 border-t border-white/5"></div>
+                            <button onClick={() => handleDelete(brand.id)} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-rose-400 hover:bg-rose-500/10 transition-colors">
+                              <Trash2 size={16} /> Delete Forever
+                            </button>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
                   </div>
-                </div>
 
-                <AnimatePresence>
-                  {actionMenu === brand.id && (
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      className="absolute right-4 top-20 bg-gray-800 border border-gray-600 rounded-xl shadow-xl py-2 z-10 min-w-[160px]"
-                    >
-                      <button onClick={() => { openModal(brand); setActionMenu(null); }} className="w-full text-left px-4 py-2 hover:bg-gray-700 flex items-center gap-3 text-sm"><Edit size={16} /> Edit</button>
-                      <button onClick={() => toggleStatus(brand)} className="w-full text-left px-4 py-2 hover:bg-gray-700 flex items-center gap-3 text-sm">
-                        {brand.status === 'active' ? <EyeOff size={16} /> : <Eye size={16} />}
-                        {brand.status === 'active' ? 'Deactivate' : 'Activate'}
-                      </button>
-                      <button onClick={() => handleDelete(brand.id)} className="w-full text-left px-4 py-2 hover:bg-red-500/20 text-red-400 flex items-center gap-3 text-sm"><Trash2 size={16} /> Delete</button>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </motion.div>
-            ))}
-        </motion.div>
+                  {/* Content Area */}
+                  <div className="p-6 relative">
+                    <h3 className="text-xl font-bold text-white group-hover:text-purple-400 transition-colors truncate mb-4">
+                      {brand.name}
+                    </h3>
 
-        {/* Pagination */}
-        {pagination.last_page > 1 && (
-          <div className="flex justify-between items-center py-6 border-t border-gray-700/30">
-            <div className="text-sm text-gray-400">
-              Showing {(pagination.current_page - 1) * pagination.per_page + 1} to {Math.min(pagination.current_page * pagination.per_page, pagination.total_items)} of {pagination.total_items}
-            </div>
-            <div className="flex gap-2">
-              <button onClick={() => handlePageChange(pagination.current_page - 1)} disabled={pagination.current_page === 1} className="px-4 py-2 rounded-xl border border-gray-600 disabled:opacity-50 flex items-center gap-2">
-                <ChevronLeft size={16} /> Previous
-              </button>
-              {Array.from({ length: pagination.last_page }, (_, i) => i + 1)
-                .filter(p => p === 1 || p === pagination.last_page || Math.abs(p - pagination.current_page) <= 2)
-                .map((p, idx, arr) => (
-                  <React.Fragment key={p}>
-                    {idx > 0 && p - arr[idx - 1] > 1 && <span className="px-3">...</span>}
-                    <button onClick={() => handlePageChange(p)} className={`px-4 py-2 rounded-xl border ${pagination.current_page === p ? 'bg-blue-600 border-blue-500' : 'border-gray-600'}`}>
-                      {p}
-                    </button>
-                  </React.Fragment>
-                ))}
-              <button onClick={() => handlePageChange(pagination.current_page + 1)} disabled={pagination.current_page === pagination.last_page} className="px-4 py-2 rounded-xl border border-gray-600 disabled:opacity-50 flex items-center gap-2">
-                Next <ChevronRight size={16} />
-              </button>
-            </div>
-          </div>
+                    <div className="flex items-center justify-between pt-4 border-t border-white/5 text-xs text-slate-500">
+                      <span className="flex items-center gap-1">
+                        <Calendar size={12} /> {formatDate(brand.created_at)}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Shield size={12} /> ID: {brand.id}
+                      </span>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </motion.div>
         )}
 
         {/* Empty State */}
-        {brands.length === 0 && !loading && (
-          <div className="text-center py-20">
-            <Tag size={64} className="mx-auto text-gray-600 mb-6" />
-            <h3 className="text-2xl font-bold mb-3">{searchTerm ? 'No brands found' : 'No brands yet'}</h3>
-            <p className="text-gray-400 mb-8">{searchTerm ? 'Try different keywords' : 'Create your first brand'}</p>
-            {!searchTerm && (
-              <button onClick={() => openModal()} className="bg-gradient-to-r from-blue-600 to-cyan-600 px-8 py-3 rounded-xl font-bold">
-                <Plus className="inline mr-2" /> Create First Brand
+        {!loading && brands.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-20 bg-white/5 rounded-3xl border border-white/10 border-dashed">
+            <div className="p-6 bg-slate-900 rounded-full mb-4">
+              <Tag size={48} className="text-slate-600" />
+            </div>
+            <h3 className="text-2xl font-bold text-white mb-2">No brands found</h3>
+            <p className="text-slate-400 max-w-md text-center mb-8">
+              {searchTerm ? "Try adjusting your search terms." : "Start by adding your first brand partner."}
+            </p>
+            <button
+              onClick={() => { searchTerm ? setSearchTerm('') : openModal(); }}
+              className="px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-semibold transition-colors shadow-lg shadow-purple-900/20"
+            >
+              {searchTerm ? 'Clear Search' : 'Create Brand'}
+            </button>
+          </div>
+        )}
+
+        {/* Pagination */}
+        {!loading && pagination.total_pages > 1 && (
+          <div className="flex justify-center mt-12 pb-12">
+            <div className="flex items-center gap-2 bg-slate-900/50 p-2 rounded-2xl border border-white/10">
+              <button
+                onClick={() => handlePageChange(pagination.current_page - 1)}
+                disabled={pagination.current_page === 1}
+                className="p-3 hover:bg-white/10 rounded-xl disabled:opacity-30 disabled:hover:bg-transparent transition-colors text-white"
+              >
+                <ChevronLeft size={20} />
               </button>
-            )}
+              <div className="flex items-center gap-1 px-2">
+                {Array.from({ length: pagination.total_pages }, (_, i) => i + 1)
+                  .filter(p => p === 1 || p === pagination.total_pages || Math.abs(p - pagination.current_page) <= 1)
+                  .map((p, idx, arr) => (
+                    <React.Fragment key={p}>
+                      {idx > 0 && p - arr[idx - 1] > 1 && <span className="text-slate-600 px-1">...</span>}
+                      <button
+                        onClick={() => handlePageChange(p)}
+                        className={`w-10 h-10 rounded-xl text-sm font-bold transition-all ${pagination.current_page === p
+                          ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/30'
+                          : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                          }`}
+                      >
+                        {p}
+                      </button>
+                    </React.Fragment>
+                  ))}
+              </div>
+              <button
+                onClick={() => handlePageChange(pagination.current_page + 1)}
+                disabled={pagination.current_page === pagination.total_pages}
+                className="p-3 hover:bg-white/10 rounded-xl disabled:opacity-30 disabled:hover:bg-transparent transition-colors text-white"
+              >
+                <ChevronRight size={20} />
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -545,72 +533,129 @@ const Brands = () => {
       {/* Modal */}
       <AnimatePresence>
         {showModal && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={closeModal}>
-            <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} className="bg-gray-800 rounded-3xl p-8 max-w-2xl w-full border border-gray-700" onClick={e => e.stopPropagation()}>
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-cyan-500 bg-clip-text text-transparent">
-                  {editingBrand ? 'Edit Brand' : 'Create New Brand'}
-                </h2>
-                <button onClick={closeModal} className="p-2 hover:bg-gray-700 rounded-lg"><X size={24} /></button>
-              </div>
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={closeModal}
+              className="absolute inset-0 bg-black/80 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className="relative w-full max-w-lg bg-slate-900 rounded-3xl border border-white/10 shadow-2xl overflow-hidden"
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-400 to-fuchsia-600" />
 
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div>
-                  <label className="block text-sm font-semibold mb-2">Brand Name *</label>
-                  <input
-                    type="text"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleInputChange}
-                    required
-                    className={`w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none ${errors.name ? 'border-red-500' : ''}`}
-                    placeholder="e.g., Apple, Samsung"
-                  />
-                  {errors.name && <p className="text-red-400 text-sm mt-1">{Array.isArray(errors.name) ? errors.name[0] : errors.name}</p>}
+              <form onSubmit={handleSubmit}>
+                <div className="p-8 border-b border-white/5 flex justify-between items-center bg-slate-900">
+                  <div>
+                    <h2 className="text-2xl font-bold text-white mb-1">
+                      {editingBrand ? 'Edit Brand' : 'New Brand'}
+                    </h2>
+                    <p className="text-slate-400 text-sm">
+                      Set up brand details.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={closeModal}
+                    className="p-2 hover:bg-white/10 rounded-xl transition-colors text-slate-400 hover:text-white"
+                  >
+                    <X size={24} />
+                  </button>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-semibold mb-3">Brand Logo</label>
-                  <div className="border-2 border-dashed border-gray-600 rounded-xl p-6 text-center hover:border-blue-500 cursor-pointer">
-                    <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" id="img-upload" />
-                    <label htmlFor="img-upload" className="cursor-pointer">
-                      <Upload size={32} className="mx-auto mb-2 text-gray-400" />
-                      <p className="text-sm text-gray-400">Click to upload (Max 2MB)</p>
-                    </label>
+                <div className="p-8 space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-300">Brand Name</label>
+                    <input
+                      type="text"
+                      name="name"
+                      value={formData.name}
+                      onChange={handleInputChange}
+                      placeholder="e.g. Nike, Apple"
+                      className="w-full bg-slate-800/50 border border-white/10 rounded-xl py-3.5 px-4 text-white focus:ring-2 focus:ring-purple-500/50 outline-none transition-all hover:border-white/20 placeholder:text-slate-600"
+                    />
+                    {errors.name && <p className="text-rose-400 text-xs mt-1">{errors.name[0]}</p>}
                   </div>
-                  {imagePreview && (
-                    <div className="mt-4 relative inline-block">
-                      <img src={imagePreview} alt="Preview" className="w-32 h-32 object-cover rounded-lg border border-gray-600" />
-                      <button type="button" onClick={() => { setImagePreview(null); setFormData(prev => ({ ...prev, image: null })); }} className="absolute -top-2 -right-2 bg-red-500 p-1 rounded-full">
-                        <X size={14} />
-                      </button>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-300">Logo</label>
+                    <div
+                      onClick={() => document.getElementById('brand-modal-upload').click()}
+                      className="border-2 border-dashed border-white/10 rounded-2xl p-6 hover:border-purple-500/50 hover:bg-purple-500/5 transition-all cursor-pointer group text-center relative overflow-hidden"
+                    >
+                      <input
+                        id="brand-modal-upload"
+                        type="file"
+                        hidden
+                        accept="image/*"
+                        onChange={handleImageChange}
+                      />
+
+                      {imagePreview ? (
+                        <div className="relative w-full h-32 rounded-xl overflow-hidden mx-auto max-w-xs shadow-xl bg-white/5 p-2">
+                          <img src={imagePreview} alt="Preview" className="w-full h-full object-contain" />
+                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            <RefreshCw className="text-white" size={24} />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="py-2">
+                          <Upload size={32} className="mx-auto mb-3 text-slate-400 group-hover:text-purple-400 transition-colors" />
+                          <p className="text-slate-300 font-medium text-sm">Click to upload logo</p>
+                        </div>
+                      )}
                     </div>
-                  )}
-                  {errors.image && <p className="text-red-400 text-sm mt-2">{Array.isArray(errors.image) ? errors.image[0] : errors.image}</p>}
-                </div>
+                    {errors.image && <p className="text-rose-400 text-xs mt-1">{errors.image[0] || errors.image}</p>}
+                  </div>
 
-                <div>
-                  <label className="block text-sm font-semibold mb-3">Status</label>
-                  <div className="grid grid-cols-2 gap-4">
-                    {['active', 'inactive'].map(st => (
-                      <label key={st} onClick={() => setFormData(prev => ({ ...prev, status: st }))} className={`p-4 border-2 rounded-xl text-center cursor-pointer transition ${formData.status === st ? (st === 'active' ? 'border-green-500 bg-green-500/10' : 'border-red-500 bg-red-500/10') : 'border-gray-600'}`}>
-                        {st === 'active' ? <Eye size={20} className="mx-auto mb-2" /> : <EyeOff size={20} className="mx-auto mb-2" />}
-                        <span className="capitalize font-medium">{st}</span>
-                      </label>
-                    ))}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-300">Status</label>
+                    <div className="grid grid-cols-2 gap-4">
+                      {['active', 'inactive'].map((status) => (
+                        <button
+                          key={status}
+                          type="button"
+                          onClick={() => setFormData(p => ({ ...p, status }))}
+                          className={`py-3 px-4 rounded-xl border flex items-center justify-center gap-2 transition-all ${formData.status === status
+                            ? status === 'active'
+                              ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300'
+                              : 'bg-rose-500/20 border-rose-500/50 text-rose-300'
+                            : 'bg-slate-800/30 border-white/5 text-slate-500 hover:bg-slate-800'
+                            }`}
+                        >
+                          {status === 'active' ? <Check size={16} /> : <X size={16} />}
+                          <span className="capitalize font-medium text-sm">{status}</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex justify-end gap-3 pt-4">
-                  <button type="button" onClick={closeModal} className="px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-xl">Cancel</button>
-                  <button type="submit" disabled={operationLoading === 'saving'} className="px-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-xl font-bold flex items-center gap-2 disabled:opacity-70">
-                    {operationLoading === 'saving' ? <Loader size={20} className="animate-spin" /> : <Check size={20} />}
-                    {editingBrand ? 'Update' : 'Create'} Brand
+                <div className="p-6 border-t border-white/5 bg-slate-900/50 flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={closeModal}
+                    className="px-6 py-2.5 rounded-xl text-slate-300 hover:text-white hover:bg-white/5 transition-colors font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={operationLoading === 'saving'}
+                    className="px-8 py-2.5 bg-gradient-to-r from-purple-600 to-fuchsia-600 hover:from-purple-500 hover:to-fuchsia-500 text-white rounded-xl font-bold shadow-lg shadow-purple-900/20 disabled:opacity-50 flex items-center gap-2 transition-all transform active:scale-95"
+                  >
+                    {operationLoading === 'saving' && <Loader size={18} className="animate-spin" />}
+                    {editingBrand ? 'Save Changes' : 'Create Brand'}
                   </button>
                 </div>
               </form>
             </motion.div>
-          </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

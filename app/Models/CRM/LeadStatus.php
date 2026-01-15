@@ -8,9 +8,13 @@ use Illuminate\Database\Eloquent\Model;
 class LeadStatus extends Model
 {
     use HasFactory;
-     protected $guarded = [];
+    protected $fillable = [
+        'name',
+        'color_code',
+        'order',
+    ];
 
-      public function leads()
+    public function leads()
     {
         return $this->hasMany(Lead::class, 'lead_status_id');
     }

@@ -4,14 +4,28 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\LogsActivity;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
-class Prooducts extends Model
+class Product extends Model
 {
-    use HasFactory;
+    use HasFactory, LogsActivity, SoftDeletes;
 
-    protected $guarded = [];
+    protected $fillable = [
+        'name',
+        'description',
+        'status',
+        'image',
+        'specification',
+        'cat_id',
+        'brand_id',
+        'sub_cat_id',
+        'sub_item_id',
+        'unit_id',
+        'product_type_id',
+    ];
 
-    protected $table = 'prooducts';
+    protected $table = 'products';
 
     // Belongs to category
     public function category()
@@ -50,22 +64,22 @@ class Prooducts extends Model
     }
 
 
-       public function variants()
+    public function variants()
     {
         return $this->hasMany(variants::class, 'product_id');
     }
 
 
     public function stocks()
-{
-    return $this->hasMany(Stocks::class, 'product_id');
-}
+    {
+        return $this->hasMany(Stocks::class, 'product_id');
+    }
 
 
-public function saleItems()
-{
-    return $this->hasMany(SaleItem::class, 'product_id');
-}
+    public function saleItems()
+    {
+        return $this->hasMany(POS\SaleItem::class, 'product_id');
+    }
 
 
 }

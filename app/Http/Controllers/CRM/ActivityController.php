@@ -20,8 +20,10 @@ class ActivityController extends Controller
         $query = Activity::query();
 
         if ($keyword) {
-            $query->where('type', 'like', "%$keyword%");
-
+            $query->where(function ($q) use ($keyword) {
+                $q->where('type', 'like', "%$keyword%")
+                    ->orWhere('description', 'like', "%$keyword%");
+            });
         }
 
         if (!$limit) {
@@ -60,8 +62,8 @@ class ActivityController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'type'         => 'required|in:call,meeting,task,note',
-            'description'  => 'nullable|string',
+            'type' => 'required|in:call,meeting,task,note',
+            'description' => 'nullable|string',
             'scheduled_at' => 'nullable|date',
         ]);
 
@@ -69,7 +71,7 @@ class ActivityController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Validation failed',
-                'errors'  => $validator->errors()
+                'errors' => $validator->errors()
             ], 422);
         }
 
@@ -110,9 +112,9 @@ class ActivityController extends Controller
         $activity = Activity::findOrFail($id);
 
         $data = $request->validate([
-            'type'         => 'sometimes|in:call,meeting,task,note',
-          
-            'description'  => 'nullable|string',
+            'type' => 'sometimes|in:call,meeting,task,note',
+
+            'description' => 'nullable|string',
             'scheduled_at' => 'nullable|date',
         ]);
 

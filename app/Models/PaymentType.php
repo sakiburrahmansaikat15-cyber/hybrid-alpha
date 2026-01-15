@@ -9,7 +9,14 @@ class PaymentType extends Model
 {
     use HasFactory;
 
-    protected $guarded = [];
+    protected $fillable = [
+        'name',
+        'type',
+        'account_number',
+        'notes',
+        'image',
+        'status',
+    ];
 
     public function transactions()
     {

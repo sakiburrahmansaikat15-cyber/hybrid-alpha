@@ -14,11 +14,13 @@ class PaymentMethodSeeder extends Seeder
         $methods = ['Cash', 'Card', 'Voucher', 'Wallet'];
 
         foreach ($methods as $method) {
-            PaymentMethod::create([
-                'name' => $method,
-                'type' => strtolower($method),
-                'status' => 'active',
-            ]);
+            PaymentMethod::firstOrCreate(
+                ['name' => $method],
+                [
+                    'type' => strtolower($method),
+                    'status' => 'active',
+                ]
+            );
         }
     }
 }

@@ -10,6 +10,13 @@ use Illuminate\Support\Facades\Validator;
 
 class EmployeeController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware('permission:employees.view')->only(['index', 'show']);
+        $this->middleware('permission:employees.create')->only(['store']);
+        $this->middleware('permission:employees.edit')->only(['update']);
+        $this->middleware('permission:employees.delete')->only(['destroy']);
+    }
     // GET /employees
     public function index(Request $request)
     {
@@ -21,27 +28,13 @@ class EmployeeController extends Controller
         if ($keyword) {
             $query->where(function ($q) use ($keyword) {
                 $q->where('first_name', 'like', "%{$keyword}%")
-                  ->orWhere('last_name', 'like', "%{$keyword}%")
-                  ->orWhere('employee_code', 'like', "%{$keyword}%");
+                    ->orWhere('last_name', 'like', "%{$keyword}%")
+                    ->orWhere('employee_code', 'like', "%{$keyword}%");
             });
         }
 
-        if (!$limit) {
-            $data = $query->latest()->get();
-
-            return response()->json([
-                'message' => 'Employees fetched successfully',
-                'pagination' => [
-                    'current_page' => 1,
-                    'per_page' => $data->count(),
-                    'total_items' => $data->count(),
-                    'total_pages' => 1,
-                    'data' => EmployeeResource::collection($data),
-                ],
-            ]);
-        }
-
-        $limit = (int) $limit ?: 10;
+        // 📄 Enforce pagination to prevent memory issues with large datasets
+        $limit = (int) ($limit ?: 15);
         $employees = $query->latest()->paginate($limit);
 
         return response()->json([
@@ -115,7 +108,7 @@ class EmployeeController extends Controller
     {
         $employee = Employee::findOrFail($id);
 
-        $data = $request->validate([
+        $validator = Validator::make($request->all(), [
             'employee_code' => "sometimes|string|unique:employees,employee_code,{$id}",
             'first_name' => 'sometimes|string|max:255',
             'last_name' => 'nullable|string|max:255',
@@ -131,7 +124,15 @@ class EmployeeController extends Controller
             'status' => 'nullable|in:active,inactive',
         ]);
 
-        $employee->update($data);
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $employee->update($validator->validated());
 
         return response()->json([
             'success' => true,

@@ -8,7 +8,13 @@ use Illuminate\Database\Eloquent\Model;
 class PosTerminal extends Model
 {
     use HasFactory;
-     protected $guarded = [];
+     protected $fillable = [
+        'name',
+        'code',
+        'location',
+        'is_active',
+        'receipt_template_id',
+    ];
 
        public function sessions()
     {

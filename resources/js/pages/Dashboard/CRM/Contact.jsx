@@ -1,546 +1,364 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Plus, Search, Edit, Trash2, X, Check, MoreVertical,
-  Calendar, Loader, ChevronLeft, ChevronRight, User, Mail, Phone, Building2, Briefcase
+  Plus, Search, Edit, Trash2, X, Loader, ChevronLeft, ChevronRight,
+  User, Mail, Phone, Briefcase, Building2, Zap, Users, Activity
 } from 'lucide-react';
 
-const API_URL = 'http://localhost:8000/api/crm/contacts';
-const CUSTOMERS_URL = 'http://localhost:8000/api/crm/customers';
+const API_URL = '/api/crm/contacts';
+const CUSTOMERS_URL = '/api/crm/customers';
 
 const Contact = () => {
   const [contacts, setContacts] = useState([]);
+  const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [operationLoading, setOperationLoading] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [editingContact, setEditingContact] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [actionMenu, setActionMenu] = useState(null);
-  const [customers, setCustomers] = useState([]);
-  const [formData, setFormData] = useState({
-    customer_id: '',
-    name: '',
-    email: '',
-    phone: '',
-    designation: ''
-  });
+  const [formData, setFormData] = useState({ customer_id: '', name: '', email: '', phone: '', designation: '' });
   const [errors, setErrors] = useState({});
   const [notification, setNotification] = useState({ show: false, message: '', type: '' });
+  const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, per_page: 12, total_items: 0 });
 
-  const [pagination, setPagination] = useState({
-    current_page: 1,
-    last_page: 1,
-    per_page: 10,
-    total_items: 0
-  });
+  const notificationTimerRef = useRef(null);
 
   const showNotification = useCallback((message, type = 'success') => {
+    if (notificationTimerRef.current) clearTimeout(notificationTimerRef.current);
     setNotification({ show: true, message, type });
-    setTimeout(() => setNotification({ show: false, message: '', type: '' }), 4000);
+    notificationTimerRef.current = setTimeout(() => setNotification({ show: false, message: '', type: '' }), 3500);
   }, []);
 
-  const handleApiError = useCallback((error, defaultMessage) => {
+  useEffect(() => () => { if (notificationTimerRef.current) clearTimeout(notificationTimerRef.current); }, []);
+
+  const handleApiError = useCallback((error) => {
     if (error.response?.status === 422) {
       const validationErrors = error.response.data.errors || {};
       setErrors(validationErrors);
-      const firstError = Object.values(validationErrors)[0]?.[0];
-      showNotification(firstError || 'Validation error', 'error');
-    } else if (error.response?.data?.message) {
-      showNotification(error.response.data.message, 'error');
-      setErrors({ _general: error.response.data.message });
+      showNotification(Object.values(validationErrors)[0]?.[0] || 'Check input fields', 'error');
     } else {
-      showNotification(defaultMessage || 'Something went wrong', 'error');
+      const msg = error.response?.data?.message || 'Operation failed';
+      showNotification(msg, 'error');
     }
   }, [showNotification]);
 
-  const fetchContacts = useCallback(async (page = 1, perPage = 10, keyword = '') => {
+  const fetchCustomers = useCallback(async () => {
+    try {
+      const res = await axios.get(CUSTOMERS_URL);
+      setCustomers(res.data.pagination?.data || res.data?.data || []);
+    } catch (e) { console.error('Failed to load customers'); }
+  }, []);
+
+  const fetchContacts = useCallback(async (page = 1, keyword = searchTerm) => {
     setLoading(true);
     try {
-      const params = { page, limit: perPage };
+      const params = { page, limit: pagination.per_page };
       if (keyword.trim()) params.keyword = keyword.trim();
-
       const response = await axios.get(API_URL, { params });
-      const res = response.data;
-
-      const contactData = res.pagination?.data || [];
-      const formatted = contactData.map(item => ({
-        id: item.id,
-        name: item.name,
-        email: item.email || 'N/A',
-        phone: item.phone || 'N/A',
-        designation: item.designation || 'N/A',
-        customer: item.customer || { name: 'No Customer' },
-        created_at: item.created_at,
-        updated_at: item.updated_at
-      }));
-
-      setContacts(formatted);
+      const res = response.data.pagination || response.data;
+      setContacts(res.data || []);
       setPagination({
-        current_page: res.pagination.current_page || 1,
-        last_page: res.pagination.total_pages || 1,
-        per_page: res.pagination.per_page || 10,
-        total_items: res.pagination.total_items || 0
+        current_page: res.current_page || 1,
+        last_page: res.total_pages || res.last_page || 1,
+        per_page: res.per_page || 12,
+        total_items: res.total_items || res.total || 0,
       });
     } catch (error) {
-      handleApiError(error, 'Failed to fetch contacts');
+      handleApiError(error);
       setContacts([]);
-      setPagination({ current_page: 1, last_page: 1, per_page: 10, total_items: 0 });
     } finally {
       setLoading(false);
     }
-  }, [handleApiError]);
-
-  const fetchCustomers = useCallback(async () => {
-    try {
-      const response = await axios.get(CUSTOMERS_URL);
-      setCustomers(response.data.pagination?.data || []);
-    } catch (error) {
-      console.error('Failed to load customers', error);
-    }
-  }, []);
+  }, [pagination.per_page, searchTerm, handleApiError]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchContacts(1, pagination.per_page, searchTerm);
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [searchTerm, pagination.per_page, fetchContacts]);
-
-  useEffect(() => {
-    fetchContacts(1, 10);
     fetchCustomers();
-  }, []);
+    const timer = setTimeout(() => fetchContacts(1), 500);
+    return () => clearTimeout(timer);
+  }, [searchTerm, fetchContacts, fetchCustomers]);
 
   const handlePageChange = (newPage) => {
     if (newPage < 1 || newPage > pagination.last_page) return;
-    fetchContacts(newPage, pagination.per_page, searchTerm);
-  };
-
-  const handleLimitChange = (newLimit) => {
-    const limit = parseInt(newLimit);
-    setPagination(prev => ({ ...prev, per_page: limit }));
-    fetchContacts(1, limit, searchTerm);
-  };
-
-  const resetForm = () => {
-    setFormData({
-      customer_id: '',
-      name: '',
-      email: '',
-      phone: '',
-      designation: ''
-    });
-    setEditingContact(null);
-    setErrors({});
+    fetchContacts(newPage);
   };
 
   const openModal = (contact = null) => {
     if (contact) {
       setEditingContact(contact);
       setFormData({
-        customer_id: contact.customer?.id || '',
-        name: contact.name || '',
+        customer_id: contact.customer_id || contact.customer?.id || '',
+        name: contact.name,
         email: contact.email || '',
         phone: contact.phone || '',
-        designation: contact.designation || ''
+        designation: contact.designation === 'N/A' ? '' : contact.designation || ''
       });
     } else {
-      resetForm();
+      setEditingContact(null);
+      setFormData({ customer_id: '', name: '', email: '', phone: '', designation: '' });
     }
+    setErrors({});
     setShowModal(true);
   };
 
   const closeModal = () => {
     setShowModal(false);
-    setTimeout(resetForm, 300);
-  };
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-    if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
+    setEditingContact(null);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setOperationLoading('saving');
-    setErrors({});
-
     try {
-      const data = {
-        customer_id: parseInt(formData.customer_id),
-        name: formData.name.trim(),
-        email: formData.email.trim() || null,
-        phone: formData.phone.trim() || null,
-        designation: formData.designation.trim() || null
-      };
-
-      let response;
+      const payload = { ...formData, customer_id: parseInt(formData.customer_id) };
       if (editingContact) {
-        response = await axios.post(`${API_URL}/${editingContact.id}`, data);
+        await axios.put(`${API_URL}/${editingContact.id}`, payload);
+        showNotification('Contact updated successfully');
       } else {
-        response = await axios.post(API_URL, data);
+        await axios.post(API_URL, payload);
+        showNotification('Contact created successfully');
       }
-
-      showNotification(response.data.message || `Contact ${editingContact ? 'updated' : 'created'} successfully!`);
-      fetchContacts(pagination.current_page, pagination.per_page, searchTerm);
+      fetchContacts(pagination.current_page);
       closeModal();
     } catch (error) {
-      handleApiError(error, 'Failed to save contact');
+      handleApiError(error);
     } finally {
       setOperationLoading(null);
     }
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Delete this contact permanently?')) return;
-    setOperationLoading(`delete-${id}`);
+    if (!window.confirm('Delete this contact?')) return;
+    setOperationLoading(id);
     try {
       await axios.delete(`${API_URL}/${id}`);
       showNotification('Contact deleted successfully');
-
-      const remaining = pagination.total_items - 1;
-      const maxPage = Math.ceil(remaining / pagination.per_page);
-      const targetPage = pagination.current_page > maxPage ? maxPage : pagination.current_page;
-
-      fetchContacts(targetPage || 1, pagination.per_page, searchTerm);
+      fetchContacts(1);
     } catch (error) {
-      handleApiError(error, 'Delete failed');
+      handleApiError(error);
     } finally {
       setOperationLoading(null);
-      setActionMenu(null);
     }
   };
 
-  const stats = {
-    total: pagination.total_items,
-    withEmail: contacts.filter(c => c.email !== 'N/A').length,
-    withDesignation: contacts.filter(c => c.designation !== 'N/A').length
-  };
-
-  const formatDate = (date) => date ? new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
-
-  useEffect(() => {
-    const handler = () => setActionMenu(null);
-    document.addEventListener('click', handler);
-    return () => document.removeEventListener('click', handler);
-  }, []);
-
-  if (loading && contacts.length === 0) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="mb-8 flex justify-between">
-            <div className="h-10 bg-gray-800 rounded w-64 animate-pulse"></div>
-            <div className="h-12 bg-gray-800 rounded-xl w-40 animate-pulse"></div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="bg-gray-800/40 rounded-2xl p-6 animate-pulse">
-                <div className="h-12 bg-gray-700 rounded"></div>
-              </div>
-            ))}
-          </div>
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="bg-gray-800/30 rounded-2xl p-6 animate-pulse space-y-4">
-                <div className="h-8 bg-gray-700 rounded"></div>
-                <div className="h-20 bg-gray-700/50 rounded-lg"></div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-gray-100 py-8">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans">
       <AnimatePresence>
         {notification.show && (
-          <motion.div
-            initial={{ opacity: 0, x: 300 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 300 }}
-            className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-xl shadow-2xl ${notification.type === 'error' ? 'bg-red-600' : 'bg-green-600'} text-white font-medium`}
-          >
-            {notification.message}
+          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} className="fixed top-4 right-4 z-50">
+            <div className={`flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg backdrop-blur-sm border ${notification.type === 'error' ? 'bg-rose-500/10 border-rose-500/20 text-rose-600' : 'bg-rose-500/10 border-rose-500/20 text-rose-600'}`}>
+              <Zap size={16} />
+              <span className="font-semibold text-sm">{notification.message}</span>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="mb-8 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+      <div className="max-w-7xl mx-auto px-4 py-6">
+        <header className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-cyan-500 bg-clip-text text-transparent">
-              Contacts Management
+            <h1 className="text-3xl font-bold tracking-tight dark:text-white mb-1 flex items-center gap-3">
+              <Users className="text-rose-500" /> Contacts
             </h1>
-            <p className="text-gray-400 mt-2">Manage contact persons for your customers</p>
+            <p className="text-sm text-slate-500">Manage individual contact points at your accounts</p>
           </div>
-          <button
-            onClick={() => openModal()}
-            className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 px-6 py-3 rounded-xl font-bold flex items-center gap-3 shadow-lg"
-          >
-            <Plus size={22} /> Add New Contact
+          <button onClick={() => openModal()} className="inline-flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-medium transition-colors shadow-lg shadow-rose-500/20">
+            <Plus size={18} />
+            <span>Add Contact</span>
           </button>
-        </div>
+        </header>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          {[
-            { label: 'Total Contacts', value: stats.total, icon: User, color: 'blue' },
-            { label: 'With Email', value: stats.withEmail, icon: Mail, color: 'green' },
-            { label: 'With Designation', value: stats.withDesignation, icon: Briefcase, color: 'purple' },
-          ].map((s, i) => (
-            <div key={i} className="bg-gray-800/40 backdrop-blur-sm rounded-2xl p-6 border border-gray-700/40">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-400 text-sm">{s.label}</p>
-                  <p className="text-3xl font-bold mt-1">{s.value}</p>
-                </div>
-                <div className={`p-3 bg-${s.color}-500/10 rounded-xl`}>
-                  <s.icon size={28} className={`text-${s.color}-400`} />
-                </div>
-              </div>
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6">
+          <div className="lg:col-span-3 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+            <input
+              type="text"
+              placeholder="Search contacts..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20 transition-all font-medium"
+            />
+          </div>
+          <div className="flex items-center justify-between px-5 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm">
+            <div className="flex items-center gap-2">
+              <Activity className="text-rose-500" size={18} />
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total</span>
             </div>
-          ))}
-        </div>
-
-        <div className="bg-gray-800/30 backdrop-blur-sm rounded-2xl p-6 mb-8 border border-gray-700/30">
-          <div className="flex flex-col lg:flex-row gap-6">
-            <div className="flex-1 relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-              <input
-                type="text"
-                placeholder="Search by name, email, phone or designation..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500/50 outline-none"
-              />
-            </div>
-            <div className="flex items-center gap-2 bg-gray-700/50 border border-gray-600/50 rounded-xl px-4 py-3">
-              <span className="text-sm text-gray-400">Show:</span>
-              <select
-                value={pagination.per_page}
-                onChange={(e) => handleLimitChange(e.target.value)}
-                className="bg-transparent border-0 text-white text-sm focus:ring-0 focus:outline-none"
-              >
-                <option value="5">5</option>
-                <option value="10">10</option>
-                <option value="25">25</option>
-                <option value="50">50</option>
-              </select>
-            </div>
+            <span className="text-xl font-bold text-rose-600">{pagination.total_items}</span>
           </div>
         </div>
 
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1, transition: { staggerChildren: 0.1 } }}
-          className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mb-8"
-        >
-          {contacts.map(contact => (
-            <motion.div
-              key={contact.id}
-              whileHover={{ y: -8, scale: 1.02 }}
-              className="group bg-gray-800/30 backdrop-blur-sm rounded-2xl border border-gray-700/30 hover:border-blue-500/50 transition-all overflow-hidden relative"
-            >
-              <div className="p-6">
-                <div className="flex justify-between items-start mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-blue-500/10 rounded-lg">
-                      <User size={20} className="text-blue-400" />
+        {loading && contacts.length === 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {[...Array(6)].map((_, i) => <div key={i} className="h-48 bg-white dark:bg-slate-900 rounded-2xl animate-pulse border border-slate-200 dark:border-slate-800" />)}
+          </div>
+        ) : contacts.length > 0 ? (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-8">
+              {contacts.map((contact) => (
+                <motion.div
+                  key={contact.id}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  whileHover={{ y: -4 }}
+                  className="group bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-rose-500/40 rounded-2xl p-6 shadow-sm hover:shadow-lg transition-all"
+                >
+                  <div className="flex justify-between items-center mb-6">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-full bg-rose-50 dark:bg-rose-900/20 flex items-center justify-center text-rose-600 font-bold text-lg">
+                        {(contact.name || '?').substring(0, 2).toUpperCase()}
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-slate-900 dark:text-white leading-tight">{contact.name}</h3>
+                        <p className="text-xs text-slate-500 flex items-center gap-1">
+                          <Briefcase size={12} /> {contact.designation || 'N/A'}
+                        </p>
+                      </div>
                     </div>
-                    <h3 className="text-xl font-bold">{contact.name}</h3>
                   </div>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setActionMenu(actionMenu === contact.id ? null : contact.id); }}
-                    className="p-2 hover:bg-gray-700/50 rounded-lg"
-                  >
-                    <MoreVertical size={18} />
-                  </button>
-                </div>
 
-                <div className="space-y-2 mb-4 text-sm text-gray-300">
-                  <div className="flex items-center gap-2"><Mail size={16} /> {contact.email}</div>
-                  <div className="flex items-center gap-2"><Phone size={16} /> {contact.phone}</div>
-                  {contact.designation !== 'N/A' && (
-                    <div className="flex items-center gap-2"><Briefcase size={16} /> {contact.designation}</div>
-                  )}
-                  {contact.customer.name !== 'No Customer' && (
-                    <div className="flex items-center gap-2"><Building2 size={16} /> {contact.customer.name}</div>
-                  )}
-                </div>
+                  <div className="space-y-3 mb-4">
+                    <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+                      <Mail size={14} className="text-rose-400" />
+                      <span className="truncate">{contact.email || 'No Email'}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+                      <Phone size={14} className="text-rose-400" />
+                      <span className="truncate">{contact.phone || 'No Phone'}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+                      <Building2 size={14} className="text-rose-400" />
+                      <span className="truncate max-w-[150px]">{contact.customer?.name || 'No Company'}</span>
+                    </div>
+                  </div>
 
-                <div className="space-y-2 text-sm text-gray-400">
-                  <div className="flex items-center gap-2"><User size={16} /> ID: #{contact.id}</div>
-                  <div className="flex items-center gap-2"><Calendar size={16} /> Created: {formatDate(contact.created_at)}</div>
-                </div>
-
-                <div className="flex justify-between items-center mt-6 pt-4 border-t border-gray-700/30">
-                  <span className="text-xs text-gray-500">Updated: {formatDate(contact.updated_at)}</span>
-                  <div className="flex gap-2">
-                    <button onClick={() => openModal(contact)} className="p-2 bg-blue-500/20 hover:bg-blue-500/40 rounded-lg"><Edit size={14} /></button>
-                    <button onClick={() => handleDelete(contact.id)} disabled={operationLoading === `delete-${contact.id}`} className="p-2 bg-red-500/20 hover:bg-red-500/40 rounded-lg">
-                      {operationLoading === `delete-${contact.id}` ? <Loader size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                  <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2">
+                    <button onClick={() => openModal(contact)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 hover:text-rose-600 transition-colors">
+                      <Edit size={16} />
+                    </button>
+                    <button onClick={() => handleDelete(contact.id)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 hover:text-rose-600 transition-colors">
+                      {operationLoading === contact.id ? <Loader className="animate-spin" size={16} /> : <Trash2 size={16} />}
                     </button>
                   </div>
-                </div>
+                </motion.div>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-between p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm">
+              <span className="text-sm font-medium text-slate-500">Page {pagination.current_page} of {pagination.last_page}</span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handlePageChange(pagination.current_page - 1)}
+                  disabled={pagination.current_page === 1}
+                  className="p-2 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-rose-500 hover:text-white disabled:opacity-50 transition-colors"
+                >
+                  <ChevronLeft size={20} />
+                </button>
+                <button
+                  onClick={() => handlePageChange(pagination.current_page + 1)}
+                  disabled={pagination.current_page === pagination.last_page}
+                  className="p-2 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-rose-500 hover:text-white disabled:opacity-50 transition-colors"
+                >
+                  <ChevronRight size={20} />
+                </button>
               </div>
-
-              <AnimatePresence>
-                {actionMenu === contact.id && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="absolute right-4 top-20 bg-gray-800 border border-gray-600 rounded-xl shadow-xl py-2 z-10 min-w-[160px]"
-                  >
-                    <button onClick={() => { openModal(contact); setActionMenu(null); }} className="w-full text-left px-4 py-2 hover:bg-gray-700 flex items-center gap-3 text-sm"><Edit size={16} /> Edit</button>
-                    <button onClick={() => { handleDelete(contact.id); setActionMenu(null); }} className="w-full text-left px-4 py-2 hover:bg-red-500/20 text-red-400 flex items-center gap-3 text-sm"><Trash2 size={16} /> Delete</button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.div>
-          ))}
-        </motion.div>
-
-        {pagination.last_page > 1 && (
-          <div className="flex justify-between items-center py-6 border-t border-gray-700/30">
-            <div className="text-sm text-gray-400">
-              Showing {(pagination.current_page - 1) * pagination.per_page + 1} to {Math.min(pagination.current_page * pagination.per_page, pagination.total_items)} of {pagination.total_items}
             </div>
-            <div className="flex gap-2">
-              <button onClick={() => handlePageChange(pagination.current_page - 1)} disabled={pagination.current_page === 1} className="px-4 py-2 rounded-xl border border-gray-600 disabled:opacity-50 flex items-center gap-2">
-                <ChevronLeft size={16} /> Previous
-              </button>
-              {Array.from({ length: pagination.last_page }, (_, i) => i + 1)
-                .filter(p => p === 1 || p === pagination.last_page || Math.abs(p - pagination.current_page) <= 2)
-                .map((p, idx, arr) => (
-                  <React.Fragment key={p}>
-                    {idx > 0 && p - arr[idx - 1] > 1 && <span className="px-3">...</span>}
-                    <button onClick={() => handlePageChange(p)} className={`px-4 py-2 rounded-xl border ${pagination.current_page === p ? 'bg-blue-600 border-blue-500' : 'border-gray-600'}`}>
-                      {p}
-                    </button>
-                  </React.Fragment>
-                ))}
-              <button onClick={() => handlePageChange(pagination.current_page + 1)} disabled={pagination.current_page === pagination.last_page} className="px-4 py-2 rounded-xl border border-gray-600 disabled:opacity-50 flex items-center gap-2">
-                Next <ChevronRight size={16} />
-              </button>
-            </div>
-          </div>
-        )}
-
-        {contacts.length === 0 && !loading && (
-          <div className="text-center py-20">
-            <User size={64} className="mx-auto text-gray-600 mb-6" />
-            <h3 className="text-2xl font-bold mb-3">{searchTerm ? 'No contacts found' : 'No contacts yet'}</h3>
-            <p className="text-gray-400 mb-8">{searchTerm ? 'Try different keywords' : 'Create your first contact person'}</p>
-            {!searchTerm && (
-              <button onClick={() => openModal()} className="bg-gradient-to-r from-blue-600 to-cyan-600 px-8 py-3 rounded-xl font-bold">
-                <Plus className="inline mr-2" /> Create First Contact
-              </button>
-            )}
+          </>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+            <User size={64} className="mb-4 opacity-50" />
+            <p className="font-semibold text-lg">No Contacts Found</p>
           </div>
         )}
       </div>
 
       <AnimatePresence>
         {showModal && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={closeModal}>
-            <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} className="bg-gray-800 rounded-3xl p-8 max-w-2xl w-full border border-gray-700" onClick={e => e.stopPropagation()}>
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-cyan-500 bg-clip-text text-transparent">
-                  {editingContact ? 'Edit Contact' : 'Create New Contact'}
-                </h2>
-                <button onClick={closeModal} className="p-2 hover:bg-gray-700 rounded-lg"><X size={24} /></button>
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
+            >
+              <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center shrink-0">
+                <h2 className="text-xl font-bold dark:text-white">{editingContact ? 'Edit Contact' : 'New Contact'}</h2>
+                <button onClick={closeModal} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"><X size={20} /></button>
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-6">
+              <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto">
                 <div>
-                  <label className="block text-sm font-semibold mb-2">Customer *</label>
-                  <select
-                    name="customer_id"
-                    value={formData.customer_id}
-                    onChange={handleInputChange}
-                    required
-                    className={`w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none ${errors.customer_id ? 'border-red-500' : ''}`}
-                  >
-                    <option value="">Select a customer</option>
-                    {customers.map(customer => (
-                      <option key={customer.id} value={customer.id}>
-                        {customer.name} {customer.company?.name ? `(${customer.company.name})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                  {errors.customer_id && <p className="text-red-400 text-sm mt-1">{Array.isArray(errors.customer_id) ? errors.customer_id[0] : errors.customer_id}</p>}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold mb-2">Name *</label>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Full Name</label>
                   <input
                     type="text"
-                    name="name"
                     value={formData.name}
-                    onChange={handleInputChange}
+                    onChange={e => setFormData({ ...formData, name: e.target.value })}
+                    className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border-none rounded-xl focus:ring-2 focus:ring-rose-500 outline-none transition-all"
+                    placeholder="John Smith"
                     required
-                    className={`w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none ${errors.name ? 'border-red-500' : ''}`}
-                    placeholder="Full name"
                   />
-                  {errors.name && <p className="text-red-400 text-sm mt-1">{Array.isArray(errors.name) ? errors.name[0] : errors.name}</p>}
+                  {errors.name && <p className="text-rose-500 text-xs mt-1">{errors.name[0]}</p>}
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Company</label>
+                  <select
+                    value={formData.customer_id}
+                    onChange={e => setFormData({ ...formData, customer_id: e.target.value })}
+                    className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border-none rounded-xl focus:ring-2 focus:ring-rose-500 outline-none transition-all"
+                    required
+                  >
+                    <option value="">Select Company</option>
+                    {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-semibold mb-2">Email</label>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Email</label>
                     <input
                       type="email"
-                      name="email"
                       value={formData.email}
-                      onChange={handleInputChange}
-                      className={`w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none ${errors.email ? 'border-red-500' : ''}`}
-                      placeholder="contact@example.com"
+                      onChange={e => setFormData({ ...formData, email: e.target.value })}
+                      className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border-none rounded-xl focus:ring-2 focus:ring-rose-500 outline-none transition-all"
                     />
-                    {errors.email && <p className="text-red-400 text-sm mt-1">{Array.isArray(errors.email) ? errors.email[0] : errors.email}</p>}
                   </div>
-
                   <div>
-                    <label className="block text-sm font-semibold mb-2">Phone</label>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Phone</label>
                     <input
                       type="tel"
-                      name="phone"
                       value={formData.phone}
-                      onChange={handleInputChange}
-                      className={`w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none ${errors.phone ? 'border-red-500' : ''}`}
-                      placeholder="+1234567890"
+                      onChange={e => setFormData({ ...formData, phone: e.target.value })}
+                      className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border-none rounded-xl focus:ring-2 focus:ring-rose-500 outline-none transition-all"
                     />
-                    {errors.phone && <p className="text-red-400 text-sm mt-1">{Array.isArray(errors.phone) ? errors.phone[0] : errors.phone}</p>}
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold mb-2">Designation</label>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Designation</label>
                   <input
                     type="text"
-                    name="designation"
                     value={formData.designation}
-                    onChange={handleInputChange}
-                    className={`w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none ${errors.designation ? 'border-red-500' : ''}`}
-                    placeholder="e.g. Sales Manager, CEO"
+                    onChange={e => setFormData({ ...formData, designation: e.target.value })}
+                    className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border-none rounded-xl focus:ring-2 focus:ring-rose-500 outline-none transition-all"
+                    placeholder="Sales Manager"
                   />
-                  {errors.designation && <p className="text-red-400 text-sm mt-1">{Array.isArray(errors.designation) ? errors.designation[0] : errors.designation}</p>}
                 </div>
 
-                <div className="flex justify-end gap-3 pt-4">
-                  <button type="button" onClick={closeModal} className="px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-xl">Cancel</button>
-                  <button type="submit" disabled={operationLoading === 'saving'} className="px-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-xl font-bold flex items-center gap-2 disabled:opacity-70">
-                    {operationLoading === 'saving' ? <Loader size={20} className="animate-spin" /> : <Check size={20} />}
-                    {editingContact ? 'Update' : 'Create'} Contact
+                <div className="pt-4 flex gap-3">
+                  <button type="button" onClick={closeModal} className="flex-1 py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-medium hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">Cancel</button>
+                  <button
+                    type="submit"
+                    disabled={operationLoading === 'saving'}
+                    className="flex-1 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-medium shadow-lg shadow-rose-500/20 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+                  >
+                    {operationLoading === 'saving' ? <Loader className="animate-spin" size={18} /> : <User size={18} />}
+                    {editingContact ? 'Update Contact' : 'Create Contact'}
                   </button>
                 </div>
               </form>
             </motion.div>
-          </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

@@ -8,7 +8,16 @@ use Illuminate\Database\Eloquent\Model;
 class PosSession extends Model
 {
     use HasFactory;
-      protected $guarded = [];
+      protected $fillable = [
+        'terminal_id',
+        'user_id',
+        'opening_balance',
+        'closing_balance',
+        'opened_at',
+        'closed_at',
+        'status',
+        'notes',
+    ];
 
 
         public function terminal()

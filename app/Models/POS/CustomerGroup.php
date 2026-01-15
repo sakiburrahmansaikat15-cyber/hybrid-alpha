@@ -8,7 +8,12 @@ use Illuminate\Database\Eloquent\Model;
 class CustomerGroup extends Model
 {
     use HasFactory;
-    protected $guarded = [];
+    protected $fillable = [
+        'name',
+        'description',
+        'discount_percentage',
+        'status',
+    ];
 
      public function customers()
     {

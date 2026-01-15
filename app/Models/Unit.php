@@ -7,12 +7,17 @@ use Illuminate\Database\Eloquent\Model;
 
 class Unit extends Model
 {
-    use HasFactory;
-    protected $guarded = [];
+    use HasFactory, \Illuminate\Database\Eloquent\SoftDeletes;
+
+    protected $fillable = [
+        'name',
+        'short_name',
+        'description',
+    ];
 
 
-        public function products()
+    public function products()
     {
-        return $this->hasMany(Prooducts::class, 'unit_id');
+        return $this->hasMany(Product::class, 'unit_id');
     }
 }

@@ -11,52 +11,59 @@ use Illuminate\Support\Facades\Validator;
 
 class BrandController extends Controller
 {
-    
-       public function index(Request $request)
-{
-    $keyword = $request->query('keyword', '');
-    $limit = $request->query('limit');
-
-    $query = Brand::query();
-
-    // 🔍 Apply search if keyword provided
-    if ($keyword) {
-        $query->where('name', 'like', "%{$keyword}%");
+    public function __construct()
+    {
+        $this->middleware('permission:brands.view')->only(['index', 'show']);
+        $this->middleware('permission:brands.create')->only(['store']);
+        $this->middleware('permission:brands.edit')->only(['update']);
+        $this->middleware('permission:brands.delete')->only(['destroy']);
     }
 
-    // ⚙️ If no limit, return all results
-    if (!$limit) {
-        $data = $query->latest()->get();
+    public function index(Request $request)
+    {
+        $keyword = $request->query('keyword', '');
+        $limit = $request->query('limit');
+
+        $query = Brand::query();
+
+        // 🔍 Apply search if keyword provided
+        if ($keyword) {
+            $query->where('name', 'like', "%{$keyword}%");
+        }
+
+        // ⚙️ If no limit, return all results
+        if (!$limit) {
+            $data = $query->latest()->get();
+
+            return response()->json([
+                'message' => 'Brands fetched successfully',
+                'pagination' => [
+                    'current_page' => 1,
+                    'per_page' => $data->count(),
+                    'total_items' => $data->count(),
+                    'total_pages' => 1,
+                    'data' => BrandResource::collection($data),
+                ],
+            ]);
+        }
+
+        // 📄 Otherwise, paginate results
+        $limit = (int) $limit ?: 10;
+        $brands = $query->latest()->paginate($limit);
 
         return response()->json([
             'message' => 'Brands fetched successfully',
             'pagination' => [
-                'current_page' => 1,
-                'per_page' => $data->count(),
-                'total_items' => $data->count(),
-                'total_pages' => 1,
-                'data' => BrandResource::collection($data),
+                'current_page' => $brands->currentPage(),
+                'per_page' => $brands->perPage(),
+                'total_items' => $brands->total(),
+                'total_pages' => $brands->lastPage(),
+                'data' => BrandResource::collection($brands),
             ],
         ]);
     }
 
-    // 📄 Otherwise, paginate results
-    $limit = (int) $limit ?: 10;
-    $brands = $query->latest()->paginate($limit);
 
-    return response()->json([
-        'message' => 'Brands fetched successfully',
-        'pagination' => [
-            'current_page' => $brands->currentPage(),
-            'per_page' => $brands->perPage(),
-            'total_items' => $brands->total(),
-            'total_pages' => $brands->lastPage(),
-            'data' => BrandResource::collection($brands),
-        ],
-    ]);
-}
-
-    
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -75,7 +82,7 @@ class BrandController extends Controller
 
         $data = $validator->validated();
 
-       
+
         if ($request->hasFile('image')) {
             $folder = public_path('brand');
             if (!File::exists($folder)) {
@@ -97,7 +104,7 @@ class BrandController extends Controller
         ], 201);
     }
 
-    
+
     public function show($id)
     {
         $brand = Brand::find($id);
@@ -115,18 +122,34 @@ class BrandController extends Controller
         ], 200);
     }
 
-    
+
     public function update(Request $request, $id)
     {
-        $brand = Brand::findOrFail($id);
+        $brand = Brand::find($id);
 
-        $data = $request->validate([
+        if (!$brand) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Brand not found'
+            ], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
             'name' => 'sometimes|string|max:255',
             'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
             'status' => 'sometimes|in:active,inactive',
         ]);
 
-    
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $data = $validator->validated();
+
         if ($request->hasFile('image')) {
             if ($brand->image && File::exists(public_path($brand->image))) {
                 File::delete(public_path($brand->image));
@@ -152,7 +175,7 @@ class BrandController extends Controller
         ], 200);
     }
 
-   
+
     public function destroy($id)
     {
         $brand = Brand::find($id);

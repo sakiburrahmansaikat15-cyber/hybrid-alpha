@@ -6,9 +6,18 @@ use App\Http\Controllers\Controller;
 use App\Models\Warehouse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use App\Http\Requests\Inventory\StoreWarehouseRequest;
+use App\Http\Requests\Inventory\UpdateWarehouseRequest;
 
 class WarehouseController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware('permission:warehouses.view')->only(['index', 'show']);
+        $this->middleware('permission:warehouses.create')->only(['store']);
+        $this->middleware('permission:warehouses.edit')->only(['update']);
+        $this->middleware('permission:warehouses.delete')->only(['destroy']);
+    }
     // ✅ List warehouses with search and pagination
     public function index(Request $request)
     {
@@ -19,8 +28,8 @@ class WarehouseController extends Controller
 
         if ($keyword) {
             $query->where('name', 'like', "%{$keyword}%")
-                  ->orWhere('code', 'like', "%{$keyword}%")
-                  ->orWhere('type', 'like', "%{$keyword}%");
+                ->orWhere('code', 'like', "%{$keyword}%")
+                ->orWhere('type', 'like', "%{$keyword}%");
         }
 
         if (!$limit) {
@@ -37,7 +46,7 @@ class WarehouseController extends Controller
             ]);
         }
 
-        $limit = (int)$limit ?: 10;
+        $limit = (int) $limit ?: 10;
         $warehouses = $query->latest()->paginate($limit);
 
         return response()->json([
@@ -53,33 +62,9 @@ class WarehouseController extends Controller
     }
 
     // ✅ Store a new warehouse
-    public function store(Request $request)
+    public function store(StoreWarehouseRequest $request)
     {
-        $validator = Validator::make($request->all(), [
-            'name'           => 'required|string|max:255',
-            'code'           => 'required|string|max:50|unique:warehouses,code',
-            'type'           => 'nullable|string|max:50',
-            'contact_person' => 'nullable|string|max:255',
-            'phone'          => 'nullable|string|max:20',
-            'email'          => 'nullable|email|max:255',
-            'address'        => 'nullable|string',
-            'country'        => 'nullable|string|max:100',
-            'state'          => 'nullable|string|max:100',
-            'city'           => 'nullable|string|max:100',
-            'capacity'       => 'nullable|integer|min:0',
-            'is_default'     => 'nullable|boolean',
-            'status'         => 'required|in:active,inactive',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $validator->errors()
-            ], 422);
-        }
-
-        $warehouse = Warehouse::create($validator->validated());
+        $warehouse = Warehouse::create($request->validated());
 
         return response()->json([
             'success' => true,
@@ -107,27 +92,11 @@ class WarehouseController extends Controller
     }
 
     // ✅ Update warehouse
-    public function update(Request $request, $id)
+    public function update(UpdateWarehouseRequest $request, $id)
     {
         $warehouse = Warehouse::findOrFail($id);
 
-        $data = $request->validate([
-            'name'           => 'sometimes|string|max:255',
-            'code'           => 'sometimes|string|max:50|unique:warehouses,code,' . $warehouse->id,
-            'type'           => 'sometimes|string|max:50',
-            'contact_person' => 'sometimes|string|max:255',
-            'phone'          => 'sometimes|string|max:20',
-            'email'          => 'sometimes|email|max:255',
-            'address'        => 'sometimes|string',
-            'country'        => 'sometimes|string|max:100',
-            'state'          => 'sometimes|string|max:100',
-            'city'           => 'sometimes|string|max:100',
-            'capacity'       => 'sometimes|integer|min:0',
-            'is_default'     => 'sometimes|boolean',
-            'status'         => 'sometimes|in:active,inactive',
-        ]);
-
-        $warehouse->update($data);
+        $warehouse->update($request->validated());
 
         return response()->json([
             'success' => true,

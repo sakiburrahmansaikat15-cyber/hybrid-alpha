@@ -8,5 +8,15 @@ use Illuminate\Database\Eloquent\Model;
 class Campaign extends Model
 {
     use HasFactory;
-    protected $guarded = [];
+    protected $fillable = [
+        'name',
+        'type',
+        'start_date',
+        'end_date',
+        'budget',
+        'expected_revenue',
+        'actual_cost',
+        'description',
+        'status',
+    ];
 }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\HRM;
 
 use App\Http\Controllers\Controller;
 use App\Models\HRM\Salary;
+use App\Http\Resources\SalaryResource;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -30,7 +31,7 @@ class SalariesController extends Controller
                     'per_page' => $data->count(),
                     'total_items' => $data->count(),
                     'total_pages' => 1,
-                    'data' => $data,
+                    'data' => SalaryResource::collection($data),
                 ],
             ]);
         }
@@ -45,7 +46,7 @@ class SalariesController extends Controller
                 'per_page' => $salaries->perPage(),
                 'total_items' => $salaries->total(),
                 'total_pages' => $salaries->lastPage(),
-                'data' => $salaries->items(),
+                'data' => SalaryResource::collection($salaries),
             ],
         ]);
     }
@@ -53,10 +54,10 @@ class SalariesController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'employee_id'    => 'required|exists:employees,id',
-            'basic_salary'   => 'required|numeric|min:0',
-            'allowances'     => 'nullable|string',
-            'deductions'     => 'nullable|string',
+            'employee_id' => 'required|exists:employees,id',
+            'basic_salary' => 'required|numeric|min:0',
+            'allowances' => 'nullable|string',
+            'deductions' => 'nullable|string',
             'effective_from' => 'required|date',
         ]);
 
@@ -64,7 +65,7 @@ class SalariesController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Validation failed',
-                'errors'  => $validator->errors()
+                'errors' => $validator->errors()
             ], 422);
         }
 
@@ -73,7 +74,7 @@ class SalariesController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Salary created successfully',
-            'data' => $salary
+            'data' => new SalaryResource($salary->load('employee'))
         ], 201);
     }
 
@@ -90,7 +91,7 @@ class SalariesController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $salary
+            'data' => new SalaryResource($salary->load('employee'))
         ], 200);
     }
 
@@ -98,20 +99,28 @@ class SalariesController extends Controller
     {
         $salary = Salary::findOrFail($id);
 
-        $data = $request->validate([
-            'employee_id'    => 'sometimes|exists:employees,id',
-            'basic_salary'   => 'sometimes|numeric|min:0',
-            'allowances'     => 'nullable|array',
-            'deductions'     => 'nullable|array',
-            'effective_from' => 'sometimes|date',
+        $validator = Validator::make($request->all(), [
+            'employee_id' => ['sometimes', 'exists:employees,id'],
+            'basic_salary' => ['sometimes', 'numeric', 'min:0'],
+            'allowances' => ['nullable', 'string'],
+            'deductions' => ['nullable', 'string'],
+            'effective_from' => ['sometimes', 'date'],
         ]);
 
-        $salary->update($data);
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $salary->update($validator->validated());
 
         return response()->json([
             'success' => true,
             'message' => 'Salary updated successfully',
-            'data' => $salary
+            'data' => new SalaryResource($salary->load('employee'))
         ], 200);
     }
 

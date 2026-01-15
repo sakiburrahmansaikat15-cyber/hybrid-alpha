@@ -14,13 +14,13 @@ class BrandResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-         return [
+        return [
             'id' => $this->id,
             'name' => $this->name,
             'image' => $this->image,
             'status' => $this->status,
-            'created_at' => $this->created_at->toDateTimeString(),
-            'updated_at' => $this->updated_at->toDateTimeString(),
+            'created_at' => $this->created_at?->toDateTimeString(),
+            'updated_at' => $this->updated_at?->toDateTimeString(),
         ];
     }
 }

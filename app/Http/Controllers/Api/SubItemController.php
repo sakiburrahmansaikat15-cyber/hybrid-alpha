@@ -12,49 +12,49 @@ use Illuminate\Support\Facades\Validator;
 class SubItemController extends Controller
 {
     // ✅ List all sub-items with pagination
-   public function index(Request $request)
-{
-    $keyword = $request->query('keyword', '');
-    $limit = $request->query('limit');
+    public function index(Request $request)
+    {
+        $keyword = $request->query('keyword', '');
+        $limit = $request->query('limit');
 
-    $query = SubItems::with('subcategory');
+        $query = SubItems::with('subcategory');
 
-    // 🔍 Apply search filter if keyword provided
-    if ($keyword) {
-        $query->where('name', 'like', "%{$keyword}%");
-    }
+        // 🔍 Apply search filter if keyword provided
+        if ($keyword) {
+            $query->where('name', 'like', "%{$keyword}%");
+        }
 
-    // ⚙️ If no limit, return all results
-    if (!$limit) {
-        $data = $query->latest()->get();
+        // ⚙️ If no limit, return all results
+        if (!$limit) {
+            $data = $query->latest()->get();
+
+            return response()->json([
+                'message' => 'SubItems fetched successfully',
+                'pagination' => [
+                    'current_page' => 1,
+                    'per_page' => $data->count(),
+                    'total_items' => $data->count(),
+                    'total_pages' => 1,
+                    'data' => SubItemsResource::collection($data),
+                ],
+            ]);
+        }
+
+        // 📄 Otherwise, paginate results
+        $limit = (int) $limit ?: 10;
+        $items = $query->latest()->paginate($limit);
 
         return response()->json([
             'message' => 'SubItems fetched successfully',
             'pagination' => [
-                'current_page' => 1,
-                'per_page' => $data->count(),
-                'total_items' => $data->count(),
-                'total_pages' => 1,
-                'data' => SubItemsResource::collection($data),
+                'current_page' => $items->currentPage(),
+                'per_page' => $items->perPage(),
+                'total_items' => $items->total(),
+                'total_pages' => $items->lastPage(),
+                'data' => SubItemsResource::collection($items),
             ],
         ]);
     }
-
-    // 📄 Otherwise, paginate results
-    $limit = (int) $limit ?: 10;
-    $items = $query->latest()->paginate($limit);
-
-    return response()->json([
-        'message' => 'SubItems fetched successfully',
-        'pagination' => [
-            'current_page' => $items->currentPage(),
-            'per_page' => $items->perPage(),
-            'total_items' => $items->total(),
-            'total_pages' => $items->lastPage(),
-            'data' => SubItemsResource::collection($items),
-        ],
-    ]);
-}
 
 
     // ✅ Store a new sub-item
@@ -128,12 +128,22 @@ class SubItemController extends Controller
             ], 404);
         }
 
-        $data = $request->validate([
+        $validator = Validator::make($request->all(), [
             'name' => 'sometimes|string|max:255',
             'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
             'status' => 'sometimes|in:active,inactive',
             'sub_category_id' => 'nullable|exists:sub_categories,id',
         ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $data = $validator->validated();
 
         if ($request->hasFile('image')) {
             if ($subItem->image && File::exists(public_path($subItem->image))) {

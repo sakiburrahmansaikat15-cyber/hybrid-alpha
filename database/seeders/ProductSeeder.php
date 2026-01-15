@@ -6,7 +6,7 @@ use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Faker\Factory as Faker;
 
-class ProoductSeeder extends Seeder
+class ProductSeeder extends Seeder
 {
     /**
      * Run the database seeds.
@@ -46,6 +46,6 @@ class ProoductSeeder extends Seeder
             ];
         }
 
-        DB::table('prooducts')->insert($products);
+        DB::table('products')->insert($products); // Fixed: prooducts → products
     }
 }

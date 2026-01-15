@@ -4,18 +4,35 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use App\Models\Prooducts;
+use App\Models\Product;
 use App\Models\Vendor;
 
 class Stocks extends Model
 {
     use HasFactory;
 
-    protected $guarded = [];
+    protected $fillable = [
+        'product_id',
+        'warehouse_id',
+        'vendor_id',
+        'payment_type_id',
+        'quantity',
+        'buying_price',
+        'selling_price',
+        'total_amount',
+        'due_amount',
+        'tax',
+        'stock_date',
+        'expire_date',
+        'paid_amount',
+        'sku',
+        'comission',
+        'status',
+    ];
 
     public function product()
     {
-        return $this->belongsTo(Prooducts::class, 'product_id');
+        return $this->belongsTo(Product::class, 'product_id');
     }
 
     public function vendor()
@@ -24,9 +41,9 @@ class Stocks extends Model
     }
 
     public function serialLists()
-{
-    return $this->hasMany(SerialList::class, 'stock_id');
-}
+    {
+        return $this->hasMany(SerialList::class, 'stock_id');
+    }
 
 
     public function transactions()
@@ -40,7 +57,7 @@ class Stocks extends Model
         return $this->belongsTo(Warehouse::class, 'warehouse_id');
     }
 
-     public function paymentType()
+    public function paymentType()
     {
         return $this->belongsTo(PaymentType::class, 'payment_type_id');
     }

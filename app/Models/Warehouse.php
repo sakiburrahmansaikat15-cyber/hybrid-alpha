@@ -7,11 +7,26 @@ use Illuminate\Database\Eloquent\Model;
 
 class Warehouse extends Model
 {
-    use HasFactory;
-    protected $guarded = [];
+    use HasFactory, \Illuminate\Database\Eloquent\SoftDeletes;
+
+    protected $fillable = [
+        'name',
+        'code',
+        'type',
+        'contact_person',
+        'phone',
+        'email',
+        'address',
+        'country',
+        'state',
+        'city',
+        'capacity',
+        'is_default',
+        'status',
+    ];
 
 
-       public function stocks()
+    public function stocks()
     {
         return $this->hasMany(Stocks::class, 'warehouse_id');
     }

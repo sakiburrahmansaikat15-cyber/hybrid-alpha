@@ -9,9 +9,17 @@ class SerialList extends Model
 {
     use HasFactory;
 
-    protected $guarded = [];
+    protected $fillable = [
+        'stock_id',
+        'sku',
+        'barcode',
+        'color',
+        'notes',
+        'image',
+        'status',
+    ];
 
-     public function stock()
+    public function stock()
     {
         return $this->belongsTo(Stocks::class, 'stock_id');
     }

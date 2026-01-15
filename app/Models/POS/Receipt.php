@@ -8,7 +8,12 @@ use Illuminate\Database\Eloquent\Model;
 class Receipt extends Model
 {
     use HasFactory;
-     protected $guarded = [];
+     protected $fillable = [
+        'sale_id',
+        'receipt_number',
+        'template_id',
+        'printed_at',
+    ];
 
 
       public function sale()

@@ -18,13 +18,14 @@ class VariantController extends Controller
 
         $query = variants::with('product');
 
-       
+
         if (!empty($keyword)) {
             $query->where(function ($q) use ($keyword) {
-                $q->where('name', 'like', "%{$keyword}%")
-                  ->orWhereHas('product', function ($q) use ($keyword) {
-                      $q->where('name', 'like', "%{$keyword}%");
-                  });
+                $q->where('variant_name', 'like', "%{$keyword}%")
+                    ->orWhere('sku', 'like', "%{$keyword}%")
+                    ->orWhereHas('product', function ($q) use ($keyword) {
+                        $q->where('name', 'like', "%{$keyword}%");
+                    });
             });
         }
 
@@ -39,7 +40,7 @@ class VariantController extends Controller
                 'per_page' => $variants->perPage(),
                 'total_items' => $variants->total(),
                 'total_pages' => $variants->lastPage(),
-                 'data' => VariantsResource::collection($variants),
+                'data' => VariantsResource::collection($variants),
             ],
         ]);
     }
@@ -48,11 +49,12 @@ class VariantController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'name' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'value' => 'required|string|max:255',
+            'variant_name' => 'required|string|max:255',
+            'sku' => 'required|string|max:255',
+            'price' => 'required|numeric|min:0',
+            'stock_quantity' => 'required|integer|min:0',
             'status' => 'required|in:active,inactive',
-            'product_id' => 'required|exists:prooducts,id',
+            'product_id' => 'required|exists:products,id',
         ]);
 
         if ($validator->fails()) {
@@ -102,15 +104,24 @@ class VariantController extends Controller
             ], 404);
         }
 
-        $data = $request->validate([
-            'name' => 'sometimes|string|max:255',
-            'description' => 'nullable|string',
-            'value' => 'sometimes|string|max:255',
+        $validator = Validator::make($request->all(), [
+            'variant_name' => 'sometimes|string|max:255',
+            'sku' => 'sometimes|string|max:255',
+            'price' => 'sometimes|numeric|min:0',
+            'stock_quantity' => 'sometimes|integer|min:0',
             'status' => 'sometimes|in:active,inactive',
-            'product_id' => 'sometimes|exists:prooducts,id',
+            'product_id' => 'sometimes|exists:products,id',
         ]);
 
-        $variant->update($data);
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $variant->update($validator->validated());
 
         return response()->json([
             'success' => true,

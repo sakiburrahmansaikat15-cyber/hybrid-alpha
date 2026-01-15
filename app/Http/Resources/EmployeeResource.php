@@ -31,8 +31,8 @@ class EmployeeResource extends JsonResource
             'job_type' => $this->job_type,
             'salary_type' => $this->salary_type,
             'status' => $this->status,
-            'created_at' => $this->created_at->toDateTimeString(),
-            'updated_at' => $this->updated_at->toDateTimeString(),
+            'created_at' => $this->created_at?->toDateTimeString(),
+            'updated_at' => $this->updated_at?->toDateTimeString(),
         ];
     }
 }

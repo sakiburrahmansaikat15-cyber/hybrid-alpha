@@ -1,27 +1,13 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Plus,
-  Search,
-  Edit,
-  Trash2,
-  X,
-  Check,
-  MoreVertical,
-  LogIn,
-  LogOut,
-  Monitor,
-  DollarSign,
-  Calendar,
-  Loader,
-  ChevronLeft,
-  ChevronRight,
-  Clock,
+  Plus, Search, Edit, Trash2, X, Loader, ChevronLeft, ChevronRight,
+  Activity, Zap, Target, Clock, DollarSign, Calendar, TrendingUp
 } from 'lucide-react';
 
-const API_URL = 'http://localhost:8000/api/pos/sessions';
-const TERMINALS_API_URL = 'http://localhost:8000/api/pos/terminals';
+const API_URL = '/api/pos/sessions';
+const TERMINALS_API = '/api/pos/terminals';
 
 const PosSessions = () => {
   const [sessions, setSessions] = useState([]);
@@ -31,128 +17,78 @@ const PosSessions = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingSession, setEditingSession] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [actionMenu, setActionMenu] = useState(null);
-  const [formData, setFormData] = useState({
-    terminal_id: '',
-    opened_at: '',
-    opening_cash: '',
-    closed_at: '',
-    closing_cash: '',
-  });
+  const [formData, setFormData] = useState({ terminal_id: '', opening_cash: '', closing_cash: '', opened_at: '', closed_at: '' });
   const [errors, setErrors] = useState({});
   const [notification, setNotification] = useState({ show: false, message: '', type: '' });
+  const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, per_page: 12, total_items: 0 });
 
-  const [pagination, setPagination] = useState({
-    current_page: 1,
-    last_page: 1,
-    per_page: 10,
-    total_items: 0,
-  });
-
+  const notificationTimerRef = useRef(null);
   const showNotification = useCallback((message, type = 'success') => {
+    if (notificationTimerRef.current) clearTimeout(notificationTimerRef.current);
     setNotification({ show: true, message, type });
-    setTimeout(() => setNotification({ show: false, message: '', type: '' }), 4000);
+    notificationTimerRef.current = setTimeout(() => setNotification({ show: false, message: '', type: '' }), 3500);
   }, []);
+
+  useEffect(() => () => { if (notificationTimerRef.current) clearTimeout(notificationTimerRef.current); }, []);
 
   const handleApiError = useCallback((error, defaultMessage) => {
     if (error.response?.status === 422) {
       const validationErrors = error.response.data.errors || {};
       setErrors(validationErrors);
-      const firstError = Object.values(validationErrors)[0]?.[0];
-      showNotification(firstError || 'Validation error', 'error');
-    } else if (error.response?.data?.message) {
-      showNotification(error.response.data.message, 'error');
-      setErrors({ _general: error.response.data.message });
+      showNotification(Object.values(validationErrors)[0]?.[0] || 'Please check your input', 'error');
     } else {
-      showNotification(defaultMessage || 'Something went wrong', 'error');
-      setErrors({ _general: defaultMessage });
+      showNotification(error.response?.data?.message || defaultMessage || 'Connection error', 'error');
     }
   }, [showNotification]);
 
-  // Fetch POS sessions with server-side search & pagination
-  const fetchSessions = useCallback(async (page = 1, perPage = 10, keyword = '') => {
+  const perPageValue = pagination.per_page;
+  const fetchSessions = useCallback(async (page = 1, perPage = perPageValue, keyword = searchTerm) => {
     setLoading(true);
     try {
       const params = { page, limit: perPage };
       if (keyword.trim()) params.keyword = keyword.trim();
-
       const response = await axios.get(API_URL, { params });
       const res = response.data;
-
-      const sessionData = res.pagination?.data || [];
-      const formattedSessions = sessionData.map(item => ({
-        id: item.id,
-        terminal_id: item.terminal_id,
-        terminal: item.terminal || null,
-        opened_at: item.opened_at,
-        closed_at: item.closed_at,
-        opening_cash: item.opening_cash,
-        closing_cash: item.closing_cash || null,
-        created_at: item.created_at,
-        updated_at: item.updated_at,
-      }));
-
-      setSessions(formattedSessions);
+      setSessions(res.pagination?.data || []);
       setPagination({
         current_page: res.pagination.current_page || 1,
         last_page: res.pagination.total_pages || 1,
-        per_page: res.pagination.per_page || 10,
+        per_page: res.pagination.per_page || 12,
         total_items: res.pagination.total_items || 0,
       });
     } catch (error) {
-      handleApiError(error, 'Failed to fetch POS sessions');
+      handleApiError(error, 'Failed to load sessions');
       setSessions([]);
-      setPagination({ current_page: 1, last_page: 1, per_page: 10, total_items: 0 });
     } finally {
       setLoading(false);
     }
-  }, [handleApiError]);
+  }, [handleApiError, perPageValue, searchTerm]);
 
-  // Fetch terminals for dropdown
   const fetchTerminals = useCallback(async () => {
     try {
-      const response = await axios.get(TERMINALS_API_URL);
-      const res = response.data;
-      const terminalData = res.pagination?.data || [];
-      setTerminals(terminalData);
+      const response = await axios.get(TERMINALS_API);
+      setTerminals(response.data.pagination?.data || response.data.data || []);
     } catch (error) {
-      setTerminals([]);
+      console.error('Failed to load terminals');
     }
   }, []);
 
-  // Debounced search
   useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchSessions(1, pagination.per_page, searchTerm);
-    }, 500);
+    const timer = setTimeout(() => fetchSessions(1), 500);
     return () => clearTimeout(timer);
-  }, [searchTerm, pagination.per_page, fetchSessions]);
+  }, [searchTerm, perPageValue, fetchSessions]);
 
-  // Initial load
   useEffect(() => {
-    fetchSessions(1, 10);
     fetchTerminals();
-  }, []);
+  }, [fetchTerminals]);
 
   const handlePageChange = (newPage) => {
     if (newPage < 1 || newPage > pagination.last_page) return;
-    fetchSessions(newPage, pagination.per_page, searchTerm);
-  };
-
-  const handleLimitChange = (newLimit) => {
-    const limit = parseInt(newLimit);
-    setPagination(prev => ({ ...prev, per_page: limit }));
-    fetchSessions(1, limit, searchTerm);
+    fetchSessions(newPage);
   };
 
   const resetForm = () => {
-    setFormData({
-      terminal_id: '',
-      opened_at: '',
-      opening_cash: '',
-      closed_at: '',
-      closing_cash: '',
-    });
+    setFormData({ terminal_id: '', opening_cash: '', closing_cash: '', opened_at: '', closed_at: '' });
     setEditingSession(null);
     setErrors({});
   };
@@ -162,10 +98,10 @@ const PosSessions = () => {
       setEditingSession(session);
       setFormData({
         terminal_id: session.terminal_id || '',
-        opened_at: session.opened_at ? session.opened_at.slice(0, 16) : '',
-        opening_cash: session.opening_cash > 0 ? session.opening_cash : '',
-        closed_at: session.closed_at ? session.closed_at.slice(0, 16) : '',
-        closing_cash: session.closing_cash > 0 ? session.closing_cash : '',
+        opening_cash: session.opening_cash || '',
+        closing_cash: session.closing_cash || '',
+        opened_at: session.opened_at || '',
+        closed_at: session.closed_at || '',
       });
     } else {
       resetForm();
@@ -175,7 +111,7 @@ const PosSessions = () => {
 
   const closeModal = () => {
     setShowModal(false);
-    setTimeout(resetForm, 300);
+    resetForm();
   };
 
   const handleInputChange = (e) => {
@@ -188,418 +124,246 @@ const PosSessions = () => {
     e.preventDefault();
     setOperationLoading('saving');
     setErrors({});
-
     try {
-      const submitData = {
-        terminal_id: parseInt(formData.terminal_id),
-        opened_at: formData.opened_at,
-        opening_cash: formData.opening_cash ? parseFloat(formData.opening_cash) : 0,
-        closed_at: formData.closed_at || null,
-        closing_cash: formData.closing_cash ? parseFloat(formData.closing_cash) : null,
-      };
-
       let response;
       if (editingSession) {
-        response = await axios.post(`${API_URL}/${editingSession.id}`, submitData);
+        response = await axios.post(`${API_URL}/${editingSession.id}`, { ...formData, _method: 'PUT' });
       } else {
-        response = await axios.post(API_URL, submitData);
+        response = await axios.post(API_URL, formData);
       }
-
-      showNotification(
-        response.data.message || `POS session ${editingSession ? 'updated' : 'created'} successfully!`
-      );
-      fetchSessions(pagination.current_page, pagination.per_page, searchTerm);
+      showNotification(response.data.message || `Session ${editingSession ? 'updated' : 'created'} successfully!`);
+      fetchSessions(pagination.current_page);
       closeModal();
     } catch (error) {
-      handleApiError(error, 'Failed to save POS session');
+      handleApiError(error, 'Failed to save session');
     } finally {
       setOperationLoading(null);
     }
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Delete this POS session permanently?')) return;
+    if (!window.confirm('Delete this session?')) return;
     setOperationLoading(`delete-${id}`);
     try {
       await axios.delete(`${API_URL}/${id}`);
-      showNotification('POS session deleted successfully');
-
-      const remainingItems = pagination.total_items - 1;
-      const maxPage = Math.ceil(remainingItems / pagination.per_page);
-      const targetPage = pagination.current_page > maxPage ? maxPage : pagination.current_page;
-
-      fetchSessions(targetPage || 1, pagination.per_page, searchTerm);
+      showNotification('Session deleted successfully');
+      fetchSessions(1);
     } catch (error) {
-      handleApiError(error, 'Delete failed');
+      handleApiError(error, 'Failed to delete session');
     } finally {
       setOperationLoading(null);
-      setActionMenu(null);
     }
   };
 
-  const formatDateTime = (date) => date ? new Date(date).toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
-
-  const isSessionOpen = (session) => !session.closed_at;
-
-  useEffect(() => {
-    const handler = () => setActionMenu(null);
-    document.addEventListener('click', handler);
-    return () => document.removeEventListener('click', handler);
-  }, []);
-
-  if (loading && sessions.length === 0) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="mb-8 flex justify-between">
-            <div className="h-10 bg-gray-800 rounded w-64 animate-pulse"></div>
-            <div className="h-12 bg-gray-800 rounded-xl w-40 animate-pulse"></div>
-          </div>
-          <div className="bg-gray-800/30 rounded-2xl p-6 mb-8 animate-pulse space-y-4">
-            <div className="h-12 bg-gray-700 rounded"></div>
-          </div>
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="bg-gray-800/30 rounded-2xl p-6 animate-pulse space-y-4">
-                <div className="h-8 bg-gray-700 rounded"></div>
-                <div className="h-20 bg-gray-700/50 rounded-lg"></div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-gray-100 py-8">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
       <AnimatePresence>
         {notification.show && (
-          <motion.div
-            initial={{ opacity: 0, x: 300 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 300 }}
-            className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-xl shadow-2xl ${notification.type === 'error' ? 'bg-red-600' : 'bg-green-600'} text-white font-medium`}
-          >
-            {notification.message}
+          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} className="fixed top-4 right-4 z-50">
+            <div className={`flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg backdrop-blur-sm border ${notification.type === 'error' ? 'bg-rose-500/10 border-rose-500/20 text-rose-600' : 'bg-indigo-500/10 border-indigo-500/20 text-indigo-600'}`}>
+              <Zap size={16} />
+              <span className="font-semibold text-sm">{notification.message}</span>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-8 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+      <div className="max-w-7xl mx-auto px-4 py-6">
+        <header className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-cyan-500 bg-clip-text text-transparent">
-              POS Sessions Management
-            </h1>
-            <p className="text-gray-400 mt-2">Track opening/closing cash and session history per terminal</p>
+            <h1 className="text-3xl font-bold tracking-tight dark:text-white mb-1">POS Sessions</h1>
+            <p className="text-sm text-slate-500">Manage terminal sessions</p>
           </div>
-          <button
-            onClick={() => openModal()}
-            className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 px-6 py-3 rounded-xl font-bold flex items-center gap-3 shadow-lg"
-          >
-            <Plus size={22} /> Open New Session
+          <button onClick={() => openModal()} className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-colors">
+            <Plus size={18} />
+            <span>New Session</span>
           </button>
-        </div>
+        </header>
 
-        {/* Search + Per Page */}
-        <div className="bg-gray-800/30 backdrop-blur-sm rounded-2xl p-6 mb-8 border border-gray-700/30">
-          <div className="flex flex-col lg:flex-row gap-6">
-            <div className="flex-1 relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-              <input
-                type="text"
-                placeholder="Search sessions by terminal name..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500/50 outline-none"
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6">
+          <div className="lg:col-span-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+              <input type="text" placeholder="Search sessions..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
               />
             </div>
-            <div className="flex items-center gap-2 bg-gray-700/50 border border-gray-600/50 rounded-xl px-4 py-3">
-              <span className="text-sm text-gray-400">Show:</span>
-              <select
-                value={pagination.per_page}
-                onChange={(e) => handleLimitChange(e.target.value)}
-                className="bg-transparent border-0 text-white text-sm focus:ring-0 focus:outline-none"
-              >
-                <option value="5">5</option>
-                <option value="10">10</option>
-                <option value="25">25</option>
-                <option value="50">50</option>
-              </select>
+          </div>
+          <div className="flex items-center justify-between px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg">
+            <div className="flex items-center gap-2">
+              <Activity className="text-indigo-500" size={18} />
+              <span className="text-xs font-medium text-slate-500">Total</span>
             </div>
+            <span className="text-lg font-bold text-indigo-600">{pagination.total_items}</span>
           </div>
         </div>
 
-        {/* Sessions Grid */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1, transition: { staggerChildren: 0.1 } }}
-          className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mb-8"
-        >
-          {sessions.map(session => {
-            const isOpen = isSessionOpen(session);
-            const color = isOpen ? 'green' : 'gray';
-
-            return (
-              <motion.div
-                key={session.id}
-                whileHover={{ y: -8, scale: 1.02 }}
-                className="group bg-gray-800/30 backdrop-blur-sm rounded-2xl border border-gray-700/30 hover:border-blue-500/50 transition-all overflow-hidden"
-              >
-                <div className="p-6">
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className={`p-2 bg-${color}-500/10 rounded-lg`}>
-                        {isOpen ? <LogIn size={20} className={`text-${color}-400`} /> : <LogOut size={20} className={`text-${color}-400`} />}
-                      </div>
-                      <div>
-                        <h3 className="text-xl font-bold">{session.terminal?.name || 'Unknown Terminal'}</h3>
-                        <p className="text-sm text-gray-400">{isOpen ? 'Currently Open' : 'Closed Session'}</p>
-                      </div>
+        {loading && sessions.length === 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[...Array(6)].map((_, i) => <div key={i} className="h-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl animate-pulse" />)}
+          </div>
+        ) : sessions.length > 0 ? (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+              {sessions.map((s) => (
+                <motion.div key={s.id} whileHover={{ y: -4 }}
+                  className="group bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-indigo-500/40 rounded-xl p-4 transition-all"
+                >
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-600">
+                      <Clock size={20} />
                     </div>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setActionMenu(actionMenu === session.id ? null : session.id); }}
-                      className="p-2 hover:bg-gray-700/50 rounded-lg"
-                    >
-                      <MoreVertical size={18} />
-                    </button>
+                    <div className="flex gap-1">
+                      <button onClick={() => openModal(s)} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
+                        <Edit size={16} className="text-slate-400 hover:text-indigo-600" />
+                      </button>
+                      <button onClick={() => handleDelete(s.id)} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
+                        <Trash2 size={16} className="text-slate-400 hover:text-rose-600" />
+                      </button>
+                    </div>
                   </div>
 
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-400">Opening Cash</span>
-                      <span className="font-bold text-green-400">${parseFloat(session.opening_cash).toFixed(2)}</span>
+                    <div>
+                      <h3 className="text-sm font-medium text-slate-500 mb-1">Terminal</h3>
+                      <p className="text-lg font-bold text-slate-900 dark:text-white truncate">{s.terminal?.name || 'Unknown'}</p>
                     </div>
-                    {session.closing_cash !== null && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-400">Closing Cash</span>
-                        <span className="font-bold text-red-400">${parseFloat(session.closing_cash).toFixed(2)}</span>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="p-3 bg-emerald-50 dark:bg-emerald-950/20 rounded-lg">
+                        <div className="flex items-center gap-2 text-emerald-600 mb-1">
+                          <TrendingUp size={14} />
+                          <span className="text-xs font-medium">Opening</span>
+                        </div>
+                        <p className="text-lg font-bold">${parseFloat(s.opening_cash || 0).toFixed(2)}</p>
                       </div>
-                    )}
-                  </div>
-
-                  <div className="mt-4 space-y-2 text-sm text-gray-400">
-                    <div className="flex items-center gap-2">
-                      <Calendar size={16} /> Opened: {formatDateTime(session.opened_at)}
-                    </div>
-                    {session.closed_at && (
-                      <div className="flex items-center gap-2">
-                        <Calendar size={16} /> Closed: {formatDateTime(session.closed_at)}
+                      <div className="p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
+                        <div className="flex items-center gap-2 text-blue-600 mb-1">
+                          <DollarSign size={14} />
+                          <span className="text-xs font-medium">Closing</span>
+                        </div>
+                        <p className="text-lg font-bold">${parseFloat(s.closing_cash || 0).toFixed(2)}</p>
                       </div>
-                    )}
-                  </div>
+                    </div>
 
-                  <div className="flex justify-between items-center mt-6 pt-4 border-t border-gray-700/30">
-                    <span className="text-xs text-gray-500">Updated: {formatDateTime(session.updated_at)}</span>
-                    <div className="flex gap-2">
-                      <button onClick={() => openModal(session)} className="p-2 bg-blue-500/20 hover:bg-blue-500/40 rounded-lg">
-                        <Edit size={14} />
-                      </button>
-                      <button onClick={() => handleDelete(session.id)} className="p-2 bg-red-500/20 hover:bg-red-500/40 rounded-lg">
-                        <Trash2 size={14} />
-                      </button>
+                    <div className="space-y-1 text-sm">
+                      <div className="flex items-center gap-2 text-slate-500">
+                        <Calendar size={14} />
+                        <span>Opened: {s.opened_at ? new Date(s.opened_at).toLocaleString() : 'N/A'}</span>
+                      </div>
+                      {s.closed_at && (
+                        <div className="flex items-center gap-2 text-slate-500">
+                          <Calendar size={14} />
+                          <span>Closed: {new Date(s.closed_at).toLocaleString()}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
-                </div>
 
-                <AnimatePresence>
-                  {actionMenu === session.id && (
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      className="absolute right-4 top-20 bg-gray-800 border border-gray-600 rounded-xl shadow-xl py-2 z-10 min-w-[160px]"
-                    >
-                      <button onClick={() => { openModal(session); setActionMenu(null); }} className="w-full text-left px-4 py-2 hover:bg-gray-700 flex items-center gap-3 text-sm">
-                        <Edit size={16} /> Edit
-                      </button>
-                      <button onClick={() => handleDelete(session.id)} className="w-full text-left px-4 py-2 hover:bg-red-500/20 text-red-400 flex items-center gap-3 text-sm">
-                        <Trash2 size={16} /> Delete
-                      </button>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </motion.div>
-            );
-          })}
-        </motion.div>
-
-        {/* Pagination */}
-        {pagination.last_page > 1 && (
-          <div className="flex justify-between items-center py-6 border-t border-gray-700/30">
-            <div className="text-sm text-gray-400">
-              Showing {(pagination.current_page - 1) * pagination.per_page + 1} to{' '}
-              {Math.min(pagination.current_page * pagination.per_page, pagination.total_items)} of {pagination.total_items}
+                  <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${s.closed_at ? 'bg-slate-100 text-slate-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                      {s.closed_at ? 'Closed' : 'Active'}
+                    </span>
+                    <span className="text-xs font-medium text-indigo-600">#{s.id}</span>
+                  </div>
+                </motion.div>
+              ))}
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => handlePageChange(pagination.current_page - 1)}
-                disabled={pagination.current_page === 1}
-                className="px-4 py-2 rounded-xl border border-gray-600 disabled:opacity-50 flex items-center gap-2"
-              >
-                <ChevronLeft size={16} /> Previous
-              </button>
-              {Array.from({ length: pagination.last_page }, (_, i) => i + 1)
-                .filter(p => p === 1 || p === pagination.last_page || Math.abs(p - pagination.current_page) <= 2)
-                .map((p, idx, arr) => (
-                  <React.Fragment key={p}>
-                    {idx > 0 && p - arr[idx - 1] > 1 && <span className="px-3">...</span>}
-                    <button
-                      onClick={() => handlePageChange(p)}
-                      className={`px-4 py-2 rounded-xl border ${pagination.current_page === p ? 'bg-blue-600 border-blue-500' : 'border-gray-600'}`}
-                    >
-                      {p}
-                    </button>
-                  </React.Fragment>
+
+            <div className="flex items-center justify-between p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl">
+              <div className="text-sm text-slate-500">Page {pagination.current_page} of {pagination.last_page}</div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => handlePageChange(pagination.current_page - 1)} disabled={pagination.current_page === 1}
+                  className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 disabled:opacity-30 hover:bg-indigo-500 hover:text-white transition-colors">
+                  <ChevronLeft size={20} />
+                </button>
+                {Array.from({ length: Math.min(pagination.last_page, 5) }, (_, i) => i + 1).map((p) => (
+                  <button key={p} onClick={() => handlePageChange(p)}
+                    className={`w-10 h-10 rounded-lg font-medium transition-all ${pagination.current_page === p ? 'bg-indigo-500 text-white' : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200'}`}>
+                    {p}
+                  </button>
                 ))}
-              <button
-                onClick={() => handlePageChange(pagination.current_page + 1)}
-                disabled={pagination.current_page === pagination.last_page}
-                className="px-4 py-2 rounded-xl border border-gray-600 disabled:opacity-50 flex items-center gap-2"
-              >
-                Next <ChevronRight size={16} />
-              </button>
+                <button onClick={() => handlePageChange(pagination.current_page + 1)} disabled={pagination.current_page === pagination.last_page}
+                  className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 disabled:opacity-30 hover:bg-indigo-500 hover:text-white transition-colors">
+                  <ChevronRight size={20} />
+                </button>
+              </div>
             </div>
-          </div>
-        )}
-
-        {/* Empty State */}
-        {sessions.length === 0 && !loading && (
-          <div className="text-center py-20">
-            <LogIn size={64} className="mx-auto text-gray-600 mb-6" />
-            <h3 className="text-2xl font-bold mb-3">{searchTerm ? 'No sessions found' : 'No POS sessions yet'}</h3>
-            <p className="text-gray-400 mb-8">{searchTerm ? 'Try different keywords' : 'Open your first POS session'}</p>
-            {!searchTerm && (
-              <button onClick={() => openModal()} className="bg-gradient-to-r from-blue-600 to-cyan-600 px-8 py-3 rounded-xl font-bold">
-                <Plus className="inline mr-2" /> Open First Session
-              </button>
-            )}
+          </>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+            <Clock size={64} className="mb-4 opacity-20" />
+            <p className="font-medium">No sessions found</p>
           </div>
         )}
       </div>
 
-      {/* Modal */}
       <AnimatePresence>
         {showModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-            onClick={closeModal}
-          >
-            <motion.div
-              initial={{ scale: 0.9 }}
-              animate={{ scale: 1 }}
-              exit={{ scale: 0.9 }}
-              className="bg-gray-800 rounded-3xl p-8 max-w-lg w-full border border-gray-700"
-              onClick={e => e.stopPropagation()}
-            >
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={closeModal} className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}
+              className="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-xl" onClick={e => e.stopPropagation()}>
               <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-cyan-500 bg-clip-text text-transparent">
-                  {editingSession ? 'Edit POS Session' : 'Open New POS Session'}
-                </h2>
-                <button onClick={closeModal} className="p-2 hover:bg-gray-700 rounded-lg">
-                  <X size={24} />
+                <h2 className="text-2xl font-bold">{editingSession ? 'Edit Session' : 'New Session'}</h2>
+                <button onClick={closeModal} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
+                  <X size={20} />
                 </button>
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-6">
+              <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-semibold mb-2">Terminal *</label>
-                  <select
-                    name="terminal_id"
-                    value={formData.terminal_id}
-                    onChange={handleInputChange}
-                    required
-                    className={`w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none ${errors.terminal_id ? 'border-red-500' : ''}`}
-                  >
-                    <option value="">Select a terminal</option>
-                    {terminals.map(term => (
-                      <option key={term.id} value={term.id}>{term.name}</option>
-                    ))}
+                  <label className="block text-sm font-medium mb-1.5">Terminal *</label>
+                  <select name="terminal_id" value={formData.terminal_id} onChange={handleInputChange} required
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20">
+                    <option value="">Select terminal...</option>
+                    {terminals.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                   </select>
-                  {errors.terminal_id && <p className="text-red-400 text-sm mt-1">{Array.isArray(errors.terminal_id) ? errors.terminal_id[0] : errors.terminal_id}</p>}
                 </div>
 
-                <div>
-                  <label className="block text-sm font-semibold mb-2">Opening Date & Time *</label>
-                  <input
-                    type="datetime-local"
-                    name="opened_at"
-                    value={formData.opened_at}
-                    onChange={handleInputChange}
-                    required
-                    className={`w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none ${errors.opened_at ? 'border-red-500' : ''}`}
-                  />
-                  {errors.opened_at && <p className="text-red-400 text-sm mt-1">{Array.isArray(errors.opened_at) ? errors.opened_at[0] : errors.opened_at}</p>}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold mb-2">Opening Cash Amount *</label>
-                  <input
-                    type="number"
-                    name="opening_cash"
-                    value={formData.opening_cash}
-                    onChange={handleInputChange}
-                    required
-                    min="0"
-                    step="0.01"
-                    placeholder="100.00"
-                    className={`w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none ${errors.opening_cash ? 'border-red-500' : ''}`}
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Enter the starting cash amount</p>
-                  {errors.opening_cash && <p className="text-red-400 text-sm mt-1">{Array.isArray(errors.opening_cash) ? errors.opening_cash[0] : errors.opening_cash}</p>}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold mb-2">Closing Date & Time (Optional)</label>
-                  <input
-                    type="datetime-local"
-                    name="closed_at"
-                    value={formData.closed_at}
-                    onChange={handleInputChange}
-                    className={`w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none ${errors.closed_at ? 'border-red-500' : ''}`}
-                  />
-                  {errors.closed_at && <p className="text-red-400 text-sm mt-1">{Array.isArray(errors.closed_at) ? errors.closed_at[0] : errors.closed_at}</p>}
-                </div>
-
-                {formData.closed_at && (
+                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-semibold mb-2">Closing Cash Amount</label>
-                    <input
-                      type="number"
-                      name="closing_cash"
-                      value={formData.closing_cash}
-                      onChange={handleInputChange}
-                      min="0"
-                      step="0.01"
-                      placeholder="150.00"
-                      className={`w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none ${errors.closing_cash ? 'border-red-500' : ''}`}
+                    <label className="block text-sm font-medium mb-1.5">Opening Cash *</label>
+                    <input type="number" step="0.01" name="opening_cash" value={formData.opening_cash} onChange={handleInputChange} required placeholder="0.00"
+                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
                     />
-                    <p className="text-xs text-gray-500 mt-1">Enter the ending cash amount (optional)</p>
-                    {errors.closing_cash && <p className="text-red-400 text-sm mt-1">{Array.isArray(errors.closing_cash) ? errors.closing_cash[0] : errors.closing_cash}</p>}
                   </div>
-                )}
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Closing Cash</label>
+                    <input type="number" step="0.01" name="closing_cash" value={formData.closing_cash} onChange={handleInputChange} placeholder="0.00"
+                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                    />
+                  </div>
+                </div>
 
-                <div className="flex justify-end gap-3 pt-4">
-                  <button type="button" onClick={closeModal} className="px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-xl">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Opened At *</label>
+                    <input type="datetime-local" name="opened_at" value={formData.opened_at} onChange={handleInputChange} required
+                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Closed At</label>
+                    <input type="datetime-local" name="closed_at" value={formData.closed_at} onChange={handleInputChange}
+                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <button type="button" onClick={closeModal} className="flex-1 px-4 py-2.5 bg-slate-100 dark:bg-slate-800 rounded-lg font-medium hover:bg-slate-200 transition-colors">
                     Cancel
                   </button>
-                  <button
-                    type="submit"
-                    disabled={operationLoading === 'saving'}
-                    className="px-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-xl font-bold flex items-center gap-2 disabled:opacity-70"
-                  >
-                    {operationLoading === 'saving' ? <Loader size={20} className="animate-spin" /> : <Check size={20} />}
-                    {editingSession ? 'Update' : 'Create'} Session
+                  <button type="submit" disabled={operationLoading === 'saving'}
+                    className="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium disabled:opacity-50 transition-colors inline-flex items-center justify-center gap-2">
+                    {operationLoading === 'saving' ? <Loader className="animate-spin" size={18} /> : <Target size={18} />}
+                    <span>{editingSession ? 'Update' : 'Create'}</span>
                   </button>
                 </div>
               </form>
             </motion.div>
-          </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

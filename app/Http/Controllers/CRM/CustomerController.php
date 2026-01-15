@@ -4,6 +4,7 @@ namespace App\Http\Controllers\CRM;
 
 use App\Http\Controllers\Controller;
 use App\Models\CRM\Customer;
+use App\Http\Resources\CustomerResource;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -21,8 +22,8 @@ class CustomerController extends Controller
 
         if ($keyword) {
             $query->where('name', 'like', "%$keyword%")
-                  ->orWhere('email', 'like', "%$keyword%")
-                  ->orWhere('phone', 'like', "%$keyword%");
+                ->orWhere('email', 'like', "%$keyword%")
+                ->orWhere('phone', 'like', "%$keyword%");
         }
 
         if (!$limit) {
@@ -35,7 +36,7 @@ class CustomerController extends Controller
                     'per_page' => $data->count(),
                     'total_items' => $data->count(),
                     'total_pages' => 1,
-                    'data' => $data,
+                    'data' => CustomerResource::collection($data),
                 ],
             ]);
         }
@@ -50,7 +51,7 @@ class CustomerController extends Controller
                 'per_page' => $customers->perPage(),
                 'total_items' => $customers->total(),
                 'total_pages' => $customers->lastPage(),
-                'data' => $customers->items(),
+                'data' => CustomerResource::collection($customers),
             ],
         ]);
     }
@@ -61,19 +62,21 @@ class CustomerController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'name'       => 'required|string|max:255',
-            'email'      => 'nullable|email|max:255',
-            'phone'      => 'nullable|string|max:50',
+            'name' => 'required|string|max:255',
+            'email' => 'nullable|email|max:255',
+            'phone' => 'nullable|string|max:50',
             'company_id' => 'nullable|exists:companies,id',
-            'type'       => 'required|in:individual,business',
-            'status'     => 'boolean',
+            'type' => 'required|in:individual,business',
+            'address' => 'nullable|string',
+            'website' => 'nullable|string|url',
+            'status' => 'boolean',
         ]);
 
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Validation failed',
-                'errors'  => $validator->errors()
+                'errors' => $validator->errors()
             ], 422);
         }
 
@@ -82,7 +85,7 @@ class CustomerController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Customer created successfully',
-            'data' => $customer
+            'data' => new CustomerResource($customer->load(['company']))
         ], 201);
     }
 
@@ -102,7 +105,7 @@ class CustomerController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $customer
+            'data' => new CustomerResource($customer)
         ], 200);
     }
 
@@ -114,12 +117,14 @@ class CustomerController extends Controller
         $customer = Customer::findOrFail($id);
 
         $data = $request->validate([
-            'name'       => 'sometimes|string|max:255',
-            'email'      => 'nullable|email|max:255',
-            'phone'      => 'nullable|string|max:50',
+            'name' => 'sometimes|string|max:255',
+            'email' => 'nullable|email|max:255',
+            'phone' => 'nullable|string|max:50',
             'company_id' => 'sometimes|exists:companies,id',
-            'type'       => 'sometimes|in:individual,business',
-            'status'     => 'boolean',
+            'type' => 'sometimes|in:individual,business',
+            'address' => 'nullable|string',
+            'website' => 'nullable|string|url',
+            'status' => 'boolean',
         ]);
 
         $customer->update($data);
@@ -127,7 +132,7 @@ class CustomerController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Customer updated successfully',
-            'data' => $customer
+            'data' => new CustomerResource($customer->load(['company']))
         ], 200);
     }
 

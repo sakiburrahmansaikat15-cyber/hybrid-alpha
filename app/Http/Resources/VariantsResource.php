@@ -14,16 +14,17 @@ class VariantsResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-            return [
+        return [
             'id' => $this->id,
-            'name' => $this->name,
-            'description' => $this->description,
-            'value' => $this->value,
+            'variant_name' => $this->variant_name,
+            'sku' => $this->sku,
+            'price' => $this->price,
+            'stock_quantity' => $this->stock_quantity,
             'status' => $this->status,
             'product_id' => $this->product_id,
             'product' => new ProductsResource($this->whenLoaded('product')),
-            'created_at' => $this->created_at->toDateTimeString(),
-            'updated_at' => $this->updated_at->toDateTimeString(),
+            'created_at' => $this->created_at?->toDateTimeString(),
+            'updated_at' => $this->updated_at?->toDateTimeString(),
         ];
     }
 }

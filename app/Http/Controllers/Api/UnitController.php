@@ -10,50 +10,57 @@ use Illuminate\Support\Facades\Validator;
 
 class UnitController extends Controller
 {
-    // ✅ List units with pagination
-   public function index(Request $request)
-{
-    $keyword = $request->query('keyword', '');
-    $limit = $request->query('limit');
-
-    $query = Unit::query();
-
-    // 🔍 Apply search filter if keyword provided
-    if ($keyword) {
-        $query->where('name', 'like', "%{$keyword}%");
+    public function __construct()
+    {
+        $this->middleware('permission:units.view')->only(['index', 'show']);
+        $this->middleware('permission:units.create')->only(['store']);
+        $this->middleware('permission:units.edit')->only(['update']);
+        $this->middleware('permission:units.delete')->only(['destroy']);
     }
+    // ✅ List units with pagination
+    public function index(Request $request)
+    {
+        $keyword = $request->query('keyword', '');
+        $limit = $request->query('limit');
 
-    // ⚙️ If no limit, return all results
-    if (!$limit) {
-        $data = $query->latest()->get();
+        $query = Unit::query();
+
+        // 🔍 Apply search filter if keyword provided
+        if ($keyword) {
+            $query->where('name', 'like', "%{$keyword}%");
+        }
+
+        // ⚙️ If no limit, return all results
+        if (!$limit) {
+            $data = $query->latest()->get();
+
+            return response()->json([
+                'message' => 'Units fetched successfully',
+                'pagination' => [
+                    'current_page' => 1,
+                    'per_page' => $data->count(),
+                    'total_items' => $data->count(),
+                    'total_pages' => 1,
+                    'data' => UnitResource::collection($data),
+                ],
+            ]);
+        }
+
+        // 📄 Otherwise, paginate results
+        $limit = (int) $limit ?: 10;
+        $units = $query->latest()->paginate($limit);
 
         return response()->json([
             'message' => 'Units fetched successfully',
             'pagination' => [
-                'current_page' => 1,
-                'per_page' => $data->count(),
-                'total_items' => $data->count(),
-                'total_pages' => 1,
-                'data' => UnitResource::collection($data),
+                'current_page' => $units->currentPage(),
+                'per_page' => $units->perPage(),
+                'total_items' => $units->total(),
+                'total_pages' => $units->lastPage(),
+                'data' => UnitResource::collection($units),
             ],
         ]);
     }
-
-    // 📄 Otherwise, paginate results
-    $limit = (int) $limit ?: 10;
-    $units = $query->latest()->paginate($limit);
-
-    return response()->json([
-        'message' => 'Units fetched successfully',
-        'pagination' => [
-            'current_page' => $units->currentPage(),
-            'per_page' => $units->perPage(),
-            'total_items' => $units->total(),
-            'total_pages' => $units->lastPage(),
-            'data' => UnitResource::collection($units),
-        ],
-    ]);
-}
 
     // ✅ Store a new unit
     public function store(Request $request)

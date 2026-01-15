@@ -8,7 +8,12 @@ use Illuminate\Database\Eloquent\Model;
 class Designation extends Model
 {
     use HasFactory;
-    protected $guarded = [];
+    protected $fillable = [
+        'name',
+        'description',
+        'department_id',
+        'status',
+    ];
 
      public function department()
     {

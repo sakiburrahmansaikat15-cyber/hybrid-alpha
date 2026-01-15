@@ -66,12 +66,12 @@ class SaleItemController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'sale_id'    => 'required|exists:sales,id',
-            'product_id' => 'required|exists:prooducts,id',
-            'quantity'   => 'required|numeric|min:0',
-            'price'      => 'required|numeric|min:0',
-            'discount'   => 'nullable|numeric|min:0',
-            'tax'        => 'nullable|numeric|min:0',
+            'sale_id' => 'required|exists:sales,id',
+            'product_id' => 'required|exists:products,id',
+            'quantity' => 'required|numeric|min:0',
+            'price' => 'required|numeric|min:0',
+            'discount' => 'nullable|numeric|min:0',
+            'tax' => 'nullable|numeric|min:0',
         ]);
 
         if ($validator->fails()) {
@@ -125,16 +125,24 @@ class SaleItemController extends Controller
             ], 404);
         }
 
-        $data = $request->validate([
-            'sale_id'    => 'sometimes|exists:sales,id',
-            'product_id' => 'sometimes|exists:prooducts,id',
-            'quantity'   => 'sometimes|numeric|min:0',
-            'price'      => 'sometimes|numeric|min:0',
-            'discount'   => 'sometimes|numeric|min:0',
-            'tax'        => 'sometimes|numeric|min:0',
+        $validator = Validator::make($request->all(), [
+            'sale_id' => 'sometimes|exists:sales,id',
+            'product_id' => 'sometimes|exists:products,id',
+            'quantity' => 'sometimes|numeric|min:0',
+            'price' => 'sometimes|numeric|min:0',
+            'discount' => 'sometimes|numeric|min:0',
+            'tax' => 'sometimes|numeric|min:0',
         ]);
 
-        $item->update($data);
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $item->update($validator->validated());
 
         return response()->json([
             'success' => true,

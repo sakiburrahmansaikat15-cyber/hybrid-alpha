@@ -9,5 +9,11 @@ class ReceiptTemplate extends Model
 {
     use HasFactory;
 
-     protected $guarded = [];
+     protected $fillable = [
+        'name',
+        'header',
+        'footer',
+        'logo',
+        'is_default',
+    ];
 }

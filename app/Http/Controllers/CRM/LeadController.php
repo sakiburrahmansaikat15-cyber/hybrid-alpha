@@ -4,6 +4,7 @@ namespace App\Http\Controllers\CRM;
 
 use App\Http\Controllers\Controller;
 use App\Models\CRM\Lead;
+use App\Http\Resources\LeadResource;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -17,12 +18,12 @@ class LeadController extends Controller
         $keyword = $request->query('keyword', '');
         $limit = $request->query('limit');
 
-        $query = Lead::with(['leadSource', 'leadStatus']); 
+        $query = Lead::with(['leadSource', 'leadStatus']);
 
         if ($keyword) {
             $query->where('name', 'like', "%$keyword%")
-                  ->orWhere('email', 'like', "%$keyword%")
-                  ->orWhere('phone', 'like', "%$keyword%");
+                ->orWhere('email', 'like', "%$keyword%")
+                ->orWhere('phone', 'like', "%$keyword%");
         }
 
         if (!$limit) {
@@ -35,7 +36,7 @@ class LeadController extends Controller
                     'per_page' => $data->count(),
                     'total_items' => $data->count(),
                     'total_pages' => 1,
-                    'data' => $data,
+                    'data' => LeadResource::collection($data),
                 ],
             ]);
         }
@@ -50,7 +51,7 @@ class LeadController extends Controller
                 'per_page' => $leads->perPage(),
                 'total_items' => $leads->total(),
                 'total_pages' => $leads->lastPage(),
-                'data' => $leads->items(),
+                'data' => LeadResource::collection($leads),
             ],
         ]);
     }
@@ -61,11 +62,11 @@ class LeadController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'name'           => 'required|string|max:255',
-            'email'          => 'nullable|email|max:255',
-            'phone'          => 'nullable|string|max:50',
-            'company'        => 'nullable|string|max:255',
-            'score'          => 'nullable|integer|min:0',
+            'name' => 'required|string|max:255',
+            'email' => 'nullable|email|max:255',
+            'phone' => 'nullable|string|max:50',
+            'company' => 'nullable|string|max:255',
+            'score' => 'nullable|integer|min:0',
             'lead_source_id' => 'required|exists:lead_sources,id',
             'lead_status_id' => 'required|exists:lead_statuses,id',
         ]);
@@ -74,7 +75,7 @@ class LeadController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Validation failed',
-                'errors'  => $validator->errors()
+                'errors' => $validator->errors()
             ], 422);
         }
 
@@ -83,7 +84,7 @@ class LeadController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Lead created successfully',
-            'data' => $lead
+            'data' => new LeadResource($lead->load(['leadSource', 'leadStatus']))
         ], 201);
     }
 
@@ -103,7 +104,7 @@ class LeadController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $lead
+            'data' => new LeadResource($lead)
         ], 200);
     }
 
@@ -115,11 +116,11 @@ class LeadController extends Controller
         $lead = Lead::findOrFail($id);
 
         $data = $request->validate([
-            'name'           => 'sometimes|string|max:255',
-            'email'          => 'nullable|email|max:255',
-            'phone'          => 'nullable|string|max:50',
-            'company'        => 'nullable|string|max:255',
-            'score'          => 'nullable|integer|min:0',
+            'name' => 'sometimes|string|max:255',
+            'email' => 'nullable|email|max:255',
+            'phone' => 'nullable|string|max:50',
+            'company' => 'nullable|string|max:255',
+            'score' => 'nullable|integer|min:0',
             'lead_source_id' => 'sometimes|exists:lead_sources,id',
             'lead_status_id' => 'sometimes|exists:lead_statuses,id',
         ]);
@@ -129,7 +130,7 @@ class LeadController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Lead updated successfully',
-            'data' => $lead
+            'data' => new LeadResource($lead->load(['leadSource', 'leadStatus']))
         ], 200);
     }
 

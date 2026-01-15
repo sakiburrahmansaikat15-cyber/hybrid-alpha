@@ -9,7 +9,13 @@ class SaleDiscount extends Model
 {
     use HasFactory;
 
-      protected $guarded = [];
+      protected $fillable = [
+        'sale_id',
+        'discount_type',
+        'discount_value',
+        'discount_amount',
+        'reason',
+    ];
 
 
          public function sale()

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\CRM;
 
 use App\Http\Controllers\Controller;
 use App\Models\CRM\LeadSource;
+use App\Http\Resources\LeadSourceResource;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -17,11 +18,11 @@ class LeadSourceController extends Controller
         $keyword = $request->query('keyword', '');
         $limit = $request->query('limit');
 
-        $query = LeadSource::with('leads');
+        $query = LeadSource::withCount('leads');
 
         if ($keyword) {
             $query->where('name', 'like', "%$keyword%")
-                  ->orWhere('description', 'like', "%$keyword%");
+                ->orWhere('description', 'like', "%$keyword%");
         }
 
         if (!$limit) {
@@ -34,7 +35,7 @@ class LeadSourceController extends Controller
                     'per_page' => $data->count(),
                     'total_items' => $data->count(),
                     'total_pages' => 1,
-                    'data' => $data,
+                    'data' => LeadSourceResource::collection($data),
                 ],
             ]);
         }
@@ -49,7 +50,7 @@ class LeadSourceController extends Controller
                 'per_page' => $sources->perPage(),
                 'total_items' => $sources->total(),
                 'total_pages' => $sources->lastPage(),
-                'data' => $sources->items(),
+                'data' => LeadSourceResource::collection($sources),
             ],
         ]);
     }
@@ -69,7 +70,7 @@ class LeadSourceController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Validation failed',
-                'errors'  => $validator->errors()
+                'errors' => $validator->errors()
             ], 422);
         }
 
@@ -78,7 +79,7 @@ class LeadSourceController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Lead source created successfully',
-            'data' => $source
+            'data' => new LeadSourceResource($source->loadCount('leads'))
         ], 201);
     }
 
@@ -98,7 +99,7 @@ class LeadSourceController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $source
+            'data' => new LeadSourceResource($source->loadCount('leads'))
         ], 200);
     }
 
@@ -120,7 +121,7 @@ class LeadSourceController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Lead source updated successfully',
-            'data' => $source
+            'data' => new LeadSourceResource($source->loadCount('leads'))
         ], 200);
     }
 

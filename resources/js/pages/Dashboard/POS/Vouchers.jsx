@@ -1,24 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Plus,
-  Search,
-  Edit,
-  Trash2,
-  X,
-  Check,
-  MoreVertical,
-  Ticket, // Perfect icon for vouchers
-  Calendar,
-  Loader,
-  ChevronLeft,
-  ChevronRight,
-  Percent,
-  DollarSign,
+  Plus, Search, Edit, Trash2, X, Loader, ChevronLeft, ChevronRight,
+  Activity, Zap, Target, Ticket, Tag, Calendar
 } from 'lucide-react';
 
-const API_URL = 'http://localhost:8000/api/pos/vouchers';
+const API_URL = '/api/pos/vouchers';
 
 const Vouchers = () => {
   const [vouchers, setVouchers] = useState([]);
@@ -27,536 +15,378 @@ const Vouchers = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingVoucher, setEditingVoucher] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [actionMenu, setActionMenu] = useState(null);
   const [formData, setFormData] = useState({
-    code: '',
-    discount_type: 'percentage',
-    value: '',
-    expiry_date: '',
+    code: '', name: '', amount: '', description: '', is_active: 1, limit_usage: '', expiry_date: ''
   });
   const [errors, setErrors] = useState({});
   const [notification, setNotification] = useState({ show: false, message: '', type: '' });
+  const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, per_page: 12, total_items: 0 });
 
-  const [pagination, setPagination] = useState({
-    current_page: 1,
-    last_page: 1,
-    per_page: 10,
-    total_items: 0,
-  });
+  const notificationTimerRef = useRef(null);
 
   const showNotification = useCallback((message, type = 'success') => {
+    if (notificationTimerRef.current) clearTimeout(notificationTimerRef.current);
     setNotification({ show: true, message, type });
-    setTimeout(() => setNotification({ show: false, message: '', type: '' }), 4000);
+    notificationTimerRef.current = setTimeout(() => setNotification({ show: false, message: '', type: '' }), 3500);
   }, []);
 
-  const handleApiError = useCallback((error, defaultMessage) => {
+  useEffect(() => () => { if (notificationTimerRef.current) clearTimeout(notificationTimerRef.current); }, []);
+
+  const handleApiError = useCallback((error) => {
     if (error.response?.status === 422) {
       const validationErrors = error.response.data.errors || {};
       setErrors(validationErrors);
-      const firstError = Object.values(validationErrors)[0]?.[0];
-      showNotification(firstError || 'Validation error', 'error');
-    } else if (error.response?.data?.message) {
-      showNotification(error.response.data.message, 'error');
-      setErrors({ _general: error.response.data.message });
+      showNotification(Object.values(validationErrors)[0]?.[0] || 'Check input fields', 'error');
     } else {
-      showNotification(defaultMessage || 'Something went wrong', 'error');
-      setErrors({ _general: defaultMessage });
+      const msg = error.response?.data?.message || 'Operation failed';
+      showNotification(msg, 'error');
     }
   }, [showNotification]);
 
-  // Fetch vouchers with server-side search & pagination
-  const fetchVouchers = useCallback(async (page = 1, perPage = 10, keyword = '') => {
+  const fetchVouchers = useCallback(async (page = 1, keyword = searchTerm) => {
     setLoading(true);
     try {
-      const params = { page, limit: perPage };
+      const params = { page, limit: pagination.per_page };
       if (keyword.trim()) params.keyword = keyword.trim();
-
       const response = await axios.get(API_URL, { params });
       const res = response.data;
-
-      const voucherData = res.pagination?.data || [];
-      const formattedVouchers = voucherData.map(item => ({
-        id: item.id,
-        code: item.code,
-        discount_type: item.discount_type,
-        value: item.value,
-        expiry_date: item.expiry_date,
-        created_at: item.created_at,
-        updated_at: item.updated_at,
-      }));
-
-      setVouchers(formattedVouchers);
+      setVouchers(res.pagination?.data || res.data || []);
       setPagination({
-        current_page: res.pagination.current_page || 1,
-        last_page: res.pagination.total_pages || 1,
-        per_page: res.pagination.per_page || 10,
-        total_items: res.pagination.total_items || 0,
+        current_page: res.pagination?.current_page || res.current_page || 1,
+        last_page: res.pagination?.total_pages || res.last_page || 1,
+        per_page: res.pagination?.per_page || res.per_page || 12,
+        total_items: res.pagination?.total_items || res.total || 0,
       });
     } catch (error) {
-      handleApiError(error, 'Failed to fetch vouchers');
+      handleApiError(error);
       setVouchers([]);
-      setPagination({ current_page: 1, last_page: 1, per_page: 10, total_items: 0 });
     } finally {
       setLoading(false);
     }
-  }, [handleApiError]);
+  }, [pagination.per_page, searchTerm, handleApiError]);
 
-  // Debounced search
   useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchVouchers(1, pagination.per_page, searchTerm);
-    }, 500);
+    const timer = setTimeout(() => fetchVouchers(1), 500);
     return () => clearTimeout(timer);
-  }, [searchTerm, pagination.per_page, fetchVouchers]);
-
-  // Initial load
-  useEffect(() => {
-    fetchVouchers(1, 10);
-  }, []);
+  }, [searchTerm, fetchVouchers]);
 
   const handlePageChange = (newPage) => {
     if (newPage < 1 || newPage > pagination.last_page) return;
-    fetchVouchers(newPage, pagination.per_page, searchTerm);
-  };
-
-  const handleLimitChange = (newLimit) => {
-    const limit = parseInt(newLimit);
-    setPagination(prev => ({ ...prev, per_page: limit }));
-    fetchVouchers(1, limit, searchTerm);
-  };
-
-  const resetForm = () => {
-    setFormData({
-      code: '',
-      discount_type: 'percentage',
-      value: '',
-      expiry_date: '',
-    });
-    setEditingVoucher(null);
-    setErrors({});
+    fetchVouchers(newPage);
   };
 
   const openModal = (voucher = null) => {
     if (voucher) {
       setEditingVoucher(voucher);
       setFormData({
-        code: voucher.code || '',
-        discount_type: voucher.discount_type || 'percentage',
-        value: voucher.value || '',
-        expiry_date: voucher.expiry_date || '',
+        code: voucher.code,
+        name: voucher.name,
+        amount: voucher.amount,
+        description: voucher.description || '',
+        is_active: voucher.is_active,
+        limit_usage: voucher.limit_usage || '',
+        expiry_date: voucher.expiry_date ? voucher.expiry_date.split('T')[0] : ''
       });
     } else {
-      resetForm();
+      setEditingVoucher(null);
+      setFormData({ code: '', name: '', amount: '', description: '', is_active: 1, limit_usage: '', expiry_date: '' });
     }
+    setErrors({});
     setShowModal(true);
   };
 
   const closeModal = () => {
     setShowModal(false);
-    setTimeout(resetForm, 300);
+    setEditingVoucher(null);
   };
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-    if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
+  const generateCode = () => {
+    const random = Math.random().toString(36).substring(2, 8).toUpperCase();
+    setFormData(prev => ({ ...prev, code: `VOU-${random}` }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setOperationLoading('saving');
-    setErrors({});
-
     try {
-      const submitData = {
-        code: formData.code.trim().toUpperCase(),
-        discount_type: formData.discount_type,
-        value: parseFloat(formData.value),
-        expiry_date: formData.expiry_date || null,
-      };
-
-      let response;
       if (editingVoucher) {
-        response = await axios.post(`${API_URL}/${editingVoucher.id}`, submitData);
+        await axios.put(`${API_URL}/${editingVoucher.id}`, formData);
+        showNotification('Voucher updated successfully');
       } else {
-        response = await axios.post(API_URL, submitData);
+        await axios.post(API_URL, formData);
+        showNotification('Voucher created successfully');
       }
-
-      showNotification(
-        response.data.message || `Voucher ${editingVoucher ? 'updated' : 'created'} successfully!`
-      );
-      fetchVouchers(pagination.current_page, pagination.per_page, searchTerm);
+      fetchVouchers(pagination.current_page);
       closeModal();
     } catch (error) {
-      handleApiError(error, 'Failed to save voucher');
+      handleApiError(error);
     } finally {
       setOperationLoading(null);
     }
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Delete this voucher permanently?')) return;
-    setOperationLoading(`delete-${id}`);
+    if (!window.confirm('Delete this voucher?')) return;
+    setOperationLoading(id);
     try {
       await axios.delete(`${API_URL}/${id}`);
       showNotification('Voucher deleted successfully');
-
-      const remainingItems = pagination.total_items - 1;
-      const maxPage = Math.ceil(remainingItems / pagination.per_page);
-      const targetPage = pagination.current_page > maxPage ? maxPage : pagination.current_page;
-
-      fetchVouchers(targetPage || 1, pagination.per_page, searchTerm);
+      fetchVouchers(1);
     } catch (error) {
-      handleApiError(error, 'Delete failed');
+      handleApiError(error);
     } finally {
       setOperationLoading(null);
-      setActionMenu(null);
     }
   };
 
-  const formatDate = (date) => date ? new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'No expiry';
-
-  useEffect(() => {
-    const handler = () => setActionMenu(null);
-    document.addEventListener('click', handler);
-    return () => document.removeEventListener('click', handler);
-  }, []);
-
-  if (loading && vouchers.length === 0) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="mb-8 flex justify-between">
-            <div className="h-10 bg-gray-800 rounded w-64 animate-pulse"></div>
-            <div className="h-12 bg-gray-800 rounded-xl w-40 animate-pulse"></div>
-          </div>
-          <div className="bg-gray-800/30 rounded-2xl p-6 mb-8 animate-pulse space-y-4">
-            <div className="h-12 bg-gray-700 rounded"></div>
-          </div>
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="bg-gray-800/30 rounded-2xl p-6 animate-pulse space-y-4">
-                <div className="h-8 bg-gray-700 rounded"></div>
-                <div className="h-20 bg-gray-700/50 rounded-lg"></div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-gray-100 py-8">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans">
       <AnimatePresence>
         {notification.show && (
-          <motion.div
-            initial={{ opacity: 0, x: 300 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 300 }}
-            className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-xl shadow-2xl ${notification.type === 'error' ? 'bg-red-600' : 'bg-green-600'} text-white font-medium`}
-          >
-            {notification.message}
+          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} className="fixed top-4 right-4 z-50">
+            <div className={`flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg backdrop-blur-sm border ${notification.type === 'error' ? 'bg-rose-500/10 border-rose-500/20 text-rose-600' : 'bg-teal-500/10 border-teal-500/20 text-teal-600'}`}>
+              <Zap size={16} />
+              <span className="font-semibold text-sm">{notification.message}</span>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-8 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+      <div className="max-w-7xl mx-auto px-4 py-6">
+        <header className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-cyan-500 bg-clip-text text-transparent">
-              Vouchers Management
+            <h1 className="text-3xl font-bold tracking-tight dark:text-white mb-1 flex items-center gap-3">
+              <Ticket className="text-teal-500" /> Vouchers
             </h1>
-            <p className="text-gray-400 mt-2">Create and manage discount vouchers for customers</p>
+            <p className="text-sm text-slate-500">Manage discount codes and promotional coupons</p>
           </div>
-          <button
-            onClick={() => openModal()}
-            className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 px-6 py-3 rounded-xl font-bold flex items-center gap-3 shadow-lg"
-          >
-            <Plus size={22} /> Add New Voucher
+          <button onClick={() => openModal()} className="inline-flex items-center gap-2 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-medium transition-colors shadow-lg shadow-teal-500/20">
+            <Plus size={18} />
+            <span>Create Voucher</span>
           </button>
-        </div>
+        </header>
 
-        {/* Search + Per Page */}
-        <div className="bg-gray-800/30 backdrop-blur-sm rounded-2xl p-6 mb-8 border border-gray-700/30">
-          <div className="flex flex-col lg:flex-row gap-6">
-            <div className="flex-1 relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-              <input
-                type="text"
-                placeholder="Search vouchers by code..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500/50 outline-none"
-              />
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6">
+          <div className="lg:col-span-3 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+            <input
+              type="text"
+              placeholder="Search vouchers by code or name..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all font-medium"
+            />
+          </div>
+          <div className="flex items-center justify-between px-5 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm">
+            <div className="flex items-center gap-2">
+              <Activity className="text-teal-500" size={18} />
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total</span>
             </div>
-            <div className="flex items-center gap-2 bg-gray-700/50 border border-gray-600/50 rounded-xl px-4 py-3">
-              <span className="text-sm text-gray-400">Show:</span>
-              <select
-                value={pagination.per_page}
-                onChange={(e) => handleLimitChange(e.target.value)}
-                className="bg-transparent border-0 text-white text-sm focus:ring-0 focus:outline-none"
-              >
-                <option value="5">5</option>
-                <option value="10">10</option>
-                <option value="25">25</option>
-                <option value="50">50</option>
-              </select>
-            </div>
+            <span className="text-xl font-bold text-teal-600">{pagination.total_items}</span>
           </div>
         </div>
 
-        {/* Vouchers Grid */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1, transition: { staggerChildren: 0.1 } }}
-          className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mb-8"
-        >
-          {vouchers.map(voucher => (
-            <motion.div
-              key={voucher.id}
-              whileHover={{ y: -8, scale: 1.02 }}
-              className="group bg-gray-800/30 backdrop-blur-sm rounded-2xl border border-gray-700/30 hover:border-blue-500/50 transition-all overflow-hidden"
-            >
-              <div className="p-6">
-                <div className="flex justify-between items-start mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-purple-500/10 rounded-lg">
-                      <Ticket size={20} className="text-purple-400" />
+        {loading && vouchers.length === 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {[...Array(8)].map((_, i) => <div key={i} className="h-48 bg-white dark:bg-slate-900 rounded-2xl animate-pulse border border-slate-200 dark:border-slate-800" />)}
+          </div>
+        ) : vouchers.length > 0 ? (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-8">
+              {vouchers.map((voucher) => (
+                <motion.div
+                  key={voucher.id}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  whileHover={{ y: -4 }}
+                  className="group relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-teal-500/40 rounded-2xl p-6 shadow-sm hover:shadow-lg transition-all"
+                >
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="flex flex-col">
+                      <span className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1">Code</span>
+                      <div className="px-3 py-1 bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-400 font-mono font-bold rounded-lg border-dashed border border-teal-200 dark:border-teal-800">
+                        {voucher.code}
+                      </div>
                     </div>
-                    <h3 className="text-xl font-bold uppercase tracking-wider">{voucher.code}</h3>
+                    <div className="flex gap-1">
+                      <button onClick={() => openModal(voucher)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 hover:text-teal-600 transition-colors">
+                        <Edit size={16} />
+                      </button>
+                      <button onClick={() => handleDelete(voucher.id)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 hover:text-rose-600 transition-colors">
+                        {operationLoading === voucher.id ? <Loader className="animate-spin" size={16} /> : <Trash2 size={16} />}
+                      </button>
+                    </div>
                   </div>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setActionMenu(actionMenu === voucher.id ? null : voucher.id); }}
-                    className="p-2 hover:bg-gray-700/50 rounded-lg"
-                  >
-                    <MoreVertical size={18} />
-                  </button>
-                </div>
 
-                <div className="mb-6 text-center">
-                  <div className="flex items-center justify-center gap-2">
-                    {voucher.discount_type === 'percentage' ? (
-                      <Percent size={36} className="text-cyan-400" />
-                    ) : (
-                      <DollarSign size={36} className="text-green-400" />
-                    )}
-                    <p className="text-4xl font-bold text-white">
-                      {voucher.discount_type === 'percentage' ? `${voucher.value}%` : voucher.value}
-                    </p>
-                  </div>
-                  <p className="text-sm text-gray-400 mt-2 capitalize">
-                    {voucher.discount_type === 'percentage' ? 'Percentage Off' : 'Fixed Amount Off'}
-                  </p>
-                </div>
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-1 truncate">{voucher.name}</h3>
+                  <p className="text-sm text-slate-500 mb-4 line-clamp-1">{voucher.description || 'No description'}</p>
 
-                <div className="space-y-2 text-sm text-gray-400">
-                  <div className="flex items-center gap-2">
-                    <Calendar size={16} /> Expires: {formatDate(voucher.expiry_date)}
+                  <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-800">
+                    <div className="flex flex-col">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase">Value</span>
+                      <span className="text-xl font-black text-slate-900 dark:text-white">
+                        ${parseFloat(voucher.amount).toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex flex-col items-end">
+                      <span className={`text-[10px] font-bold uppercase mb-1 ${voucher.is_active ? 'text-teal-500' : 'text-slate-400'}`}>
+                        {voucher.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                      {voucher.expiry_date && (
+                        <span className="text-xs text-slate-400 flex items-center gap-1">
+                          <Calendar size={12} /> {new Date(voucher.expiry_date).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Calendar size={16} /> Created: {formatDate(voucher.created_at)}
-                  </div>
-                </div>
+                </motion.div>
+              ))}
+            </div>
 
-                <div className="flex justify-between items-center mt-6 pt-4 border-t border-gray-700/30">
-                  <span className="text-xs text-gray-500">Updated: {formatDate(voucher.updated_at)}</span>
-                  <div className="flex gap-2">
-                    <button onClick={() => openModal(voucher)} className="p-2 bg-blue-500/20 hover:bg-blue-500/40 rounded-lg">
-                      <Edit size={14} />
-                    </button>
-                    <button onClick={() => handleDelete(voucher.id)} className="p-2 bg-red-500/20 hover:bg-red-500/40 rounded-lg">
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                </div>
+            <div className="flex items-center justify-between p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm">
+              <span className="text-sm font-medium text-slate-500">Page {pagination.current_page} of {pagination.last_page}</span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handlePageChange(pagination.current_page - 1)}
+                  disabled={pagination.current_page === 1}
+                  className="p-2 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-teal-500 hover:text-white disabled:opacity-50 transition-colors"
+                >
+                  <ChevronLeft size={20} />
+                </button>
+                <button
+                  onClick={() => handlePageChange(pagination.current_page + 1)}
+                  disabled={pagination.current_page === pagination.last_page}
+                  className="p-2 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-teal-500 hover:text-white disabled:opacity-50 transition-colors"
+                >
+                  <ChevronRight size={20} />
+                </button>
               </div>
-
-              <AnimatePresence>
-                {actionMenu === voucher.id && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="absolute right-4 top-20 bg-gray-800 border border-gray-600 rounded-xl shadow-xl py-2 z-10 min-w-[160px]"
-                  >
-                    <button onClick={() => { openModal(voucher); setActionMenu(null); }} className="w-full text-left px-4 py-2 hover:bg-gray-700 flex items-center gap-3 text-sm">
-                      <Edit size={16} /> Edit
-                    </button>
-                    <button onClick={() => handleDelete(voucher.id)} className="w-full text-left px-4 py-2 hover:bg-red-500/20 text-red-400 flex items-center gap-3 text-sm">
-                      <Trash2 size={16} /> Delete
-                    </button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.div>
-          ))}
-        </motion.div>
-
-        {/* Pagination */}
-        {pagination.last_page > 1 && (
-          <div className="flex justify-between items-center py-6 border-t border-gray-700/30">
-            <div className="text-sm text-gray-400">
-              Showing {(pagination.current_page - 1) * pagination.per_page + 1} to{' '}
-              {Math.min(pagination.current_page * pagination.per_page, pagination.total_items)} of {pagination.total_items}
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => handlePageChange(pagination.current_page - 1)}
-                disabled={pagination.current_page === 1}
-                className="px-4 py-2 rounded-xl border border-gray-600 disabled:opacity-50 flex items-center gap-2"
-              >
-                <ChevronLeft size={16} /> Previous
-              </button>
-              {Array.from({ length: pagination.last_page }, (_, i) => i + 1)
-                .filter(p => p === 1 || p === pagination.last_page || Math.abs(p - pagination.current_page) <= 2)
-                .map((p, idx, arr) => (
-                  <React.Fragment key={p}>
-                    {idx > 0 && p - arr[idx - 1] > 1 && <span className="px-3">...</span>}
-                    <button
-                      onClick={() => handlePageChange(p)}
-                      className={`px-4 py-2 rounded-xl border ${pagination.current_page === p ? 'bg-blue-600 border-blue-500' : 'border-gray-600'}`}
-                    >
-                      {p}
-                    </button>
-                  </React.Fragment>
-                ))}
-              <button
-                onClick={() => handlePageChange(pagination.current_page + 1)}
-                disabled={pagination.current_page === pagination.last_page}
-                className="px-4 py-2 rounded-xl border border-gray-600 disabled:opacity-50 flex items-center gap-2"
-              >
-                Next <ChevronRight size={16} />
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Empty State */}
-        {vouchers.length === 0 && !loading && (
-          <div className="text-center py-20">
-            <Ticket size={64} className="mx-auto text-gray-600 mb-6" />
-            <h3 className="text-2xl font-bold mb-3">{searchTerm ? 'No vouchers found' : 'No vouchers yet'}</h3>
-            <p className="text-gray-400 mb-8">{searchTerm ? 'Try different keywords' : 'Create your first discount voucher'}</p>
-            {!searchTerm && (
-              <button onClick={() => openModal()} className="bg-gradient-to-r from-blue-600 to-cyan-600 px-8 py-3 rounded-xl font-bold">
-                <Plus className="inline mr-2" /> Create First Voucher
-              </button>
-            )}
+          </>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+            <Ticket size={64} className="mb-4 opacity-50" />
+            <p className="font-semibold text-lg">No Vouchers Found</p>
           </div>
         )}
       </div>
 
-      {/* Modal */}
       <AnimatePresence>
         {showModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-            onClick={closeModal}
-          >
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
             <motion.div
-              initial={{ scale: 0.9 }}
-              animate={{ scale: 1 }}
-              exit={{ scale: 0.9 }}
-              className="bg-gray-800 rounded-3xl p-8 max-w-lg w-full border border-gray-700"
-              onClick={e => e.stopPropagation()}
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-white dark:bg-slate-900 w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
             >
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-cyan-500 bg-clip-text text-transparent">
-                  {editingVoucher ? 'Edit Voucher' : 'Create New Voucher'}
-                </h2>
-                <button onClick={closeModal} className="p-2 hover:bg-gray-700 rounded-lg">
-                  <X size={24} />
-                </button>
+              <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center shrink-0">
+                <h2 className="text-xl font-bold dark:text-white">{editingVoucher ? 'Edit Voucher' : 'Create Voucher'}</h2>
+                <button onClick={closeModal} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"><X size={20} /></button>
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div>
-                  <label className="block text-sm font-semibold mb-2">Voucher Code *</label>
-                  <input
-                    type="text"
-                    name="code"
-                    value={formData.code}
-                    onChange={handleInputChange}
-                    required
-                    placeholder="e.g., SAVE20, WELCOME100"
-                    className={`w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none uppercase ${errors.code ? 'border-red-500' : ''}`}
-                  />
-                  {errors.code && <p className="text-red-400 text-sm mt-1">{Array.isArray(errors.code) ? errors.code[0] : errors.code}</p>}
+              <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Voucher Name</label>
+                    <input
+                      type="text"
+                      value={formData.name}
+                      onChange={e => setFormData({ ...formData, name: e.target.value })}
+                      className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border-none rounded-xl focus:ring-2 focus:ring-teal-500 outline-none transition-all"
+                      placeholder="Summer Sale"
+                      required
+                    />
+                    {errors.name && <p className="text-rose-500 text-xs mt-1">{errors.name[0]}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Voucher Code</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={formData.code}
+                        onChange={e => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
+                        className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border-none rounded-xl focus:ring-2 focus:ring-teal-500 outline-none transition-all font-mono"
+                        placeholder="SUMMER25"
+                        required
+                      />
+                      <button type="button" onClick={generateCode} className="px-3 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-bold">GEN</button>
+                    </div>
+                    {errors.code && <p className="text-rose-500 text-xs mt-1">{errors.code[0]}</p>}
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-semibold mb-2">Discount Type *</label>
-                  <div className="grid grid-cols-2 gap-4">
-                    <label
-                      onClick={() => setFormData(prev => ({ ...prev, discount_type: 'percentage' }))}
-                      className={`p-4 border-2 rounded-xl text-center cursor-pointer transition flex items-center justify-center gap-2 ${
-                        formData.discount_type === 'percentage' ? 'border-cyan-500 bg-cyan-500/10' : 'border-gray-600'
-                      }`}
-                    >
-                      <Percent size={20} />
-                      <span>Percentage</span>
-                    </label>
-                    <label
-                      onClick={() => setFormData(prev => ({ ...prev, discount_type: 'fixed' }))}
-                      className={`p-4 border-2 rounded-xl text-center cursor-pointer transition flex items-center justify-center gap-2 ${
-                        formData.discount_type === 'fixed' ? 'border-green-500 bg-green-500/10' : 'border-gray-600'
-                      }`}
-                    >
-                      <DollarSign size={20} />
-                      <span>Fixed Amount</span>
-                    </label>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Amount ($)</label>
+                    <input
+                      type="number" step="0.01"
+                      value={formData.amount}
+                      onChange={e => setFormData({ ...formData, amount: e.target.value })}
+                      className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border-none rounded-xl focus:ring-2 focus:ring-teal-500 outline-none transition-all"
+                      placeholder="0.00"
+                      required
+                    />
+                    {errors.amount && <p className="text-rose-500 text-xs mt-1">{errors.amount[0]}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Usage Limit</label>
+                    <input
+                      type="number"
+                      value={formData.limit_usage}
+                      onChange={e => setFormData({ ...formData, limit_usage: e.target.value })}
+                      className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border-none rounded-xl focus:ring-2 focus:ring-teal-500 outline-none transition-all"
+                      placeholder="Optional"
+                    />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold mb-2">Discount Value *</label>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Expiry Date</label>
                   <input
-                    type="number"
-                    name="value"
-                    value={formData.value}
-                    onChange={handleInputChange}
-                    required
-                    min="0"
-                    step="0.01"
-                    placeholder={formData.discount_type === 'percentage' ? 'e.g., 15' : 'e.g., 50.00'}
-                    className={`w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none ${errors.value ? 'border-red-500' : ''}`}
+                    type="date"
+                    value={formData.expiry_date}
+                    onChange={e => setFormData({ ...formData, expiry_date: e.target.value })}
+                    className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border-none rounded-xl focus:ring-2 focus:ring-teal-500 outline-none transition-all"
                   />
-                  {errors.value && <p className="text-red-400 text-sm mt-1">{Array.isArray(errors.value) ? errors.value[0] : errors.value}</p>}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold mb-2">Expiry Date (Optional)</label>
-                  <input
-                    type="date"
-                    name="expiry_date"
-                    value={formData.expiry_date}
-                    onChange={handleInputChange}
-                    className={`w-full px-4 py-3 bg-gray-700/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none ${errors.expiry_date ? 'border-red-500' : ''}`}
-                  />
-                  {errors.expiry_date && <p className="text-red-400 text-sm mt-1">{Array.isArray(errors.expiry_date) ? errors.expiry_date[0] : errors.expiry_date}</p>}
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Description</label>
+                  <textarea
+                    value={formData.description}
+                    onChange={e => setFormData({ ...formData, description: e.target.value })}
+                    className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border-none rounded-xl focus:ring-2 focus:ring-teal-500 outline-none transition-all h-20 resize-none"
+                    placeholder="Voucher details..."
+                  ></textarea>
                 </div>
 
-                <div className="flex justify-end gap-3 pt-4">
-                  <button type="button" onClick={closeModal} className="px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-xl">
-                    Cancel
-                  </button>
+                <div>
+                  <label className="flex items-center gap-3 p-3 border border-slate-100 dark:border-slate-800 rounded-xl cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={formData.is_active == 1}
+                      onChange={e => setFormData({ ...formData, is_active: e.target.checked ? 1 : 0 })}
+                      className="w-5 h-5 rounded text-teal-600 focus:ring-teal-500 border-gray-300"
+                    />
+                    <span className="font-medium text-sm">Active Voucher</span>
+                  </label>
+                </div>
+
+                <div className="pt-4 flex gap-3">
+                  <button type="button" onClick={closeModal} className="flex-1 py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-medium hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">Cancel</button>
                   <button
                     type="submit"
                     disabled={operationLoading === 'saving'}
-                    className="px-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-xl font-bold flex items-center gap-2 disabled:opacity-70"
+                    className="flex-1 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-medium shadow-lg shadow-teal-500/20 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
                   >
-                    {operationLoading === 'saving' ? <Loader size={20} className="animate-spin" /> : <Check size={20} />}
-                    {editingVoucher ? 'Update' : 'Create'} Voucher
+                    {operationLoading === 'saving' ? <Loader className="animate-spin" size={18} /> : <Target size={18} />}
+                    {editingVoucher ? 'Update Voucher' : 'Create Voucher'}
                   </button>
                 </div>
               </form>
             </motion.div>
-          </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

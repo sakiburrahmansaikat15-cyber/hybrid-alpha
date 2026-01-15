@@ -4,6 +4,7 @@ namespace App\Http\Controllers\HRM;
 
 use App\Http\Controllers\Controller;
 use App\Models\HRM\Shift;
+use App\Http\Resources\ShiftResource;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -30,7 +31,7 @@ class ShiftController extends Controller
                     'per_page' => $data->count(),
                     'total_items' => $data->count(),
                     'total_pages' => 1,
-                    'data' => $data,
+                    'data' => ShiftResource::collection($data),
                 ],
             ]);
         }
@@ -45,7 +46,7 @@ class ShiftController extends Controller
                 'per_page' => $shifts->perPage(),
                 'total_items' => $shifts->total(),
                 'total_pages' => $shifts->lastPage(),
-                'data' => $shifts->items(),
+                'data' => ShiftResource::collection($shifts),
             ],
         ]);
     }
@@ -53,17 +54,17 @@ class ShiftController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'name'       => 'required|string|max:255',
-            'start_time' => 'required|date_format:H:i',
-            'end_time'   => 'required|date_format:H:i',
-            'grace_time' => 'nullable|integer|min:0',
+            'name' => ['required', 'string', 'max:255'],
+            'start_time' => ['required', 'regex:/^([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$/'],
+            'end_time' => ['required', 'regex:/^([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$/'],
+            'grace_time' => ['nullable', 'integer', 'min:0'],
         ]);
 
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Validation failed',
-                'errors'  => $validator->errors()
+                'errors' => $validator->errors()
             ], 422);
         }
 
@@ -72,7 +73,7 @@ class ShiftController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Shift created successfully',
-            'data' => $shift
+            'data' => new ShiftResource($shift)
         ], 201);
     }
 
@@ -89,27 +90,34 @@ class ShiftController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $shift
+            'data' => new ShiftResource($shift)
         ], 200);
     }
 
     public function update(Request $request, $id)
     {
         $shift = Shift::findOrFail($id);
-
-        $data = $request->validate([
-            'name'       => 'sometimes|string|max:255',
-            'start_time' => 'sometimes|date_format:H:i',
-            'end_time'   => 'sometimes|date_format:H:i',
-            'grace_time' => 'nullable|integer|min:0',
+        $validator = Validator::make($request->all(), [
+            'name' => ['sometimes', 'string', 'max:255'],
+            'start_time' => ['sometimes', 'regex:/^([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$/'],
+            'end_time' => ['sometimes', 'regex:/^([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$/'],
+            'grace_time' => ['nullable', 'integer', 'min:0'],
         ]);
 
-        $shift->update($data);
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $shift->update($validator->validated());
 
         return response()->json([
             'success' => true,
             'message' => 'Shift updated successfully',
-            'data' => $shift
+            'data' => new ShiftResource($shift)
         ], 200);
     }
 

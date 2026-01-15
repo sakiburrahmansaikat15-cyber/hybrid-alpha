@@ -13,11 +13,13 @@ class PaymentGatewaySeeder extends Seeder
         $faker = Faker::create();
 
         for ($i = 1; $i <= 10; $i++) {
-            PaymentGateway::create([
-                'name' => 'Gateway ' . $i,
-                'config' => json_encode(['api_key' => $faker->uuid()]),
-                'status' => $faker->randomElement(['active', 'inactive']),
-            ]);
+            PaymentGateway::firstOrCreate(
+                ['name' => 'Gateway ' . $i],
+                [
+                    'config' => json_encode(['api_key' => $faker->uuid()]),
+                    'status' => $faker->randomElement(['active', 'inactive']),
+                ]
+            );
         }
     }
 }
